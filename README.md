@@ -43,7 +43,7 @@ storage.connection((err) => {
   if (err) {
     // Invalid credentials
   }
-  // Everything is fine!
+  // Success, connected!
 })
 ```
 Upload a file
