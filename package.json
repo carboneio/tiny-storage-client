@@ -1,0 +1,30 @@
+{
+  "name": "ovh-object-storage-ha",
+  "version": "0.1.0",
+  "description": "Performant and tiny helper to request the OVH Object Storage",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha ./tests",
+    "lint": "eslint \"index.js\" \"tests/**/*.js\" --fix"
+  },
+  "keywords": [
+    "Object",
+    "Storage",
+    "SDK",
+    "OVH",
+    "Nodejs",
+    "Performances",
+    "Tiny",
+    "High Availability"
+  ],
+  "author": "Steevepay",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "simple-get": "=4.0.0"
+  },
+  "devDependencies": {
+    "eslint": "=7.29.0",
+    "mocha": "=9.0.1",
+    "nock": "=13.1.0"
+  }
+}
