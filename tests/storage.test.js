@@ -197,12 +197,33 @@ describe('Ovh Object Storage High Availability', function () {
     });
 
 
-    it('should write file on server', function (done) {
+    it('should write file on server from a local path', function (done) {
+      const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
+
       nock(publicURL)
         .put('/templates/test.odt')
-        .reply(201, '');
+        .reply(201, (uri, requestBody) => {
+          assert.strictEqual(requestBody, _expectedFileContent.toString());
+          return '';
+        });
 
       storage.writeFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
+        assert.strictEqual(err, null);
+        done();
+      });
+    });
+
+    it('should write file on server from a buffer', function (done) {
+      const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
+
+      nock(publicURL)
+        .put('/templates/test.odt')
+        .reply(201, (uri, requestBody) => {
+          assert.strictEqual(requestBody, _expectedFileContent.toString());
+          return '';
+        });
+
+      storage.writeFile('templates', 'test.odt', _expectedFileContent, (err) => {
         assert.strictEqual(err, null);
         done();
       });
@@ -227,11 +248,19 @@ describe('Ovh Object Storage High Availability', function () {
       });
     });
 
+    it('should return an error if the local path does not exist', function (done) {
+      storage.writeFile('templates', 'test.odt', '/assets/fileee.txt', (err) => {
+        assert.notStrictEqual(err, null);
+        assert.strictEqual(err.message, 'The local file does not exist');
+        done();
+      });
+    });
 
-    it('should return an error if containers does not exists', function (done) {
+
+    it('should return an error if containers or the file does not exists', function (done) {
       nock(publicURL)
         .put('/templates/test.odt')
-        .reply(404, '<html></html>');
+        .reply(404, '<html><h1>Unauthorized</h1><p>This server could not verify that you are authorized to access the document you requested.</p></html>');
 
       storage.writeFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
         assert.notStrictEqual(err, null);

@@ -1,3 +1,6 @@
+### v0.1.1
+  - Update `writeFile` function : it can take a Buffer as an argument
+
 ### v0.1.0
   - Methods to interact with the OVH Object Storage:
     - writeFile: upload a file
