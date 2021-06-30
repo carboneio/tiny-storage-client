@@ -82,12 +82,12 @@ function connection (callback) {
  *
  * @param {string} container Container name
  * @param {string} filename file to store
- * @param {string|Buffer} localPath absolute path to the file
+ * @param {string|Buffer} localPathOrBuffer absolute path to the file
  * @param {function} callback function(err):void = The `err` is null by default, return an object if an error occurs.
  * @returns {void}
  */
-function writeFile (container, filename, localPathOrContentBuffer, callback) {
-  let readStream = Buffer.isBuffer(localPathOrContentBuffer) === true ? Readable.from(localPathOrContentBuffer) : fs.createReadStream(localPathOrContentBuffer);
+function writeFile (container, filename, localPathOrBuffer, callback) {
+  let readStream = Buffer.isBuffer(localPathOrBuffer) === true ? Readable.from(localPathOrBuffer) : fs.createReadStream(localPathOrBuffer);
 
   get({
     url     : `${_config._endpoints.url}/${container}/${filename}`,
