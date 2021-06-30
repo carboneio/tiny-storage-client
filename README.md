@@ -1,6 +1,6 @@
 # OVH Object Storage High Availability
 
-![Version](https://img.shields.io/badge/version-0.1.0-blue.svg?style=flat-square&cacheSeconds=2592000)
+![Version](https://img.shields.io/badge/version-0.1.1-blue.svg?style=flat-square&cacheSeconds=2592000)
 [![Documentation](https://img.shields.io/badge/documentation-yes-brightgreen.svg?style=flat-square)](#api-usage)
 
 
@@ -48,9 +48,18 @@ storage.connection((err) => {
 ```
 Upload a file
 ```js
-const path = require(path)
+const path = require(path);
 
+/** SOLUTION 1: The file content can be passed by giving the file absolute path **/
 storage.writeFile('container', 'filename.jpg', path.join(__dirname, './assets/file.txt'), (err) => {
+  if (err) {
+    // handle error
+  }
+  // success
+});
+
+/** SOLUTION 2: A buffer can be passed for the file content **/
+storage.writeFile('container', 'filename.jpg', Buffer.from("File content"), (err) => {
   if (err) {
     // handle error
   }
