@@ -1,5 +1,6 @@
 const get = require('simple-get');
 const fs = require('fs');
+const { Readable } = require('stream');
 
 let _config = {
   authUrl: 'https://auth.cloud.ovh.net/v3',
@@ -81,12 +82,12 @@ function connection (callback) {
  *
  * @param {string} container Container name
  * @param {string} filename file to store
- * @param {string} localPath absolute path to the file
+ * @param {string|Buffer} localPathOrBuffer absolute path to the file
  * @param {function} callback function(err):void = The `err` is null by default, return an object if an error occurs.
  * @returns {void}
  */
-function writeFile (container, filename, localPath, callback) {
-  let readStream = fs.createReadStream(localPath);
+function writeFile (container, filename, localPathOrBuffer, callback) {
+  let readStream = Buffer.isBuffer(localPathOrBuffer) === true ? Readable.from(localPathOrBuffer) : fs.createReadStream(localPathOrBuffer);
 
   get({
     url     : `${_config._endpoints.url}/${container}/${filename}`,
@@ -105,6 +106,9 @@ function writeFile (container, filename, localPath, callback) {
       err = err || checkResponseError(res);
 
       if (err) {
+        if (err.code === 'ENOENT') {
+          return callback(new Error('The local file does not exist'));
+        }
         return callback(err);
       }
       return callback(null);
