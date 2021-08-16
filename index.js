@@ -72,8 +72,62 @@ function connection (callback) {
     if (!_config._endpoints) {
       return callback(new Error('Endpoint not found, invalid region'));
     }
-
     return callback(null);
+  });
+}
+/**
+ * @description Show container details and list objects. It is possible to pass as a second argument as an object with queries or headers to overwrite the request.
+ * @description List of headers and queries: https://docs.openstack.org/api-ref/object-store/?expanded=show-container-details-and-list-objects-detail#show-container-details-and-list-objects
+ *
+ * @param {String} container container name
+ * @param {Object} options [OPTIONAL]: { prefix, format, headers: {} }
+ * @param {function} callback function(err, body):void = The second argument `body` is the content of the file as a Buffer. The `err` argument is null by default, return an object if an error occurs.
+ */
+function getFiles(container, options, callback) {
+  let _options = null;
+  if (!callback) {
+    callback = options;
+    _options = { headers: {}, queries: {} };
+  } else {
+    _options = options;
+  }
+  let _queries = '';
+  if (typeof _options.queries === "object") {
+    const _queriesEntries = Object.entries(_options.queries);
+    for (const [key, value] of _queriesEntries) {
+      _queries += `${key}=${value}&`
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(_options, 'headers') === false) {
+    _options.headers = {};
+  }
+  get.concat({
+    url     : `${_config._endpoints.url}/${container}${_queries !== '' ? '?' + _queries : '' }`,
+    method  : 'GET',
+    headers : {
+      'X-Auth-Token' : _config._token,
+      Accept         : 'application/json',
+      ..._options.headers
+    }
+  }, (err, res, body) => {
+    checkIsConnected(res, 'getFiles', arguments, (error) => {
+      if (error) {
+        return callback(error);
+      }
+
+      if (res && res.statusCode === 404) {
+        return callback(new Error('Container does not exist'));
+      }
+
+      err = err || checkResponseError(res);
+
+      if (err) {
+        return callback(err);
+      }
+
+      return callback(null, body);
+    });
   });
 }
 
@@ -238,6 +292,9 @@ function checkIsConnected (response, from, args, callback) {
       case 'deleteFile':
         deleteFile.apply(null, args);
         break;
+      case 'getFiles':
+        getFiles.apply(null, args);
+        break;
       default:
         callback(null);
         break;
@@ -288,6 +345,7 @@ module.exports = (config) => {
     readFile,
     deleteFile,
     setConfig,
-    getConfig
+    getConfig,
+    getFiles
   }
 }

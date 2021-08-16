@@ -1,3 +1,14 @@
+### v0.1.2
+  - Add method `getFiles`: Show container details and list objects. It is possible to filter the list or overwrite the request headers, such as:
+    ```js
+      storage.getFiles('containerName', { queries: { prefix: 'prefixName' }, headers: { Accept: 'application/xml' } }, function (err, body) {
+        if (err) {
+          return console.log(err);
+        }
+        console.log(body.toString());
+      });
+    ```
+    List of headers and queries: https://docs.openstack.org/api-ref/object-store/?expanded=show-container-details-and-list-objects-detail#show-container-details-and-list-objects
 ### v0.1.1
   - Update `writeFile` function : it can take a Buffer as an argument
 

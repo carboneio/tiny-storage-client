@@ -91,6 +91,158 @@ describe('Ovh Object Storage High Availability', function () {
     });
   });
 
+  describe('getFiles', function() {
+    before(function (done) {
+      // Mock connection to get a token for future call
+      nock(authURL)
+        .post('/auth/tokens')
+        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+      storage.setConfig({
+        username                     : 'toto',
+        password                     : 'toto',
+        authUrl                      : authURL,
+        tenantName                     : 'toto',
+        region                       : 'GRA'
+      });
+
+      storage.connection((err) => {
+        assert.strictEqual(err, null);
+        done();
+      });
+    });
+
+    it('should return a list of files as a JSON and as an XML', function (done) {
+      nock(publicURL)
+        .get('/templates')
+        .reply(200, () => {
+          return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+        });
+
+      storage.getFiles('templates', (err, body) => {
+        assert.strictEqual(err, null);
+        const _files = JSON.parse(body.toString());
+        assert.strictEqual(_files.length > 0, true)
+        assert.strictEqual(_files[0].bytes > 0, true)
+        assert.strictEqual(_files[0].last_modified.length > 0, true)
+        assert.strictEqual(_files[0].hash.length > 0, true)
+        assert.strictEqual(_files[0].name.length > 0, true)
+        assert.strictEqual(_files[0].content_type.length > 0, true)
+        done();
+
+      });
+    });
+
+    it('should return a list of files as a XML and the header is overwritted', function (done) {
+      nock(publicURL)
+        .get('/templates')
+        .reply(200, () => {
+          return fs.createReadStream(path.join(__dirname, 'assets', 'files.xml'));
+        });
+
+      storage.getFiles('templates', { headers : { Accept: 'application/xml' } }, (err, body) => {
+        assert.strictEqual(err, null);
+        const _files = body.toString();
+        assert.strictEqual(_files.includes('<?xml'), true)
+        assert.strictEqual(_files.includes('<container name="templates">'), true)
+        assert.strictEqual(_files.includes('<bytes>47560</bytes>'), true)
+        done();
+      });
+    })
+
+    it('should return a list of files with a prefix', function (done) {
+      nock(publicURL)
+        .get('/templates')
+        .query({ prefix : 'keys' })
+        .reply(200, () => {
+          let _file = fs.readFileSync(path.join(__dirname, 'assets', 'files.json'))
+          return Buffer.from(JSON.stringify(JSON.parse(_file.toString()).filter((el => el.name.includes('keys')))));
+        });
+
+      storage.getFiles('templates', { queries: { prefix: 'keys' } }, (err, body) => {
+        assert.strictEqual(err, null);
+        const _files = JSON.parse(body.toString());
+        _files.forEach(el => {
+          assert.strictEqual(el.name.includes('keys'), true);
+        });
+        done();
+      });
+    });
+
+    it('should return a list of files with a prefix and delimiter', function (done) {
+      nock(publicURL)
+        .get('/templates')
+        .query({ prefix : 'keys', delimiter : '/' })
+        .reply(200, () => {
+          return Buffer.from(JSON.stringify([
+            {
+              "subdir": "keys/"
+            }]));
+        });
+
+      storage.getFiles('templates', { queries: { prefix: 'keys', delimiter : '/' } }, (err, body) => {
+        assert.strictEqual(err, null);
+        const _files = JSON.parse(body.toString());
+        assert.strictEqual(_files[0].subdir, 'keys/')
+        done();
+      });
+    });
+
+    it('should reconnect automatically to object storage and retry', function (done) {
+      let firstNock = nock(publicURL)
+        .get('/templates')
+        .reply(401, 'Unauthorized')
+        .get('/templates')
+        .reply(200, () => {
+          return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+        });
+
+      let secondNock = nock(authURL)
+        .post('/auth/tokens')
+        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+      storage.getFiles('templates', (err, body) => {
+        assert.strictEqual(err, null);
+        const _files = JSON.parse(body.toString());
+        assert.strictEqual(_files.length > 0, true)
+        assert.strictEqual(_files[0].bytes > 0, true)
+        assert.strictEqual(_files[0].last_modified.length > 0, true)
+        assert.strictEqual(_files[0].hash.length > 0, true)
+        assert.strictEqual(_files[0].name.length > 0, true)
+        assert.strictEqual(_files[0].content_type.length > 0, true)
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
+        assert.strictEqual(secondNock.pendingMocks().length, 0);
+        done();
+      });
+    });
+
+    it('should return an error if the request return an error', function (done) {
+      nock(publicURL)
+        .get('/templates')
+        .replyWithError('Error Message 1234');
+
+      storage.getFiles('templates', (err, body) => {
+        assert.notStrictEqual(err, null);
+        assert.strictEqual(err.message, 'Error Message 1234');
+        assert.strictEqual(body, undefined);
+        done();
+      });
+    });
+
+    it('should return an error if the container does not exist', function (done) {
+      nock(publicURL)
+        .get('/templates')
+        .reply(404);
+
+      storage.getFiles('templates', (err, body) => {
+        assert.notStrictEqual(err, null);
+        assert.strictEqual(err.message, 'Container does not exist');
+        assert.strictEqual(body, undefined);
+        done();
+      });
+    });
+  });
+
   describe('readFile', function () {
     before(function (done) {
       // Mock connection to get a token for future call
