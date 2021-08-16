@@ -1,6 +1,6 @@
 # OVH Object Storage High Availability
 
-![Version](https://img.shields.io/badge/version-0.1.1-blue.svg?style=flat-square&cacheSeconds=2592000)
+![Version](https://img.shields.io/badge/version-0.1.2-blue.svg?style=flat-square&cacheSeconds=2592000)
 [![Documentation](https://img.shields.io/badge/documentation-yes-brightgreen.svg?style=flat-square)](#api-usage)
 
 
@@ -86,6 +86,23 @@ storage.deleteFile('templates', 'filename.jpg', (err) => {
 });
 ```
 
+Get container list objects and details
+```js
+storage.getFiles('templates', function (err, body) {
+  if (err) {
+    // handle error
+  }
+  // success
+});
+
+// Possible to pass queries and overwrite request headers, list of options: https://docs.openstack.org/api-ref/object-store/?expanded=show-container-details-and-list-objects-detail#show-container-details-and-list-objects
+storage.getFiles('templates', { queries: { prefix: 'prefixName' }, headers: { Accept: 'application/xml' } }, function (err, body) {
+  if (err) {
+    // handle error
+  }
+  // success
+});
+```
 
 Overwrite the configuration
 ```js
