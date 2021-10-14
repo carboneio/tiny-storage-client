@@ -1,13 +1,11 @@
 const get = require('simple-get');
 const fs = require('fs');
+const debug = require('debug')('ovh-object-storage-ha')
 const { Readable } = require('stream');
 
 let _config = {
-  authUrl: 'https://auth.cloud.ovh.net/v3',
-  username: null,
-  password: null,
-  tenantName: null,
-  region: null,
+  storages: [],
+  _actualStorage: 0,
   _endpoints: null,
   _token: null
 }
@@ -18,15 +16,21 @@ let _config = {
  * @param {function} callback function(err):void = The `err` is null by default, return an object if an error occurs.
  */
 function connection (callback) {
+  if (_config._actualStorage === _config.storages.length) {
+    return callback(new Error('Object Storages are not available.'));
+  }
+
+  const _storage = _config.storages[_config._actualStorage];
+  debug(`Object Storage index "${_config._actualStorage}" region "${_storage.region}" connection...`);
   const _json = {
     auth : {
       identity : {
         methods  : ['password'],
         password : {
           user : {
-            name     : _config.username,
+            name     : _storage.username,
             domain   : { id : 'default' },
-            password : _config.password
+            password : _storage.password
           }
         }
       },
@@ -35,14 +39,14 @@ function connection (callback) {
           domain : {
             id : 'default'
           },
-          name : _config.tenantName
+          name : _storage.tenantName
         }
       }
     }
   };
 
   get.concat({
-    url    : `${_config.authUrl}/auth/tokens`,
+    url    : `${_storage.authUrl}/auth/tokens`,
     method : 'POST',
     json   : true,
     body   : _json
@@ -52,7 +56,9 @@ function connection (callback) {
     }
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      return callback(new Error(res.statusCode.toString() + ' ' + res.statusMessage));
+      debug(`Object Storage index "${_config._actualStorage}" region "${_storage.region}" not available | Status ${res.statusCode.toString()} | Message: ${res.statusMessage} `);
+      _config._actualStorage += 1
+      return connection.apply(null, arguments);
     }
 
     _config._token = res.headers['x-subject-token'];
@@ -62,16 +68,21 @@ function connection (callback) {
     });
 
     if (!_serviceCatalog) {
-      return callback(new Error('Endpoint not found'));
+      debug(`Object Storage index "${_config._actualStorage}" region "${_storage.region} warning: Object storage catalog not found`);
+      _config._actualStorage += 1
+      return connection.apply(null, arguments);
     }
 
     _config._endpoints = _serviceCatalog.endpoints.find((element) => {
-      return element.region === _config.region;
+      return element.region === _storage.region;
     });
 
     if (!_config._endpoints) {
-      return callback(new Error('Endpoint not found, invalid region'));
+      debug(`Object Storage index "${_config._actualStorage}" region "${_storage.region} warning: storage endpoint not found, invalid region`);
+      _config._actualStorage += 1
+      return connection.apply(null, arguments);
     }
+    debug(`Object Storage index "${_config._actualStorage}" region "${_storage.region}" connected!`);
     return callback(null);
   });
 }
@@ -281,6 +292,9 @@ function checkIsConnected (response, from, args, callback) {
     return callback(null);
   }
 
+  // Reset the index of the actual storage
+  _config._actualStorage = 0;
+
   // Reconnect to object storage
   connection((err) => {
     if (err) {
@@ -317,18 +331,24 @@ function checkIsConnected (response, from, args, callback) {
  * @param {String} config.tenantName Tenant Name/Tenant ID for authentication
  * @param {String} config.region Region used to retreive the Object Storage endpoint to request
  */
-function setConfig(config) {
-  _config = { ...config }
+function setStorages(storages) {
+  if (Array.isArray(storages) === true) {
+    /** List of storage */
+    _config.storages = storages;
+  } else if (typeof storages === 'object') {
+    /** Only a single storage is passed */
+    _config.storages = [];
+    _config.storages.push(storages)
+  }
 }
 
 /**
  * @description Return the configuration value
  *
- * @param {String} name property name
- * @returns {String} value of the config property
+ * @returns {String} The list of storages
  */
-function getConfig(name) {
-  return _config[name];
+function getStorages() {
+  return _config.storages;
 }
 
 /**
@@ -343,14 +363,14 @@ function getConfig(name) {
  * @param {String} config.region Region used to retreive the Object Storage endpoint to request
  */
 module.exports = (config) => {
-  setConfig(config)
+  setStorages(config)
   return {
     connection,
     writeFile,
     readFile,
     deleteFile,
-    setConfig,
-    getConfig,
+    setStorages,
+    getStorages,
     getFiles
   }
 }
