@@ -12,7 +12,6 @@ Version `1.0.0` in progress: coming versions may have breaking changes
 
 - [x] Authenticate to get a new token if a request fail and request the API again
 - [ ] Provide a Object Storage fallback if an issue occurs
-- [ ] Upload to multiple Object Storage at the same time
 
 ## Install
 
