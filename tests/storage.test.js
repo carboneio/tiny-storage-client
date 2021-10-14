@@ -169,8 +169,11 @@ describe('Ovh Object Storage High Availability', function () {
       });
     });
 
-    it('should return a list of files with a prefix and delimiter', function (done) {
-      nock(publicURL)
+    it('should reconnect automatically to object storage and return a list of files with a prefix and delimiter', function (done) {
+      let firstNock = nock(publicURL)
+        .get('/templates')
+        .query({ prefix : 'keys', delimiter : '/' })
+        .reply(401, 'Unauthorized')
         .get('/templates')
         .query({ prefix : 'keys', delimiter : '/' })
         .reply(200, () => {
@@ -180,10 +183,16 @@ describe('Ovh Object Storage High Availability', function () {
             }]));
         });
 
+      let secondNock = nock(authURL)
+        .post('/auth/tokens')
+        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
       storage.getFiles('templates', { queries: { prefix: 'keys', delimiter : '/' } }, (err, body) => {
         assert.strictEqual(err, null);
         const _files = JSON.parse(body.toString());
         assert.strictEqual(_files[0].subdir, 'keys/')
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
+        assert.strictEqual(secondNock.pendingMocks().length, 0);
         done();
       });
     });
@@ -396,6 +405,25 @@ describe('Ovh Object Storage High Availability', function () {
         assert.strictEqual(err, null);
         assert.strictEqual(firstNock.pendingMocks().length, 0);
         assert.strictEqual(secondNock.pendingMocks().length, 0);
+        done();
+      });
+    });
+
+    it('should write file on server from a local path with query parameters and params', function (done) {
+      const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
+      const _headers = { ETag: "md5CheckSum" }
+      const _queries = { temp_url_expires: "1440619048" }
+
+      nock(publicURL, { reqheaders: _headers })
+        .put('/templates/test.odt')
+        .query(_queries)
+        .reply(201, (uri, requestBody) => {
+          assert.strictEqual(requestBody, _expectedFileContent.toString());
+          return '';
+        });
+
+      storage.writeFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), { headers: _headers, queries: _queries}, (err) => {
+        assert.strictEqual(err, null);
         done();
       });
     });

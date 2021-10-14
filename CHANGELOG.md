@@ -1,3 +1,6 @@
+### v0.1.3
+  - Edit the method `writeFile`: It accepts a new optionnal fourth argument `option`: `{ queries: { temp_url_expires: '1440619048' }, headers: { X-Object-Meta-LocationOrigin: 'Paris/France' }`. List of query parameters and headers: https://docs.openstack.org/api-ref/object-store/?expanded=create-or-replace-object-detail#create-or-replace-object
+
 ### v0.1.2
   - Add method `getFiles`: Show container details and list objects. It is possible to filter the list or overwrite the request headers, such as:
     ```js
