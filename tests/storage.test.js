@@ -14,7 +14,7 @@ describe('Ovh Object Storage High Availability', function () {
 
   describe('Connection', function () {
     before(function () {
-      storage.setConfig({
+      storage.setStorages({
         username                     : 'toto',
         password                     : 'toto',
         authUrl                      : authURL,
@@ -30,8 +30,8 @@ describe('Ovh Object Storage High Availability', function () {
 
       storage.connection((err) => {
         assert.strictEqual(err, null);
-        assert.deepStrictEqual(storage.getConfig("_token"), tokenAuth);
-        assert.deepStrictEqual(storage.getConfig("_endpoints").url, connectionResultSuccessV3.token.catalog[9].endpoints[20].url);
+        assert.deepStrictEqual(storage.getConfig().token, tokenAuth);
+        assert.deepStrictEqual(storage.getConfig().endpoints.url, connectionResultSuccessV3.token.catalog[9].endpoints[20].url);
         done();
       });
     });
@@ -43,6 +43,7 @@ describe('Ovh Object Storage High Availability', function () {
 
       storage.connection((err) => {
         assert.notStrictEqual(err, null);
+        assert.strictEqual(err.message, 'Object Storages are not available');
         done();
       });
     });
@@ -54,7 +55,7 @@ describe('Ovh Object Storage High Availability', function () {
 
       storage.connection((err) => {
         assert.notStrictEqual(err, null);
-        assert.strictEqual(err.message, 'Endpoint not found');
+        assert.strictEqual(err.message, 'Object Storages are not available');
         done();
       });
     });
@@ -66,13 +67,148 @@ describe('Ovh Object Storage High Availability', function () {
 
       storage.connection((err) => {
         assert.notStrictEqual(err, null);
-        assert.strictEqual(err.message, 'Endpoint not found, invalid region');
+        assert.strictEqual(err.message, 'Object Storages are not available');
         done();
+      });
+    });
+
+    it('should connect to the second object storage if the first one is not available (error 500)', function (done) {
+      storage.setStorages([{
+        username                     : 'storage-1-user',
+        password                     : 'storage-1-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-1-tenant',
+        region                       : 'GRA'
+      },
+      {
+        username                     : 'storage-2-user',
+        password                     : 'storage-2-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-2-tenant',
+        region                       : 'GRA'
+      }])
+
+      const nockList = nock(authURL)
+        .post('/auth/tokens')
+        .reply(500, {})
+        .post('/auth/tokens')
+        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+      storage.connection((err) => {
+        assert.strictEqual(err, null);
+        assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+        assert.deepStrictEqual(storage.getConfig().token, tokenAuth);
+        assert.deepStrictEqual(storage.getConfig().endpoints.url, connectionResultSuccessV3.token.catalog[9].endpoints[20].url);
+        assert.strictEqual(nockList.pendingMocks().length, 0);
+        done();
+      });
+    });
+
+    it('should connect to the second object storage if endpoints of the first object storage cannot be found', function (done) {
+      storage.setStorages([{
+        username                     : 'storage-1-user',
+        password                     : 'storage-1-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-1-tenant',
+        region                       : 'GRA'
+      },
+      {
+        username                     : 'storage-2-user',
+        password                     : 'storage-2-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-2-tenant',
+        region                       : 'GRA'
+      }])
+
+      const nockList = nock(authURL)
+        .post('/auth/tokens')
+        .reply(200, connectionResultSuccessV3WithoutObjectStore)
+        .post('/auth/tokens')
+        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+      storage.connection((err) => {
+        assert.strictEqual(err, null);
+        assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+        assert.deepStrictEqual(storage.getConfig().token, tokenAuth);
+        assert.deepStrictEqual(storage.getConfig().endpoints.url, connectionResultSuccessV3.token.catalog[9].endpoints[20].url);
+        assert.strictEqual(nockList.pendingMocks().length, 0);
+        done();
+      });
+    });
+
+    it('should connect to the second object storage if endpoints of the first object storage cannot be found because region is invalid', function (done) {
+      storage.setStorages([{
+        username                     : 'storage-1-user',
+        password                     : 'storage-1-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-1-tenant',
+        region                       : 'GRA'
+      },
+      {
+        username                     : 'storage-2-user',
+        password                     : 'storage-2-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-2-tenant',
+        region                       : 'GRA'
+      }])
+
+      const nockList = nock(authURL)
+        .post('/auth/tokens')
+        .reply(200, connectionResultSuccessV3WithoutRegion)
+        .post('/auth/tokens')
+        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+      storage.connection((err) => {
+        assert.strictEqual(err, null);
+        assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+        assert.deepStrictEqual(storage.getConfig().token, tokenAuth);
+        assert.deepStrictEqual(storage.getConfig().endpoints.url, connectionResultSuccessV3.token.catalog[9].endpoints[20].url);
+        assert.strictEqual(nockList.pendingMocks().length, 0);
+        done();
+      });
+    });
+
+    it('should reconnect to the first object storage if the first and second one are not available (error 500) but the first storage revive', function (done) {
+      storage.setStorages([{
+        username                     : 'storage-1-user',
+        password                     : 'storage-1-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-1-tenant',
+        region                       : 'GRA'
+      },
+      {
+        username                     : 'storage-2-user',
+        password                     : 'storage-2-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-2-tenant',
+        region                       : 'GRA'
+      }])
+
+      const nockList = nock(authURL)
+        .post('/auth/tokens')
+        .reply(500, {})
+        .post('/auth/tokens')
+        .reply(500, {})
+        .post('/auth/tokens')
+        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+      storage.connection((err) => {
+        assert.notStrictEqual(err, null);
+        assert.strictEqual(err.message, 'Object Storages are not available');
+
+        storage.connection((err) => {
+          assert.strictEqual(err, null);
+          assert.deepStrictEqual(storage.getConfig().actifStorage, 0);
+          assert.deepStrictEqual(storage.getConfig().token, tokenAuth);
+          assert.deepStrictEqual(storage.getConfig().endpoints.url, connectionResultSuccessV3.token.catalog[9].endpoints[20].url);
+          assert.strictEqual(nockList.pendingMocks().length, 0);
+          done();
+        });
       });
     });
   });
 
-  describe('setConfig/getConfig', function () {
+  describe('setStorage/getStorages/setTimeout/getConfig', function () {
     it('should update the initial configuration', function (done) {
       const _expectedConfig = {
         authUrl    : 'https://carbone.io',
@@ -81,24 +217,31 @@ describe('Ovh Object Storage High Availability', function () {
         tenantName : 'toto',
         region     : 'GRA22'
       }
-      storage.setConfig(_expectedConfig)
-      assert.strictEqual(storage.getConfig('authUrl'), _expectedConfig.authUrl);
-      assert.strictEqual(storage.getConfig('username'), _expectedConfig.username);
-      assert.strictEqual(storage.getConfig('password'), _expectedConfig.password);
-      assert.strictEqual(storage.getConfig('tenantName'), _expectedConfig.tenantName);
-      assert.strictEqual(storage.getConfig('region'), _expectedConfig.region);
+      storage.setStorages(_expectedConfig)
+      const _storages = storage.getStorages();
+      assert.strictEqual(_storages[0].authUrl, _expectedConfig.authUrl);
+      assert.strictEqual(_storages[0].username, _expectedConfig.username);
+      assert.strictEqual(_storages[0].password, _expectedConfig.password);
+      assert.strictEqual(_storages[0].tenantName, _expectedConfig.tenantName);
+      assert.strictEqual(_storages[0].region, _expectedConfig.region);
+      done();
+    });
+
+    it('should set the request timeout', function (done) {
+      storage.setTimeout(200);
+      assert.strictEqual(storage.getConfig().timeout, 200);
       done();
     });
   });
 
-  describe('getFiles', function() {
+  describe('listFiles', function() {
     before(function (done) {
       // Mock connection to get a token for future call
-      nock(authURL)
+      let firstNock = nock(authURL)
         .post('/auth/tokens')
         .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-      storage.setConfig({
+      storage.setStorages({
         username                     : 'toto',
         password                     : 'toto',
         authUrl                      : authURL,
@@ -108,18 +251,31 @@ describe('Ovh Object Storage High Availability', function () {
 
       storage.connection((err) => {
         assert.strictEqual(err, null);
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
         done();
       });
     });
 
+    beforeEach(function (done) {
+      storage.setTimeout(5000);
+      storage.setStorages([{
+        username                     : 'storage-1-user',
+        password                     : 'storage-1-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-1-tenant',
+        region                       : 'GRA'
+      }]);
+      done();
+    })
+
     it('should return a list of files as a JSON and as an XML', function (done) {
-      nock(publicURL)
+      let firstNock = nock(publicURL)
         .get('/templates')
         .reply(200, () => {
           return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
         });
 
-      storage.getFiles('templates', (err, body) => {
+      storage.listFiles('templates', (err, body) => {
         assert.strictEqual(err, null);
         const _files = JSON.parse(body.toString());
         assert.strictEqual(_files.length > 0, true)
@@ -128,30 +284,31 @@ describe('Ovh Object Storage High Availability', function () {
         assert.strictEqual(_files[0].hash.length > 0, true)
         assert.strictEqual(_files[0].name.length > 0, true)
         assert.strictEqual(_files[0].content_type.length > 0, true)
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
         done();
-
       });
     });
 
     it('should return a list of files as a XML and the header is overwritted', function (done) {
-      nock(publicURL)
+      let firstNock = nock(publicURL)
         .get('/templates')
         .reply(200, () => {
           return fs.createReadStream(path.join(__dirname, 'assets', 'files.xml'));
         });
 
-      storage.getFiles('templates', { headers : { Accept: 'application/xml' } }, (err, body) => {
+      storage.listFiles('templates', { headers : { Accept: 'application/xml' } }, (err, body) => {
         assert.strictEqual(err, null);
         const _files = body.toString();
         assert.strictEqual(_files.includes('<?xml'), true)
         assert.strictEqual(_files.includes('<container name="templates">'), true)
         assert.strictEqual(_files.includes('<bytes>47560</bytes>'), true)
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
         done();
       });
     })
 
     it('should return a list of files with a prefix', function (done) {
-      nock(publicURL)
+      let firstNock = nock(publicURL)
         .get('/templates')
         .query({ prefix : 'keys' })
         .reply(200, () => {
@@ -159,12 +316,13 @@ describe('Ovh Object Storage High Availability', function () {
           return Buffer.from(JSON.stringify(JSON.parse(_file.toString()).filter((el => el.name.includes('keys')))));
         });
 
-      storage.getFiles('templates', { queries: { prefix: 'keys' } }, (err, body) => {
+      storage.listFiles('templates', { queries: { prefix: 'keys' } }, (err, body) => {
         assert.strictEqual(err, null);
         const _files = JSON.parse(body.toString());
         _files.forEach(el => {
           assert.strictEqual(el.name.includes('keys'), true);
         });
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
         done();
       });
     });
@@ -187,7 +345,7 @@ describe('Ovh Object Storage High Availability', function () {
         .post('/auth/tokens')
         .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-      storage.getFiles('templates', { queries: { prefix: 'keys', delimiter : '/' } }, (err, body) => {
+      storage.listFiles('templates', { queries: { prefix: 'keys', delimiter : '/' } }, (err, body) => {
         assert.strictEqual(err, null);
         const _files = JSON.parse(body.toString());
         assert.strictEqual(_files[0].subdir, 'keys/')
@@ -210,7 +368,7 @@ describe('Ovh Object Storage High Availability', function () {
         .post('/auth/tokens')
         .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-      storage.getFiles('templates', (err, body) => {
+      storage.listFiles('templates', (err, body) => {
         assert.strictEqual(err, null);
         const _files = JSON.parse(body.toString());
         assert.strictEqual(_files.length > 0, true)
@@ -225,41 +383,183 @@ describe('Ovh Object Storage High Availability', function () {
       });
     });
 
+    it('should reconnect automatically to the second object storage and should retry the request', function (done) {
+      storage.setStorages([{
+        username                     : 'storage-1-user',
+        password                     : 'storage-1-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-1-tenant',
+        region                       : 'GRA'
+      },
+      {
+        username                     : 'storage-2-user',
+        password                     : 'storage-2-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-2-tenant',
+        region                       : 'GRA'
+      }])
+
+      let firstNock = nock(publicURL)
+        /** 1 */
+        .get('/templates')
+        .reply(401, 'Unauthorized')
+        /** 4 */
+        .get('/templates')
+        .reply(200, () => {
+          return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+        });
+
+      let secondNock = nock(authURL)
+        /** 2 */
+        .post('/auth/tokens')
+        .reply(500, {})
+        /** 3 */
+        .post('/auth/tokens')
+        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+      storage.listFiles('templates', (err, body) => {
+        assert.strictEqual(err, null);
+        const _files = JSON.parse(body.toString());
+        assert.strictEqual(_files.length > 0, true)
+        assert.strictEqual(_files[0].bytes > 0, true)
+        assert.strictEqual(_files[0].last_modified.length > 0, true)
+        assert.strictEqual(_files[0].hash.length > 0, true)
+        assert.strictEqual(_files[0].name.length > 0, true)
+        assert.strictEqual(_files[0].content_type.length > 0, true)
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
+        assert.strictEqual(secondNock.pendingMocks().length, 0);
+        assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+        done();
+      });
+    });
+
+    it('should retry the request with the second object storage if the first object storage return a 500 error', function (done) {
+      storage.setStorages([{
+        username                     : 'storage-1-user',
+        password                     : 'storage-1-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-1-tenant',
+        region                       : 'GRA'
+      },
+      {
+        username                     : 'storage-2-user',
+        password                     : 'storage-2-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-2-tenant',
+        region                       : 'GRA'
+      }])
+
+      let firstNock = nock(publicURL)
+        .get('/templates')
+        .reply(500, {})
+        .get('/templates')
+        .reply(200, () => {
+          return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+        });
+      let secondNock = nock(authURL)
+        .post('/auth/tokens')
+        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+      storage.listFiles('templates', (err, body) => {
+        assert.strictEqual(err, null);
+        const _files = JSON.parse(body.toString());
+        assert.strictEqual(_files.length > 0, true)
+        assert.strictEqual(_files[0].bytes > 0, true)
+        assert.strictEqual(_files[0].last_modified.length > 0, true)
+        assert.strictEqual(_files[0].hash.length > 0, true)
+        assert.strictEqual(_files[0].name.length > 0, true)
+        assert.strictEqual(_files[0].content_type.length > 0, true)
+
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
+        assert.strictEqual(secondNock.pendingMocks().length, 0);
+        assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+        done();
+      });
+    });
+
+    it('should retry the request with the second object storage if the first object storage timeout', function (done) {
+      storage.setTimeout(200);
+      storage.setStorages([{
+        username                     : 'storage-1-user',
+        password                     : 'storage-1-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-1-tenant',
+        region                       : 'GRA'
+      },
+      {
+        username                     : 'storage-2-user',
+        password                     : 'storage-2-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-2-tenant',
+        region                       : 'GRA'
+      }])
+
+      let firstNock = nock(publicURL)
+        .get('/templates')
+        .delayConnection(500)
+        .reply(200, {})
+        .get('/templates')
+        .reply(200, () => {
+          return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+        });
+      let secondNock = nock(authURL)
+        .post('/auth/tokens')
+        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+      storage.listFiles('templates', (err, body) => {
+        assert.strictEqual(err, null);
+        const _files = JSON.parse(body.toString());
+        assert.strictEqual(_files.length > 0, true)
+        assert.strictEqual(_files[0].bytes > 0, true)
+        assert.strictEqual(_files[0].last_modified.length > 0, true)
+        assert.strictEqual(_files[0].hash.length > 0, true)
+        assert.strictEqual(_files[0].name.length > 0, true)
+        assert.strictEqual(_files[0].content_type.length > 0, true)
+
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
+        assert.strictEqual(secondNock.pendingMocks().length, 0);
+        assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+        done();
+      });
+    });
+
     it('should return an error if the request return an error', function (done) {
-      nock(publicURL)
+      let firstNock = nock(publicURL)
         .get('/templates')
         .replyWithError('Error Message 1234');
 
-      storage.getFiles('templates', (err, body) => {
+      storage.listFiles('templates', (err, body) => {
         assert.notStrictEqual(err, null);
         assert.strictEqual(err.message, 'Error Message 1234');
         assert.strictEqual(body, undefined);
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
         done();
       });
     });
 
     it('should return an error if the container does not exist', function (done) {
-      nock(publicURL)
+      let firstNock = nock(publicURL)
         .get('/templates')
         .reply(404);
 
-      storage.getFiles('templates', (err, body) => {
+      storage.listFiles('templates', (err, body) => {
         assert.notStrictEqual(err, null);
         assert.strictEqual(err.message, 'Container does not exist');
         assert.strictEqual(body, undefined);
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
         done();
       });
     });
   });
 
-  describe('readFile', function () {
+  describe('downloadFile', function () {
     before(function (done) {
       // Mock connection to get a token for future call
       nock(authURL)
         .post('/auth/tokens')
         .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-      storage.setConfig({
+      storage.setStorages({
         username                     : 'toto',
         password                     : 'toto',
         authUrl                      : authURL,
@@ -280,7 +580,7 @@ describe('Ovh Object Storage High Availability', function () {
           return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
         });
 
-      storage.readFile('templates', 'test.odt', (err, body) => {
+      storage.downloadFile('templates', 'test.odt', (err, body) => {
         assert.strictEqual(err, null);
         assert.strictEqual(body.toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
         done();
@@ -300,7 +600,7 @@ describe('Ovh Object Storage High Availability', function () {
         .post('/auth/tokens')
         .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-      storage.readFile('templates', 'test.odt', (err, body) => {
+      storage.downloadFile('templates', 'test.odt', (err, body) => {
         assert.strictEqual(err, null);
         assert.strictEqual(body.toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
         assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -309,12 +609,24 @@ describe('Ovh Object Storage High Availability', function () {
       });
     });
 
+    it.skip('should reconnect automatically to the second object storage and should retry the request', function(done){
+
+    })
+
+    it.skip('should retry the request with the second object storage if the first object storage return a 500 error', function(done){
+
+    })
+
+    it.skip('should retry the request with the second object storage if the first object storage timeout', function(done){
+
+    })
+
     it('should return an error if the request return an error', function (done) {
       nock(publicURL)
         .get('/templates/test.odt')
         .replyWithError('Error Message 1234');
 
-      storage.readFile('templates', 'test.odt', (err, body) => {
+      storage.downloadFile('templates', 'test.odt', (err, body) => {
         assert.notStrictEqual(err, null);
         assert.strictEqual(err.message, 'Error Message 1234');
         assert.strictEqual(body, undefined);
@@ -327,7 +639,7 @@ describe('Ovh Object Storage High Availability', function () {
         .get('/templates/test.odt')
         .reply(404);
 
-      storage.readFile('templates', 'test.odt', (err, body) => {
+      storage.downloadFile('templates', 'test.odt', (err, body) => {
         assert.notStrictEqual(err, null);
         assert.strictEqual(err.message, 'File does not exist');
         assert.strictEqual(body, undefined);
@@ -336,14 +648,14 @@ describe('Ovh Object Storage High Availability', function () {
     });
   });
 
-  describe('writeFile', function () {
+  describe('uploadFile', function () {
      before(function (done) {
       // Mock connection to get a token for future call
       nock(authURL)
         .post('/auth/tokens')
         .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-      storage.setConfig({
+      storage.setStorages({
         username                     : 'toto',
         password                     : 'toto',
         authUrl                      : authURL,
@@ -368,7 +680,7 @@ describe('Ovh Object Storage High Availability', function () {
           return '';
         });
 
-      storage.writeFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
+      storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
         assert.strictEqual(err, null);
         done();
       });
@@ -384,7 +696,7 @@ describe('Ovh Object Storage High Availability', function () {
           return '';
         });
 
-      storage.writeFile('templates', 'test.odt', _expectedFileContent, (err) => {
+      storage.uploadFile('templates', 'test.odt', _expectedFileContent, (err) => {
         assert.strictEqual(err, null);
         done();
       });
@@ -401,13 +713,26 @@ describe('Ovh Object Storage High Availability', function () {
         .post('/auth/tokens')
         .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-      storage.writeFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
+      storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
         assert.strictEqual(err, null);
         assert.strictEqual(firstNock.pendingMocks().length, 0);
         assert.strictEqual(secondNock.pendingMocks().length, 0);
         done();
       });
     });
+
+
+    it.skip('should reconnect automatically to the second object storage and should retry the request', function(done){
+
+    })
+
+    it.skip('should retry the request with the second object storage if the first object storage return a 500 error', function(done){
+
+    })
+
+    it.skip('should retry the request with the second object storage if the first object storage timeout', function(done){
+
+    })
 
     it('should write file on server from a local path with query parameters and params', function (done) {
       const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
@@ -422,14 +747,14 @@ describe('Ovh Object Storage High Availability', function () {
           return '';
         });
 
-      storage.writeFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), { headers: _headers, queries: _queries}, (err) => {
+      storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), { headers: _headers, queries: _queries}, (err) => {
         assert.strictEqual(err, null);
         done();
       });
     });
 
     it('should return an error if the local path does not exist', function (done) {
-      storage.writeFile('templates', 'test.odt', '/assets/fileee.txt', (err) => {
+      storage.uploadFile('templates', 'test.odt', '/assets/fileee.txt', (err) => {
         assert.notStrictEqual(err, null);
         assert.strictEqual(err.message, 'The local file does not exist');
         done();
@@ -442,7 +767,7 @@ describe('Ovh Object Storage High Availability', function () {
         .put('/templates/test.odt')
         .reply(404, '<html><h1>Unauthorized</h1><p>This server could not verify that you are authorized to access the document you requested.</p></html>');
 
-      storage.writeFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
+      storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
         assert.notStrictEqual(err, null);
         assert.strictEqual(err.message, '404 null');
         done();
@@ -454,7 +779,7 @@ describe('Ovh Object Storage High Availability', function () {
         .put('/templates/test.odt')
         .replyWithError('Error Message 1234');
 
-      storage.writeFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
+      storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
         assert.notStrictEqual(err, null);
         assert.strictEqual(err.message, 'Error Message 1234');
         done();
@@ -471,7 +796,7 @@ describe('Ovh Object Storage High Availability', function () {
         .post('/auth/tokens')
         .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-      storage.setConfig({
+      storage.setStorages({
         username                     : 'toto',
         password                     : 'toto',
         authUrl                      : authURL,
@@ -514,6 +839,19 @@ describe('Ovh Object Storage High Availability', function () {
         done();
       });
     });
+
+
+    it.skip('should reconnect automatically to the second object storage and should retry the request', function(done){
+
+    })
+
+    it.skip('should retry the request with the second object storage if the first object storage return a 500 error', function(done){
+
+    })
+
+    it.skip('should retry the request with the second object storage if the first object storage timeout', function(done){
+
+    })
 
     it('should return an error if the request return an error', function (done) {
       nock(publicURL)
