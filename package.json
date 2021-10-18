@@ -20,6 +20,7 @@
   "author": "Steevepay",
   "license": "Apache-2.0",
   "dependencies": {
+    "debug": "=4.3.1",
     "simple-get": "=4.0.0"
   },
   "devDependencies": {
