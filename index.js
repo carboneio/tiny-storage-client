@@ -121,8 +121,9 @@ function listFiles(container, options, callback) {
     timeout: _config.timeout
   }, (err, res, body) => {
 
+    /** Manage special errors: timeouts, too many redirects or any unexpected behavior */
     res = res || {};
-    res = { timeout: (err && err.toString() == 'Error: Request timed out' ? true : false), ...res };
+    res = { error: (err && err.toString().length > 0 ? err.toString() : null), ...res };
 
     checkIsConnected(res, 'listFiles', arguments, (error) => {
       if (error) {
@@ -179,6 +180,11 @@ function uploadFile (container, filename, localPathOrBuffer, options, callback) 
     },
     timeout: _config.timeout
   }, (err, res) => {
+
+    /** Manage special errors: timeouts, too many redirects or any unexpected behavior */
+    res = res || {};
+    res = { error: (err && err.toString().length > 0 && err.code !== 'ENOENT' ? err.toString() : null), ...res };
+
     checkIsConnected(res, 'uploadFile', arguments, (error) => {
       if (error) {
         return callback(error);
@@ -215,6 +221,11 @@ function downloadFile (container, filename, callback) {
     },
     timeout: _config.timeout
   }, (err, res, body) => {
+
+    /** Manage special errors: timeouts, too many redirects or any unexpected behavior */
+    res = res || {};
+    res = { error: (err && err.toString().length > 0 ? err.toString() : null), ...res };
+
     checkIsConnected(res, 'downloadFile', arguments, (error) => {
       if (error) {
         return callback(error);
@@ -253,6 +264,11 @@ function deleteFile (container, filename, callback) {
     },
     timeout: _config.timeout
   }, (err, res) => {
+
+    /** Manage special errors: timeouts, too many redirects or any unexpected behavior */
+    res = res || {};
+    res = { error: (err && err.toString().length > 0 ? err.toString() : null), ...res };
+
     checkIsConnected(res, 'deleteFile', arguments, (error) => {
       if (error) {
         return callback(error);
@@ -301,17 +317,17 @@ function checkResponseError (response) {
  * @returns {void}
  */
 function checkIsConnected (response, from, args, callback) {
-  if (!response || (response.statusCode < 500 && response.statusCode !== 401) || (!response.statusCode && response.timeout !== true)) {
+  if (!response || (response.statusCode < 500 && response.statusCode !== 401) || (!response.statusCode && !!response.error !== true)) {
     return callback(null);
   }
 
   if (response && response.statusCode >= 500) {
-    debug(`Object Storage index "${_config.actifStorage}" region "${_config.storages[_config.actifStorage]}" Error Status ${response.statusCode}`);
+    debug(`Object Storage index "${_config.actifStorage}" region "${_config.storages[_config.actifStorage].region}" Error Status ${response.statusCode}`);
     _config.actifStorage += 1
   }
 
-  if (response && response.timeout === true) {
-    debug(`Object Storage index "${_config.actifStorage}" region "${_config.storages[_config.actifStorage]}" Timeout ${_config.timeout} ms`);
+  if (response && !!response.error === true) {
+    debug(`Object Storage index "${_config.actifStorage}" region "${_config.storages[_config.actifStorage].region}" ${response.error}`);
     _config.actifStorage += 1
   }
 
