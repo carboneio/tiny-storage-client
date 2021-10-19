@@ -1,42 +1,39 @@
-# OVH Object Storage High Availability
+# OpenStack Object Storage High Availability
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/carboneio/ovh-object-storage-ha?style=for-the-badge)
+[![Documentation](https://img.shields.io/badge/documentation-yes-brightgreen.svg?style=for-the-badge)](#api-usage)
 
-![Version](https://img.shields.io/badge/version-0.1.2-blue.svg?style=flat-square&cacheSeconds=2592000)
-[![Documentation](https://img.shields.io/badge/documentation-yes-brightgreen.svg?style=flat-square)](#api-usage)
-
-
-High availability and performances are the main focus of this tiny helper: upload and get files in different regions, with fallback storage if something goes wrong.
-
-## TODO
-
-Version `1.0.0` in progress: coming versions may have breaking changes
-
-- [x] Authenticate to get a new token if a request fail and request the API again
-- [ ] Provide a Object Storage fallback if an issue occurs
+High availability and performances are the main focus of this tiny Node SDK: **upload** and **download files**, with __fallback storages__ if something goes wrong (Server or DNS not responding, timeout, error 500, too many redirection, and more...).
 
 ## Install
 
+1. **Prior installing**, Object Storages must be synchronized in order to access same objects. Learn more: https://docs.ovh.com/us/en/storage/pcs/sync-container/
+2. Install the package with your package manager:
+
 ```sh
 npm install --save ovh-object-storage-ha
-```
-
-or
-
-```sh
+// od
 yarn add ovh-object-storage-ha
 ```
 ## API Usage
 
-Initialise and authenticate the object storage
+Initialise and authenticate the object storage with a list of storages. You can register one or multiple storage, if something goes wrong, the next region will take over automatically.
 ```js
 const storageSDK = require('ovh-object-storage-ha');
 
-let storage = storageSDK({
+let storage = storageSDK([{
   authUrl    : 'https://auth.cloud.ovh.net/v3',
-  username   : 'username',
-  password   : 'password',
-  tenantName : 'tenantName',
-  region     : 'region'
-});
+  username   : 'username-1',
+  password   : 'password-1',
+  tenantName : 'tenantName-1',
+  region     : 'region-1'
+},
+{
+  authUrl    : 'https://auth.cloud.ovh.net/v3',
+  username   : 'username-2',
+  password   : 'password-2',
+  tenantName : 'tenantName-2',
+  region     : 'region-2'
+}]);
 
 storage.connection((err) => {
   if (err) {
@@ -50,7 +47,7 @@ Upload a file
 const path = require(path);
 
 /** SOLUTION 1: The file content can be passed by giving the file absolute path **/
-storage.writeFile('container', 'filename.jpg', path.join(__dirname, './assets/file.txt'), (err) => {
+storage.uploadFile('container', 'filename.jpg', path.join(__dirname, './assets/file.txt'), (err) => {
   if (err) {
     // handle error
   }
@@ -58,7 +55,7 @@ storage.writeFile('container', 'filename.jpg', path.join(__dirname, './assets/fi
 });
 
 /** SOLUTION 2: A buffer can be passed for the file content **/
-storage.writeFile('container', 'filename.jpg', Buffer.from("File content"), (err) => {
+storage.uploadFile('container', 'filename.jpg', Buffer.from("File content"), (err) => {
   if (err) {
     // handle error
   }
@@ -67,7 +64,7 @@ storage.writeFile('container', 'filename.jpg', Buffer.from("File content"), (err
 ```
 Download a file
 ```js
-storage.readFile('templates', 'filename.jpg', (err, body) => {
+storage.downloadFile('templates', 'filename.jpg', (err, body) => {
   if (err) {
     // handle error
   }
@@ -87,7 +84,7 @@ storage.deleteFile('templates', 'filename.jpg', (err) => {
 
 Get container list objects and details
 ```js
-storage.getFiles('templates', function (err, body) {
+storage.listFiles('templates', function (err, body) {
   if (err) {
     // handle error
   }
@@ -95,26 +92,13 @@ storage.getFiles('templates', function (err, body) {
 });
 
 // Possible to pass queries and overwrite request headers, list of options: https://docs.openstack.org/api-ref/object-store/?expanded=show-container-details-and-list-objects-detail#show-container-details-and-list-objects
-storage.getFiles('templates', { queries: { prefix: 'prefixName' }, headers: { Accept: 'application/xml' } }, function (err, body) {
+storage.listFiles('templates', { queries: { prefix: 'prefixName' }, headers: { Accept: 'application/xml' } }, function (err, body) {
   if (err) {
     // handle error
   }
   // success
 });
 ```
-
-Overwrite the configuration
-```js
-// Each configuration is optional, for example is is possible to provide only the username and password
-storage.setConfig({
-  authUrl    : 'https://auth.cloud.ovh.net/v3',
-  username   : 'username',
-  password   : 'password',
-  tenantName : 'tenantName',
-  region     : 'region'
-});
-```
-
 
 ## Run tests
 

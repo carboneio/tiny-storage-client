@@ -5,74 +5,227 @@ const fs     = require('fs');
 const path   = require('path');
 
 const authURL   = 'https://auth.cloud.ovh.net/v3';
-const publicURL = 'https://storage.gra.cloud.ovh.net/v1/AUTH_ce3e510224d740a685cb0ae7bdb8ebc3';
+const publicUrlGRA = 'https://storage.gra.cloud.ovh.net/v1/AUTH_ce3e510224d740a685cb0ae7bdb8ebc3';
+const publicUrlSBG = 'https://storage.sbg.cloud.ovh.net/v1/AUTH_ce3e510224d740a685cb0ae7bdb8ebc3';
 
 const tokenAuth = 'gAAAAABe8JlEGYPUwwOyjqgUBl11gSjDOw5VTtUZ5n8SWxghRGwakDkP_lelLfRctzyhbIFUXjsdPaGmV2xicL-9333lJUnL3M4JYlYCYMWsX3IhnLPYboyti835VdhAHQ7K_d0OC4OYvM04bvL3w_uSbkxPmL27uO0ISUgQdB_mHxoYlol8xYI'
 
 describe('Ovh Object Storage High Availability', function () {
   let storage = storageSDK();
 
+  beforeEach(function (done) {
+    const firstNock = nock(authURL)
+        .post('/auth/tokens')
+        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+    storage.setTimeout(5000);
+    storage.setStorages([{
+      username                     : 'storage-1-user',
+      password                     : 'storage-1-password',
+      authUrl                      : authURL,
+      tenantName                   : 'storage-1-tenant',
+      region                       : 'GRA'
+    }]);
+    storage.connection((err) => {
+      assert.strictEqual(err, null)
+      assert.strictEqual(firstNock.pendingMocks().length, 0);
+      done();
+    })
+  })
+
   describe('Connection', function () {
-    before(function () {
-      storage.setConfig({
-        username                     : 'toto',
-        password                     : 'toto',
-        authUrl                      : authURL,
-        tenantName                   : 'toto',
-        region                       : 'GRA'
-      })
-    });
 
     it('should connect to object file storage', function (done) {
-      nock(authURL)
+      const firstNock = nock(authURL)
         .post('/auth/tokens')
         .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
       storage.connection((err) => {
         assert.strictEqual(err, null);
-        assert.deepStrictEqual(storage.getConfig("_token"), tokenAuth);
-        assert.deepStrictEqual(storage.getConfig("_endpoints").url, connectionResultSuccessV3.token.catalog[9].endpoints[20].url);
+        assert.deepStrictEqual(storage.getConfig().token, tokenAuth);
+        assert.deepStrictEqual(storage.getConfig().endpoints.url, connectionResultSuccessV3.token.catalog[9].endpoints[20].url);
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
         done();
       });
     });
 
     it('should return an error if status code is not a 200', function (done) {
-      nock(authURL)
+      const firstNock = nock(authURL)
         .post('/auth/tokens')
         .reply(300, {});
 
       storage.connection((err) => {
         assert.notStrictEqual(err, null);
+        assert.strictEqual(err.message, 'Object Storages are not available');
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
         done();
       });
     });
 
     it('should return an error if endpoints cannot be found', function (done) {
-      nock(authURL)
+      const firstNock = nock(authURL)
         .post('/auth/tokens')
         .reply(200, connectionResultSuccessV3WithoutObjectStore);
 
       storage.connection((err) => {
         assert.notStrictEqual(err, null);
-        assert.strictEqual(err.message, 'Endpoint not found');
+        assert.strictEqual(err.message, 'Object Storages are not available');
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
         done();
       });
     });
 
     it('should return an error if endpoints cannot be found because region is invalid', function (done) {
-      nock(authURL)
+      const firstNock = nock(authURL)
         .post('/auth/tokens')
         .reply(200, connectionResultSuccessV3WithoutRegion);
 
       storage.connection((err) => {
         assert.notStrictEqual(err, null);
-        assert.strictEqual(err.message, 'Endpoint not found, invalid region');
+        assert.strictEqual(err.message, 'Object Storages are not available');
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
         done();
+      });
+    });
+
+    it('should connect to the second object storage if the first one is not available (error 500)', function (done) {
+      storage.setStorages([{
+        username                     : 'storage-1-user',
+        password                     : 'storage-1-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-1-tenant',
+        region                       : 'GRA'
+      },
+      {
+        username                     : 'storage-2-user',
+        password                     : 'storage-2-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-2-tenant',
+        region                       : 'SBG'
+      }])
+
+      const firstNock = nock(authURL)
+        .post('/auth/tokens')
+        .reply(500, {})
+        .post('/auth/tokens')
+        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+      storage.connection((err) => {
+        assert.strictEqual(err, null);
+        assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+        assert.deepStrictEqual(storage.getConfig().token, tokenAuth);
+        assert.deepStrictEqual(storage.getConfig().endpoints.url, connectionResultSuccessV3.token.catalog[9].endpoints[4].url);
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
+        done();
+      });
+    });
+
+    it('should connect to the second object storage if endpoints of the first object storage cannot be found', function (done) {
+      storage.setStorages([{
+        username                     : 'storage-1-user',
+        password                     : 'storage-1-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-1-tenant',
+        region                       : 'GRA'
+      },
+      {
+        username                     : 'storage-2-user',
+        password                     : 'storage-2-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-2-tenant',
+        region                       : 'SBG'
+      }])
+
+      const firstNock = nock(authURL)
+        .post('/auth/tokens')
+        .reply(200, connectionResultSuccessV3WithoutObjectStore)
+        .post('/auth/tokens')
+        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+      storage.connection((err) => {
+        assert.strictEqual(err, null);
+        assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+        assert.deepStrictEqual(storage.getConfig().token, tokenAuth);
+        assert.deepStrictEqual(storage.getConfig().endpoints.url, connectionResultSuccessV3.token.catalog[9].endpoints[4].url);
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
+        done();
+      });
+    });
+
+    it('should connect to the second object storage if endpoints of the first object storage cannot be found because region is invalid', function (done) {
+      storage.setStorages([{
+        username                     : 'storage-1-user',
+        password                     : 'storage-1-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-1-tenant',
+        region                       : 'GRA'
+      },
+      {
+        username                     : 'storage-2-user',
+        password                     : 'storage-2-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-2-tenant',
+        region                       : 'SBG'
+      }])
+
+      const firstNock = nock(authURL)
+        .post('/auth/tokens')
+        .reply(200, connectionResultSuccessV3WithoutRegion)
+        .post('/auth/tokens')
+        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+      storage.connection((err) => {
+        assert.strictEqual(err, null);
+        assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+        assert.deepStrictEqual(storage.getConfig().token, tokenAuth);
+        assert.deepStrictEqual(storage.getConfig().endpoints.url, connectionResultSuccessV3.token.catalog[9].endpoints[4].url);
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
+        done();
+      });
+    });
+
+    it('should reconnect to the first object storage if the first and second one are not available (error 500) but the first storage revive', function (done) {
+      storage.setStorages([{
+        username                     : 'storage-1-user',
+        password                     : 'storage-1-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-1-tenant',
+        region                       : 'GRA'
+      },
+      {
+        username                     : 'storage-2-user',
+        password                     : 'storage-2-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-2-tenant',
+        region                       : 'SBG'
+      }])
+
+      const firstNock = nock(authURL)
+        .post('/auth/tokens')
+        .reply(500, {})
+        .post('/auth/tokens')
+        .reply(500, {})
+        .post('/auth/tokens')
+        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+      storage.connection((err) => {
+        assert.notStrictEqual(err, null);
+        assert.strictEqual(err.message, 'Object Storages are not available');
+
+        storage.connection((err) => {
+          assert.strictEqual(err, null);
+          assert.deepStrictEqual(storage.getConfig().actifStorage, 0);
+          assert.deepStrictEqual(storage.getConfig().token, tokenAuth);
+          assert.deepStrictEqual(storage.getConfig().endpoints.url, connectionResultSuccessV3.token.catalog[9].endpoints[20].url);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
       });
     });
   });
 
-  describe('setConfig/getConfig', function () {
+  describe('setStorage/getStorages/setTimeout/getConfig', function () {
+
     it('should update the initial configuration', function (done) {
       const _expectedConfig = {
         authUrl    : 'https://carbone.io',
@@ -81,383 +234,860 @@ describe('Ovh Object Storage High Availability', function () {
         tenantName : 'toto',
         region     : 'GRA22'
       }
-      storage.setConfig(_expectedConfig)
-      assert.strictEqual(storage.getConfig('authUrl'), _expectedConfig.authUrl);
-      assert.strictEqual(storage.getConfig('username'), _expectedConfig.username);
-      assert.strictEqual(storage.getConfig('password'), _expectedConfig.password);
-      assert.strictEqual(storage.getConfig('tenantName'), _expectedConfig.tenantName);
-      assert.strictEqual(storage.getConfig('region'), _expectedConfig.region);
+      storage.setStorages(_expectedConfig)
+      const _storages = storage.getStorages();
+      assert.strictEqual(_storages[0].authUrl, _expectedConfig.authUrl);
+      assert.strictEqual(_storages[0].username, _expectedConfig.username);
+      assert.strictEqual(_storages[0].password, _expectedConfig.password);
+      assert.strictEqual(_storages[0].tenantName, _expectedConfig.tenantName);
+      assert.strictEqual(_storages[0].region, _expectedConfig.region);
+      done();
+    });
+
+    it('should set the request timeout', function (done) {
+      storage.setTimeout(200);
+      assert.strictEqual(storage.getConfig().timeout, 200);
       done();
     });
   });
 
-  describe('getFiles', function() {
-    before(function (done) {
-      // Mock connection to get a token for future call
-      nock(authURL)
-        .post('/auth/tokens')
-        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+  describe('listFiles', function() {
 
-      storage.setConfig({
-        username                     : 'toto',
-        password                     : 'toto',
-        authUrl                      : authURL,
-        tenantName                     : 'toto',
-        region                       : 'GRA'
+
+    describe("SINGLE STORAGE", function () {
+      it('should return a list of files as a JSON and as an XML', function (done) {
+        let firstNock = nock(publicUrlGRA)
+          .get('/templates')
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+          });
+
+        storage.listFiles('templates', (err, body) => {
+          assert.strictEqual(err, null);
+          const _files = JSON.parse(body.toString());
+          assert.strictEqual(_files.length > 0, true)
+          assert.strictEqual(_files[0].bytes > 0, true)
+          assert.strictEqual(_files[0].last_modified.length > 0, true)
+          assert.strictEqual(_files[0].hash.length > 0, true)
+          assert.strictEqual(_files[0].name.length > 0, true)
+          assert.strictEqual(_files[0].content_type.length > 0, true)
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
       });
 
-      storage.connection((err) => {
-        assert.strictEqual(err, null);
-        done();
+
+      it('should return a list of files as a XML and the header is overwritted', function (done) {
+        let firstNock = nock(publicUrlGRA)
+          .get('/templates')
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'files.xml'));
+          });
+
+        storage.listFiles('templates', { headers : { Accept: 'application/xml' } }, (err, body) => {
+          assert.strictEqual(err, null);
+          const _files = body.toString();
+          assert.strictEqual(_files.includes('<?xml'), true)
+          assert.strictEqual(_files.includes('<container name="templates">'), true)
+          assert.strictEqual(_files.includes('<bytes>47560</bytes>'), true)
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      })
+
+
+      it('should return a list of files with a prefix', function (done) {
+        let firstNock = nock(publicUrlGRA)
+          .get('/templates')
+          .query({ prefix : 'keys' })
+          .reply(200, () => {
+            let _file = fs.readFileSync(path.join(__dirname, 'assets', 'files.json'))
+            return Buffer.from(JSON.stringify(JSON.parse(_file.toString()).filter((el => el.name.includes('keys')))));
+          });
+
+        storage.listFiles('templates', { queries: { prefix: 'keys' } }, (err, body) => {
+          assert.strictEqual(err, null);
+          const _files = JSON.parse(body.toString());
+          _files.forEach(el => {
+            assert.strictEqual(el.name.includes('keys'), true);
+          });
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should reconnect automatically to the storage', function (done) {
+        let firstNock = nock(publicUrlGRA)
+          .get('/templates')
+          .reply(401, 'Unauthorized')
+          .get('/templates')
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+          });
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        storage.listFiles('templates', (err, body) => {
+          assert.strictEqual(err, null);
+          const _files = JSON.parse(body.toString());
+          assert.strictEqual(_files.length > 0, true)
+          assert.strictEqual(_files[0].bytes > 0, true)
+          assert.strictEqual(_files[0].last_modified.length > 0, true)
+          assert.strictEqual(_files[0].hash.length > 0, true)
+          assert.strictEqual(_files[0].name.length > 0, true)
+          assert.strictEqual(_files[0].content_type.length > 0, true)
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should reconnect automatically to the storage with a prefix and delimiter as option/query parameters', function (done) {
+        let firstNock = nock(publicUrlGRA)
+          .get('/templates')
+          .query({ prefix : 'keys', delimiter : '/' })
+          .reply(401, 'Unauthorized')
+          .get('/templates')
+          .query({ prefix : 'keys', delimiter : '/' })
+          .reply(200, () => {
+            return Buffer.from(JSON.stringify([
+              {
+                "subdir": "keys/"
+              }]));
+          });
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        storage.listFiles('templates', { queries: { prefix: 'keys', delimiter : '/' } }, (err, body) => {
+          assert.strictEqual(err, null);
+          const _files = JSON.parse(body.toString());
+          assert.strictEqual(_files[0].subdir, 'keys/')
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return an error if the single storage timout', function (done) {
+        storage.setTimeout(200);
+        const firstNock = nock(publicUrlGRA)
+          .get('/templates')
+          .delayConnection(500)
+          .reply(200, {})
+
+        storage.listFiles('templates', (err, body) => {
+          assert.notStrictEqual(err, null);
+          assert.strictEqual(err.message, 'Object Storages are not available');
+          assert.strictEqual(body, undefined);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return an error if the single storage return any kind of errors', function (done) {
+        let firstNock = nock(publicUrlGRA)
+          .get('/templates')
+          .replyWithError('Error Message 1234')
+
+        storage.listFiles('templates', (err, body) => {
+          assert.notStrictEqual(err, null);
+          assert.strictEqual(err.message, 'Object Storages are not available');
+          assert.strictEqual(body, undefined);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.deepStrictEqual(storage.getConfig().actifStorage, 0);
+          done();
+        });
+      });
+
+      it('should return an error if the container does not exist', function (done) {
+        let firstNock = nock(publicUrlGRA)
+          .get('/templates')
+          .reply(404);
+
+        storage.listFiles('templates', (err, body) => {
+          assert.notStrictEqual(err, null);
+          assert.strictEqual(err.message, 'Container does not exist');
+          assert.strictEqual(body, undefined);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+    });
+
+    describe("MUTLIPLE STORAGES", function () {
+      beforeEach(function (done) {
+        const firstNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        storage.setTimeout(5000);
+        storage.setStorages([{
+          username                     : 'storage-1-user',
+          password                     : 'storage-1-password',
+          authUrl                      : authURL,
+          tenantName                   : 'storage-1-tenant',
+          region                       : 'GRA'
+        },
+        {
+          username                     : 'storage-2-user',
+          password                     : 'storage-2-password',
+          authUrl                      : authURL,
+          tenantName                   : 'storage-2-tenant',
+          region                       : 'SBG'
+        }]);
+        storage.connection((err) => {
+          assert.strictEqual(err, null)
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+      it('should reconnect automatically to the second object storage if the first storage authentication fail and should retry the request', function (done) {
+
+        let firstNock = nock(publicUrlGRA)
+          /** 1 */
+          .get('/templates')
+          .reply(401, 'Unauthorized')
+
+        let secondNock = nock(authURL)
+          /** 2 */
+          .post('/auth/tokens')
+          .reply(500, {})
+          /** 3 */
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          /** 4 */
+          .get('/templates')
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+          });
+
+
+        storage.listFiles('templates', (err, body) => {
+          assert.strictEqual(err, null);
+          const _files = JSON.parse(body.toString());
+          assert.strictEqual(_files.length > 0, true)
+          assert.strictEqual(_files[0].bytes > 0, true)
+          assert.strictEqual(_files[0].last_modified.length > 0, true)
+          assert.strictEqual(_files[0].hash.length > 0, true)
+          assert.strictEqual(_files[0].name.length > 0, true)
+          assert.strictEqual(_files[0].content_type.length > 0, true)
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+          done();
+        });
+      });
+
+      it('should retry the request with the second object storage if the first object storage return a 500 error', function (done) {
+
+        let firstNock = nock(publicUrlGRA)
+          .get('/templates')
+          .reply(500, {});
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          .get('/templates')
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+          });
+
+
+        storage.listFiles('templates', (err, body) => {
+          assert.strictEqual(err, null);
+          const _files = JSON.parse(body.toString());
+          assert.strictEqual(_files.length > 0, true)
+          assert.strictEqual(_files[0].bytes > 0, true)
+          assert.strictEqual(_files[0].last_modified.length > 0, true)
+          assert.strictEqual(_files[0].hash.length > 0, true)
+          assert.strictEqual(_files[0].name.length > 0, true)
+          assert.strictEqual(_files[0].content_type.length > 0, true)
+
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+          done();
+        });
+      });
+
+
+
+      it('should retry the request with the second object storage if the first object storage timeout', function (done) {
+
+        storage.setTimeout(200);
+
+        let firstNock = nock(publicUrlGRA)
+          .get('/templates')
+          .delayConnection(500)
+          .reply(200, {});
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          .get('/templates')
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+          });
+
+        storage.listFiles('templates', (err, body) => {
+          assert.strictEqual(err, null);
+          const _files = JSON.parse(body.toString());
+          assert.strictEqual(_files.length > 0, true)
+          assert.strictEqual(_files[0].bytes > 0, true)
+          assert.strictEqual(_files[0].last_modified.length > 0, true)
+          assert.strictEqual(_files[0].hash.length > 0, true)
+          assert.strictEqual(_files[0].name.length > 0, true)
+          assert.strictEqual(_files[0].content_type.length > 0, true)
+
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+          done();
+        });
+      });
+
+      it('should retry the request with the second storage if the first storage return any kind of errors', function (done) {
+
+        let firstNock = nock(publicUrlGRA)
+          .get('/templates')
+          .replyWithError('Error Message 1234');
+
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          .get('/templates')
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+          });
+
+        storage.listFiles('templates', (err, body) => {
+          assert.strictEqual(err, null);
+          const _files = JSON.parse(body.toString());
+          assert.strictEqual(_files.length > 0, true)
+          assert.strictEqual(_files[0].bytes > 0, true)
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+          done();
+        });
+      });
+    });
+  });
+
+  describe('downloadFile', function () {
+
+    describe('SINGLE STORAGE', function () {
+      it('should download file', function (done) {
+        const firstNock = nock(publicUrlGRA)
+          .get('/templates/test.odt')
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+          });
+
+        storage.downloadFile('templates', 'test.odt', (err, body) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(body.toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should reconnect automatically to object storage and retry', function (done) {
+        let firstNock = nock(publicUrlGRA)
+          .get('/templates/test.odt')
+          .reply(401, 'Unauthorized')
+          .get('/templates/test.odt')
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+          });
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        storage.downloadFile('templates', 'test.odt', (err, body) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(body.toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return an error if the single storage timout', function (done) {
+        storage.setTimeout(200);
+        const firstNock = nock(publicUrlGRA)
+          .get('/templates/test.odt')
+          .delayConnection(500)
+          .reply(200, {})
+
+        storage.downloadFile('templates', 'test.odt', (err, body) => {
+          assert.notStrictEqual(err, null);
+          assert.strictEqual(err.message, 'Object Storages are not available');
+          assert.strictEqual(body, undefined);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return an error if the single storage return any kind of errors', function (done) {
+        const firstNock = nock(publicUrlGRA)
+          .get('/templates/test.odt')
+          .replyWithError('Error Message 1234');
+
+        storage.downloadFile('templates', 'test.odt', (err, body) => {
+          assert.notStrictEqual(err, null);
+          assert.strictEqual(err.message, 'Object Storages are not available');
+          assert.strictEqual(body, undefined);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return an error if the file does not exist', function (done) {
+        const firstNock = nock(publicUrlGRA)
+          .get('/templates/test.odt')
+          .reply(404);
+
+        storage.downloadFile('templates', 'test.odt', (err, body) => {
+          assert.notStrictEqual(err, null);
+          assert.strictEqual(err.message, 'File does not exist');
+          assert.strictEqual(body, undefined);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
       });
     });
 
-    it('should return a list of files as a JSON and as an XML', function (done) {
-      nock(publicURL)
-        .get('/templates')
-        .reply(200, () => {
-          return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+    describe('MULTIPLE STORAGES', function () {
+      beforeEach(function (done) {
+        const firstNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        storage.setTimeout(5000);
+        storage.setStorages([{
+          username                     : 'storage-1-user',
+          password                     : 'storage-1-password',
+          authUrl                      : authURL,
+          tenantName                   : 'storage-1-tenant',
+          region                       : 'GRA'
+        },
+        {
+          username                     : 'storage-2-user',
+          password                     : 'storage-2-password',
+          authUrl                      : authURL,
+          tenantName                   : 'storage-2-tenant',
+          region                       : 'SBG'
+        }]);
+        storage.connection((err) => {
+          assert.strictEqual(err, null)
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+      it('should reconnect automatically to the second object storage if the first storage authentication fail and should retry the request', function(done){
+        let firstNock = nock(publicUrlGRA)
+          /** 1 */
+          .get('/templates/test.odt')
+          .reply(401, 'Unauthorized');
+
+        let secondNock = nock(authURL)
+          /** 2 */
+          .post('/auth/tokens')
+          .reply(500, {})
+          /** 3 */
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          /** 4 */
+          .get('/templates/test.odt')
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+          });
+
+        storage.downloadFile('templates', 'test.odt', (err, body) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(body.toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+          done();
         });
 
-      storage.getFiles('templates', (err, body) => {
-        assert.strictEqual(err, null);
-        const _files = JSON.parse(body.toString());
-        assert.strictEqual(_files.length > 0, true)
-        assert.strictEqual(_files[0].bytes > 0, true)
-        assert.strictEqual(_files[0].last_modified.length > 0, true)
-        assert.strictEqual(_files[0].hash.length > 0, true)
-        assert.strictEqual(_files[0].name.length > 0, true)
-        assert.strictEqual(_files[0].content_type.length > 0, true)
-        done();
 
+      })
+
+      it('should retry the request with the second object storage if the first object storage return a 500 error', function(done){
+        let firstNock = nock(publicUrlGRA)
+          .get('/templates/test2.odt')
+          .reply(500, () => {
+            return '';
+          });
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          .get('/templates/test2.odt')
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+          });
+
+        storage.downloadFile('templates', 'test2.odt', (err, body) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(body.toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+          done();
+        });
+      })
+
+      it('should retry the request with the second object storage if the first object storage timeout', function(done){
+        storage.setTimeout(200);
+        let firstNock = nock(publicUrlGRA)
+          .get('/templates/test.odt')
+          .delayConnection(500)
+          .reply(200, {});
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          .get('/templates/test.odt')
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+          });
+
+
+        storage.downloadFile('templates', 'test.odt', (err, body) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(body.toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          done();
+        });
+      })
+
+      it('should retry the request with the second storage if the first storage return any kind of errors', function (done) {
+        let firstNock = nock(publicUrlGRA)
+          .get('/templates/test.odt')
+          .replyWithError('Error Message 1234');
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          .get('/templates/test.odt')
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+          });
+
+
+        storage.downloadFile('templates', 'test.odt', (err, body) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(body.toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+          done();
+        });
       });
-    });
+    })
+  });
 
-    it('should return a list of files as a XML and the header is overwritted', function (done) {
-      nock(publicURL)
-        .get('/templates')
-        .reply(200, () => {
-          return fs.createReadStream(path.join(__dirname, 'assets', 'files.xml'));
+  describe('uploadFile', function () {
+
+    describe("SINGLE STORAGE", function () {
+      it('should write file on server from a local path', function (done) {
+        const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
+
+        const firstNock = nock(publicUrlGRA)
+          .put('/templates/test.odt')
+          .reply(201, (uri, requestBody) => {
+            assert.strictEqual(requestBody, _expectedFileContent.toString());
+            return '';
+          });
+
+        storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
         });
+      });
 
-      storage.getFiles('templates', { headers : { Accept: 'application/xml' } }, (err, body) => {
-        assert.strictEqual(err, null);
-        const _files = body.toString();
-        assert.strictEqual(_files.includes('<?xml'), true)
-        assert.strictEqual(_files.includes('<container name="templates">'), true)
-        assert.strictEqual(_files.includes('<bytes>47560</bytes>'), true)
-        done();
+      it('should write file on server from a buffer', function (done) {
+        const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
+
+        const firstNock = nock(publicUrlGRA)
+          .put('/templates/test.odt')
+          .reply(201, (uri, requestBody) => {
+            assert.strictEqual(requestBody, _expectedFileContent.toString());
+            return '';
+          });
+
+        storage.uploadFile('templates', 'test.odt', _expectedFileContent, (err) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should reconnect automatically if the token is invalid and retry', function (done) {
+        let firstNock = nock(publicUrlGRA)
+          .put('/templates/test.odt')
+          .reply(401, 'Unauthorized')
+          .put('/templates/test.odt')
+          .reply(201, '');
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return an error if the single storage timout', function (done) {
+        storage.setTimeout(200);
+        const firstNock = nock(publicUrlGRA)
+          .put('/templates/test.odt')
+          .delayConnection(500)
+          .reply(200, {})
+
+        storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
+          assert.notStrictEqual(err, null);
+          assert.strictEqual(err.message, 'Object Storages are not available');
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+
+      it('should write file on server from a local path with query parameters and params', function (done) {
+        const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
+        const _headers = { ETag: "md5CheckSum" }
+        const _queries = { temp_url_expires: "1440619048" }
+
+        const firstNock = nock(publicUrlGRA, { reqheaders: _headers })
+          .put('/templates/test.odt')
+          .query(_queries)
+          .reply(201, (uri, requestBody) => {
+            assert.strictEqual(requestBody, _expectedFileContent.toString());
+            return '';
+          });
+
+        storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), { headers: _headers, queries: _queries}, (err) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return an error if the local path does not exist', function (done) {
+        storage.uploadFile('templates', 'test.odt', '/assets/fileee.txt', (err) => {
+          assert.notStrictEqual(err, null);
+          assert.strictEqual(err.message, 'The local file does not exist');
+          done();
+        });
+      });
+
+
+      it('should return an error if containers or the file does not exists', function (done) {
+        const firstNock = nock(publicUrlGRA)
+          .put('/templates/test.odt')
+          .reply(404, '<html><h1>Unauthorized</h1><p>This server could not verify that you are authorized to access the document you requested.</p></html>');
+
+        storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
+          assert.notStrictEqual(err, null);
+          assert.strictEqual(err.message, '404 null');
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return an error if the single storage return any kind of errors', function (done) {
+        const firstNock = nock(publicUrlGRA)
+          .put('/templates/test.odt')
+          .replyWithError('Error Message 1234');
+
+        storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
+          assert.notStrictEqual(err, null);
+          assert.strictEqual(err.message, 'Object Storages are not available');
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
       });
     })
 
-    it('should return a list of files with a prefix', function (done) {
-      nock(publicURL)
-        .get('/templates')
-        .query({ prefix : 'keys' })
-        .reply(200, () => {
-          let _file = fs.readFileSync(path.join(__dirname, 'assets', 'files.json'))
-          return Buffer.from(JSON.stringify(JSON.parse(_file.toString()).filter((el => el.name.includes('keys')))));
+    describe("MULTIPLE STORAGES", function () {
+
+      beforeEach(function (done) {
+        const firstNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        storage.setTimeout(5000);
+        storage.setStorages([{
+          username                     : 'storage-1-user',
+          password                     : 'storage-1-password',
+          authUrl                      : authURL,
+          tenantName                   : 'storage-1-tenant',
+          region                       : 'GRA'
+        },
+        {
+          username                     : 'storage-2-user',
+          password                     : 'storage-2-password',
+          authUrl                      : authURL,
+          tenantName                   : 'storage-2-tenant',
+          region                       : 'SBG'
+        }]);
+        storage.connection((err) => {
+          assert.strictEqual(err, null)
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+      it('should reconnect automatically to the second object storage if the first storage authentication fail and should retry the request', function(done){
+
+        let firstNock = nock(publicUrlGRA)
+          /** 1 */
+          .put('/templates/test.odt')
+          .reply(401, 'Unauthorized')
+
+
+        let secondNock = nock(authURL)
+          /** 2 */
+          .post('/auth/tokens')
+          .reply(500, {})
+          /** 3 */
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          /** 4 */
+          .put('/templates/test.odt')
+          .reply(201, '');
+
+        storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          done();
         });
+      })
 
-      storage.getFiles('templates', { queries: { prefix: 'keys' } }, (err, body) => {
-        assert.strictEqual(err, null);
-        const _files = JSON.parse(body.toString());
-        _files.forEach(el => {
-          assert.strictEqual(el.name.includes('keys'), true);
+      it('should retry the request with the second object storage if the first object storage return a 500 error', function(done){
+
+        let firstNock = nock(publicUrlGRA)
+          .put('/templates/test.odt')
+          .reply(500, {});
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          .put('/templates/test.odt')
+          .reply(201, '');
+
+        storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          done();
         });
-        done();
-      });
-    });
+      })
 
-    it('should reconnect automatically to object storage and return a list of files with a prefix and delimiter', function (done) {
-      let firstNock = nock(publicURL)
-        .get('/templates')
-        .query({ prefix : 'keys', delimiter : '/' })
-        .reply(401, 'Unauthorized')
-        .get('/templates')
-        .query({ prefix : 'keys', delimiter : '/' })
-        .reply(200, () => {
-          return Buffer.from(JSON.stringify([
-            {
-              "subdir": "keys/"
-            }]));
+
+
+      it('should retry the request with the second object storage if the first object storage timeout', function(done){
+        storage.setTimeout(200);
+        let firstNock = nock(publicUrlGRA)
+          .put('/templates/test.odt')
+          .delayConnection(500)
+          .reply(200, {});
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          .put('/templates/test.odt')
+          .reply(201, '');
+
+        storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          done();
         });
+      })
 
-      let secondNock = nock(authURL)
-        .post('/auth/tokens')
-        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+      it('should retry the request with the second storage if the first storage return any kind of errors', function (done) {
+        const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
 
-      storage.getFiles('templates', { queries: { prefix: 'keys', delimiter : '/' } }, (err, body) => {
-        assert.strictEqual(err, null);
-        const _files = JSON.parse(body.toString());
-        assert.strictEqual(_files[0].subdir, 'keys/')
-        assert.strictEqual(firstNock.pendingMocks().length, 0);
-        assert.strictEqual(secondNock.pendingMocks().length, 0);
-        done();
-      });
-    });
+        let firstNock = nock(publicUrlGRA)
+          .put('/templates/test.odt')
+          .replyWithError('Error Message 1234');
 
-    it('should reconnect automatically to object storage and retry', function (done) {
-      let firstNock = nock(publicURL)
-        .get('/templates')
-        .reply(401, 'Unauthorized')
-        .get('/templates')
-        .reply(200, () => {
-          return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          .put('/templates/test.odt')
+          .reply(201, (uri, requestBody) => {
+            assert.strictEqual(requestBody, _expectedFileContent.toString());
+            return '';
+          });
+
+        storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          done();
         });
-
-      let secondNock = nock(authURL)
-        .post('/auth/tokens')
-        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
-
-      storage.getFiles('templates', (err, body) => {
-        assert.strictEqual(err, null);
-        const _files = JSON.parse(body.toString());
-        assert.strictEqual(_files.length > 0, true)
-        assert.strictEqual(_files[0].bytes > 0, true)
-        assert.strictEqual(_files[0].last_modified.length > 0, true)
-        assert.strictEqual(_files[0].hash.length > 0, true)
-        assert.strictEqual(_files[0].name.length > 0, true)
-        assert.strictEqual(_files[0].content_type.length > 0, true)
-        assert.strictEqual(firstNock.pendingMocks().length, 0);
-        assert.strictEqual(secondNock.pendingMocks().length, 0);
-        done();
-      });
-    });
-
-    it('should return an error if the request return an error', function (done) {
-      nock(publicURL)
-        .get('/templates')
-        .replyWithError('Error Message 1234');
-
-      storage.getFiles('templates', (err, body) => {
-        assert.notStrictEqual(err, null);
-        assert.strictEqual(err.message, 'Error Message 1234');
-        assert.strictEqual(body, undefined);
-        done();
-      });
-    });
-
-    it('should return an error if the container does not exist', function (done) {
-      nock(publicURL)
-        .get('/templates')
-        .reply(404);
-
-      storage.getFiles('templates', (err, body) => {
-        assert.notStrictEqual(err, null);
-        assert.strictEqual(err.message, 'Container does not exist');
-        assert.strictEqual(body, undefined);
-        done();
-      });
-    });
-  });
-
-  describe('readFile', function () {
-    before(function (done) {
-      // Mock connection to get a token for future call
-      nock(authURL)
-        .post('/auth/tokens')
-        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
-
-      storage.setConfig({
-        username                     : 'toto',
-        password                     : 'toto',
-        authUrl                      : authURL,
-        tenantName                     : 'toto',
-        region                       : 'GRA'
-      });
-
-      storage.connection((err) => {
-        assert.strictEqual(err, null);
-        done();
-      });
-    });
-
-    it('should download file', function (done) {
-      nock(publicURL)
-        .get('/templates/test.odt')
-        .reply(200, () => {
-          return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
-        });
-
-      storage.readFile('templates', 'test.odt', (err, body) => {
-        assert.strictEqual(err, null);
-        assert.strictEqual(body.toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
-        done();
-      });
-    });
-
-    it('should reconnect automatically to object storage and retry', function (done) {
-      let firstNock = nock(publicURL)
-        .get('/templates/test.odt')
-        .reply(401, 'Unauthorized')
-        .get('/templates/test.odt')
-        .reply(200, () => {
-          return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
-        });
-
-      let secondNock = nock(authURL)
-        .post('/auth/tokens')
-        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
-
-      storage.readFile('templates', 'test.odt', (err, body) => {
-        assert.strictEqual(err, null);
-        assert.strictEqual(body.toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
-        assert.strictEqual(firstNock.pendingMocks().length, 0);
-        assert.strictEqual(secondNock.pendingMocks().length, 0);
-        done();
-      });
-    });
-
-    it('should return an error if the request return an error', function (done) {
-      nock(publicURL)
-        .get('/templates/test.odt')
-        .replyWithError('Error Message 1234');
-
-      storage.readFile('templates', 'test.odt', (err, body) => {
-        assert.notStrictEqual(err, null);
-        assert.strictEqual(err.message, 'Error Message 1234');
-        assert.strictEqual(body, undefined);
-        done();
-      });
-    });
-
-    it('should return an error if the file does not exist', function (done) {
-      nock(publicURL)
-        .get('/templates/test.odt')
-        .reply(404);
-
-      storage.readFile('templates', 'test.odt', (err, body) => {
-        assert.notStrictEqual(err, null);
-        assert.strictEqual(err.message, 'File does not exist');
-        assert.strictEqual(body, undefined);
-        done();
-      });
-    });
-  });
-
-  describe('writeFile', function () {
-     before(function (done) {
-      // Mock connection to get a token for future call
-      nock(authURL)
-        .post('/auth/tokens')
-        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
-
-      storage.setConfig({
-        username                     : 'toto',
-        password                     : 'toto',
-        authUrl                      : authURL,
-        tenantName                   : 'toto',
-        region                       : 'GRA'
-      });
-
-      storage.connection((err) => {
-        assert.strictEqual(err, null);
-        done();
-      });
-    });
-
-
-    it('should write file on server from a local path', function (done) {
-      const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
-
-      nock(publicURL)
-        .put('/templates/test.odt')
-        .reply(201, (uri, requestBody) => {
-          assert.strictEqual(requestBody, _expectedFileContent.toString());
-          return '';
-        });
-
-      storage.writeFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
-        assert.strictEqual(err, null);
-        done();
-      });
-    });
-
-    it('should write file on server from a buffer', function (done) {
-      const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
-
-      nock(publicURL)
-        .put('/templates/test.odt')
-        .reply(201, (uri, requestBody) => {
-          assert.strictEqual(requestBody, _expectedFileContent.toString());
-          return '';
-        });
-
-      storage.writeFile('templates', 'test.odt', _expectedFileContent, (err) => {
-        assert.strictEqual(err, null);
-        done();
-      });
-    });
-
-    it('should reconnect automatically if the token is invalid and retry', function (done) {
-      let firstNock = nock(publicURL)
-        .put('/templates/test.odt')
-        .reply(401, 'Unauthorized')
-        .put('/templates/test.odt')
-        .reply(201, '');
-
-      let secondNock = nock(authURL)
-        .post('/auth/tokens')
-        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
-
-      storage.writeFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
-        assert.strictEqual(err, null);
-        assert.strictEqual(firstNock.pendingMocks().length, 0);
-        assert.strictEqual(secondNock.pendingMocks().length, 0);
-        done();
-      });
-    });
-
-    it('should write file on server from a local path with query parameters and params', function (done) {
-      const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
-      const _headers = { ETag: "md5CheckSum" }
-      const _queries = { temp_url_expires: "1440619048" }
-
-      nock(publicURL, { reqheaders: _headers })
-        .put('/templates/test.odt')
-        .query(_queries)
-        .reply(201, (uri, requestBody) => {
-          assert.strictEqual(requestBody, _expectedFileContent.toString());
-          return '';
-        });
-
-      storage.writeFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), { headers: _headers, queries: _queries}, (err) => {
-        assert.strictEqual(err, null);
-        done();
-      });
-    });
-
-    it('should return an error if the local path does not exist', function (done) {
-      storage.writeFile('templates', 'test.odt', '/assets/fileee.txt', (err) => {
-        assert.notStrictEqual(err, null);
-        assert.strictEqual(err.message, 'The local file does not exist');
-        done();
-      });
-    });
-
-
-    it('should return an error if containers or the file does not exists', function (done) {
-      nock(publicURL)
-        .put('/templates/test.odt')
-        .reply(404, '<html><h1>Unauthorized</h1><p>This server could not verify that you are authorized to access the document you requested.</p></html>');
-
-      storage.writeFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
-        assert.notStrictEqual(err, null);
-        assert.strictEqual(err.message, '404 null');
-        done();
-      });
-    });
-
-    it('should return an error if the request return an error', function (done) {
-      nock(publicURL)
-        .put('/templates/test.odt')
-        .replyWithError('Error Message 1234');
-
-      storage.writeFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
-        assert.notStrictEqual(err, null);
-        assert.strictEqual(err.message, 'Error Message 1234');
-        done();
       });
     });
   });
@@ -465,80 +1095,217 @@ describe('Ovh Object Storage High Availability', function () {
 
 
   describe('deleteFile', function () {
-    before(function (done) {
-      // Mock connection to get a token for future call
-      nock(authURL)
-        .post('/auth/tokens')
-        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+    describe('SINGLE STORAGE', function () {
 
-      storage.setConfig({
-        username                     : 'toto',
-        password                     : 'toto',
-        authUrl                      : authURL,
-        tenantName                     : 'toto',
-        region                       : 'GRA'
+      it('should delete a file on the server', function (done) {
+        const firstNock = nock(publicUrlGRA)
+          .delete('/templates/test.odt')
+          .reply(201, '');
+
+        storage.deleteFile('templates', 'test.odt', (err) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
       });
 
-      storage.connection((err) => {
-        assert.strictEqual(err, null);
-        done();
+      it('should reconnect automatically if the token is invalid and retry', function (done) {
+        let firstNock = nock(publicUrlGRA)
+          .delete('/templates/test.odt')
+          .reply(401, 'Unauthorized')
+          .delete('/templates/test.odt')
+          .reply(201, '');
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        storage.deleteFile('templates', 'test.odt', (err) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          done();
+        });
       });
-    });
 
-    it('should delete a file on the server', function (done) {
-      nock(publicURL)
-        .delete('/templates/test.odt')
-        .reply(201, '');
+      it('should return an error if the single storage timout', function (done) {
+        storage.setTimeout(200);
+        const firstNock = nock(publicUrlGRA)
+          .delete('/templates/test.odt')
+          .delayConnection(500)
+          .reply(200, {})
 
-      storage.deleteFile('templates', 'test.odt', (err) => {
-        assert.strictEqual(err, null);
-        done();
+        storage.deleteFile('templates', 'test.odt', (err) => {
+          assert.notStrictEqual(err, null);
+          assert.strictEqual(err.message, 'Object Storages are not available');
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
       });
-    });
 
-    it('should reconnect automatically if the token is invalid and retry', function (done) {
-      let firstNock = nock(publicURL)
-        .delete('/templates/test.odt')
-        .reply(401, 'Unauthorized')
-        .delete('/templates/test.odt')
-        .reply(201, '');
+      it('should return an error if the single storage return any kind of errors', function (done) {
+        const firstNock = nock(publicUrlGRA)
+          .delete('/templates/test.odt')
+          .replyWithError('Error Message 1234');
 
-      let secondNock = nock(authURL)
-        .post('/auth/tokens')
-        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
-
-      storage.deleteFile('templates', 'test.odt', (err) => {
-        assert.strictEqual(err, null);
-        assert.strictEqual(firstNock.pendingMocks().length, 0);
-        assert.strictEqual(secondNock.pendingMocks().length, 0);
-        done();
+        storage.deleteFile('templates', 'test.odt', (err, body) => {
+          assert.notStrictEqual(err, null);
+          assert.strictEqual(err.message, 'Object Storages are not available');
+          assert.strictEqual(body, undefined);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
       });
-    });
 
-    it('should return an error if the request return an error', function (done) {
-      nock(publicURL)
-        .delete('/templates/test.odt')
-        .replyWithError('Error Message 1234');
+      it('should return an error if the file does not exist', function (done) {
+        const firstNock = nock(publicUrlGRA)
+          .delete('/templates/test.odt')
+          .reply(404);
 
-      storage.deleteFile('templates', 'test.odt', (err, body) => {
-        assert.notStrictEqual(err, null);
-        assert.strictEqual(err.message, 'Error Message 1234');
-        assert.strictEqual(body, undefined);
-        done();
+        storage.deleteFile('templates', 'test.odt', (err) => {
+          assert.notStrictEqual(err, null);
+          assert.strictEqual(err.message, 'File does not exist');
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
       });
-    });
+    })
 
-    it('should return an error if the file does not exist', function (done) {
-      nock(publicURL)
-        .delete('/templates/test.odt')
-        .reply(404);
+    describe('MULTIPLE STORAGES', function () {
 
-      storage.deleteFile('templates', 'test.odt', (err) => {
-        assert.notStrictEqual(err, null);
-        assert.strictEqual(err.message, 'File does not exist');
-        done();
+      beforeEach(function (done) {
+        const firstNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        storage.setTimeout(5000);
+        storage.setStorages([{
+          username                     : 'storage-1-user',
+          password                     : 'storage-1-password',
+          authUrl                      : authURL,
+          tenantName                   : 'storage-1-tenant',
+          region                       : 'GRA'
+        },
+        {
+          username                     : 'storage-2-user',
+          password                     : 'storage-2-password',
+          authUrl                      : authURL,
+          tenantName                   : 'storage-2-tenant',
+          region                       : 'SBG'
+        }]);
+        storage.connection((err) => {
+          assert.strictEqual(err, null)
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+      it('should reconnect automatically to the second object storage if the first storage authentication fail and should retry the request', function(done){
+        let firstNock = nock(publicUrlGRA)
+          /** 1 */
+          .delete('/templates/test.odt')
+          .reply(401, 'Unauthorized')
+          /** 4 */
+
+        let secondNock = nock(authURL)
+          /** 2 */
+          .post('/auth/tokens')
+          .reply(500, {})
+          /** 3 */
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          .delete('/templates/test.odt')
+          .reply(200, {})
+
+
+        storage.deleteFile('templates', 'test.odt', (err) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          done();
+        });
       });
-    });
+
+      it('should retry the request with the second object storage if the first object storage return a 500 error', function(done){
+
+        let firstNock = nock(publicUrlGRA)
+          .delete('/templates/test.odt')
+          .reply(500, {})
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+
+        let thirdNock = nock(publicUrlSBG)
+          .delete('/templates/test.odt')
+          .reply(200, {})
+
+        storage.deleteFile('templates', 'test.odt', (err) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          done();
+        });
+      })
+
+
+      it('should retry the request with the second object storage if the first object storage timeout', function(done){
+
+        storage.setTimeout(200);
+
+        let firstNock = nock(publicUrlGRA)
+          .delete('/templates/test.odt')
+          .delayConnection(500)
+          .reply(200, {});
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+
+        let thirdNock = nock(publicUrlSBG)
+          .delete('/templates/test.odt')
+          .reply(200, {});
+
+        storage.deleteFile('templates', 'test.odt', (err) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          done();
+        });
+      })
+
+
+
+      it('should retry the request with the second storage if the first storage return any kind of errors', function (done) {
+
+        let firstNock = nock(publicUrlGRA)
+          .delete('/templates/test.odt')
+          .replyWithError('Error Message 1234');
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          .delete('/templates/test.odt')
+          .reply(200, {});
+
+        storage.deleteFile('templates', 'test.odt', (err) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+    })
   });
 });
 

@@ -1,15 +1,14 @@
 const get = require('simple-get');
 const fs = require('fs');
+const debug = require('debug')('ovh-object-storage-ha')
 const { Readable } = require('stream');
 
 let _config = {
-  authUrl: 'https://auth.cloud.ovh.net/v3',
-  username: null,
-  password: null,
-  tenantName: null,
-  region: null,
-  _endpoints: null,
-  _token: null
+  storages: [],
+  actifStorage: 0,
+  endpoints: {},
+  token: '',
+  timeout: 5000
 }
 
 /**
@@ -18,15 +17,23 @@ let _config = {
  * @param {function} callback function(err):void = The `err` is null by default, return an object if an error occurs.
  */
 function connection (callback) {
+  if (_config.actifStorage === _config.storages.length) {
+    // Reset the index of the actual storage
+    _config.actifStorage = 0;
+    debug(`Error: Object Storages are not available`);
+    return callback(new Error('Object Storages are not available'));
+  }
+  const _storage = _config.storages[_config.actifStorage];
+  debug(`Object Storage index "${_config.actifStorage}" region "${_storage.region}" connection...`);
   const _json = {
     auth : {
       identity : {
         methods  : ['password'],
         password : {
           user : {
-            name     : _config.username,
+            name     : _storage.username,
             domain   : { id : 'default' },
-            password : _config.password
+            password : _storage.password
           }
         }
       },
@@ -35,54 +42,62 @@ function connection (callback) {
           domain : {
             id : 'default'
           },
-          name : _config.tenantName
+          name : _storage.tenantName
         }
       }
     }
   };
 
   get.concat({
-    url    : `${_config.authUrl}/auth/tokens`,
+    url    : `${_storage.authUrl}/auth/tokens`,
     method : 'POST',
     json   : true,
-    body   : _json
+    body   : _json,
+    timeout: _config.timeout
   }, (err, res, data) => {
     if (err) {
       return callback(new Error(err.toString()));
     }
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      return callback(new Error(res.statusCode.toString() + ' ' + res.statusMessage));
+      debug(`Object Storage index "${_config.actifStorage}" region "${_storage.region}" not available | Status ${res.statusCode.toString()} | Message: ${res.statusMessage} `);
+      _config.actifStorage += 1
+      return connection.apply(null, arguments);
     }
 
-    _config._token = res.headers['x-subject-token'];
+    _config.token = res.headers['x-subject-token'];
 
     const _serviceCatalog = data.token.catalog.find((element) => {
       return element.type === 'object-store';
     });
 
     if (!_serviceCatalog) {
-      return callback(new Error('Endpoint not found'));
+      debug(`Object Storage index "${_config.actifStorage}" region "${_storage.region}" warning: Object storage catalog not found`);
+      _config.actifStorage += 1
+      return connection.apply(null, arguments);
     }
 
-    _config._endpoints = _serviceCatalog.endpoints.find((element) => {
-      return element.region === _config.region;
+    _config.endpoints = _serviceCatalog.endpoints.find((element) => {
+      return element.region === _storage.region;
     });
 
-    if (!_config._endpoints) {
-      return callback(new Error('Endpoint not found, invalid region'));
+    if (!_config.endpoints) {
+      debug(`Object Storage index "${_config.actifStorage}" region "${_storage.region} warning: storage endpoint not found, invalid region`);
+      _config.actifStorage += 1
+      return connection.apply(null, arguments);
     }
+    debug(`Object Storage index "${_config.actifStorage}" region "${_storage.region}" connected!`);
     return callback(null);
   });
 }
 /**
- * @description Show container details and list objects. It is possible to pass as a second argument as an object with queries or headers to overwrite the request.
+ * @description List objects from a container. It is possible to pass as a second argument as an object with queries or headers to overwrite the request.
  *
  * @param {String} container container name
  * @param {Object} options [OPTIONAL]: { headers: {}, queries: {} } List of headers and queries: https://docs.openstack.org/api-ref/object-store/?expanded=show-container-details-and-list-objects-detail#show-container-details-and-list-objects
  * @param {function} callback function(err, body):void = The second argument `body` is the content of the file as a Buffer. The `err` argument is null by default, return an object if an error occurs.
  */
-function getFiles(container, options, callback) {
+function listFiles(container, options, callback) {
   let _options = {};
 
   if (!callback) {
@@ -95,15 +110,21 @@ function getFiles(container, options, callback) {
   const { headers, queries } = getHeaderAndQueryParameters(_options);
 
   get.concat({
-    url     : `${_config._endpoints.url}/${container}${queries}`,
+    url     : `${_config.endpoints.url}/${container}${queries}`,
     method  : 'GET',
     headers : {
-      'X-Auth-Token' : _config._token,
+      'X-Auth-Token' : _config.token,
       Accept         : 'application/json',
       ...headers
-    }
+    },
+    timeout: _config.timeout
   }, (err, res, body) => {
-    checkIsConnected(res, 'getFiles', arguments, (error) => {
+
+    /** Manage special errors: timeouts, too many redirects or any unexpected behavior */
+    res = res || {};
+    res = { error: (err && err.toString().length > 0 ? err.toString() : null), ...res };
+
+    checkIsConnected(res, 'listFiles', arguments, (error) => {
       if (error) {
         return callback(error);
       }
@@ -133,7 +154,7 @@ function getFiles(container, options, callback) {
  * @param {function} callback function(err):void = The `err` is null by default, return an object if an error occurs.
  * @returns {void}
  */
-function writeFile (container, filename, localPathOrBuffer, options, callback) {
+function uploadFile (container, filename, localPathOrBuffer, options, callback) {
   let readStream = Buffer.isBuffer(localPathOrBuffer) === true ? Readable.from(localPathOrBuffer) : fs.createReadStream(localPathOrBuffer);
 
   let _options = {};
@@ -148,16 +169,22 @@ function writeFile (container, filename, localPathOrBuffer, options, callback) {
   const { headers, queries } = getHeaderAndQueryParameters(_options);
 
   get({
-    url     : `${_config._endpoints.url}/${container}/${filename}${queries}`,
+    url     : `${_config.endpoints.url}/${container}/${filename}${queries}`,
     method  : 'PUT',
     body    : readStream,
     headers : {
-      'X-Auth-Token' : _config._token,
+      'X-Auth-Token' : _config.token,
       Accept         : 'application/json',
       ...headers
-    }
+    },
+    timeout: _config.timeout
   }, (err, res) => {
-    checkIsConnected(res, 'writeFile', arguments, (error) => {
+
+    /** Manage special errors: timeouts, too many redirects or any unexpected behavior */
+    res = res || {};
+    res = { error: (err && err.toString().length > 0 && err.code !== 'ENOENT' ? err.toString() : null), ...res };
+
+    checkIsConnected(res, 'uploadFile', arguments, (error) => {
       if (error) {
         return callback(error);
       }
@@ -183,16 +210,21 @@ function writeFile (container, filename, localPathOrBuffer, options, callback) {
  * @param {function} callback function(err, body):void = The second argument `body` is the content of the file as a Buffer. The `err` argument is null by default, return an object if an error occurs.
  * @returns {void}
  */
-function readFile (container, filename, callback) {
+function downloadFile (container, filename, callback) {
   get.concat({
-    url     : `${_config._endpoints.url}/${container}/${filename}`,
+    url     : `${_config.endpoints.url}/${container}/${filename}`,
     method  : 'GET',
     headers : {
-      'X-Auth-Token' : _config._token,
+      'X-Auth-Token' : _config.token,
       Accept         : 'application/json'
-    }
+    },
+    timeout: _config.timeout
   }, (err, res, body) => {
-    checkIsConnected(res, 'readFile', arguments, (error) => {
+    /** Manage special errors: timeouts, too many redirects or any unexpected behavior */
+    res = res || {};
+    res = { error: (err && err.toString().length > 0 ? err.toString() : null), ...res };
+
+    checkIsConnected(res, 'downloadFile', arguments, (error) => {
       if (error) {
         return callback(error);
       }
@@ -222,13 +254,19 @@ function readFile (container, filename, callback) {
  */
 function deleteFile (container, filename, callback) {
   get.concat({
-    url     : `${_config._endpoints.url}/${container}/${filename}`,
+    url     : `${_config.endpoints.url}/${container}/${filename}`,
     method  : 'DELETE',
     headers : {
-      'X-Auth-Token' : _config._token,
+      'X-Auth-Token' : _config.token,
       Accept         : 'application/json'
-    }
+    },
+    timeout: _config.timeout
   }, (err, res) => {
+
+    /** Manage special errors: timeouts, too many redirects or any unexpected behavior */
+    res = res || {};
+    res = { error: (err && err.toString().length > 0 ? err.toString() : null), ...res };
+
     checkIsConnected(res, 'deleteFile', arguments, (error) => {
       if (error) {
         return callback(error);
@@ -277,8 +315,18 @@ function checkResponseError (response) {
  * @returns {void}
  */
 function checkIsConnected (response, from, args, callback) {
-  if (!response || response.statusCode !== 401) {
+  if (!response || (response.statusCode < 500 && response.statusCode !== 401) || (!response.statusCode && !!response.error !== true)) {
     return callback(null);
+  }
+
+  if (response && response.statusCode >= 500) {
+    debug(`Object Storage index "${_config.actifStorage}" region "${_config.storages[_config.actifStorage].region}" Error Status ${response.statusCode}`);
+    _config.actifStorage += 1
+  }
+
+  if (response && !!response.error === true) {
+    debug(`Object Storage index "${_config.actifStorage}" region "${_config.storages[_config.actifStorage].region}" ${response.error}`);
+    _config.actifStorage += 1
   }
 
   // Reconnect to object storage
@@ -288,17 +336,17 @@ function checkIsConnected (response, from, args, callback) {
     }
 
     switch (from) {
-      case 'readFile':
-        readFile.apply(null, args);
+      case 'downloadFile':
+        downloadFile.apply(null, args);
         break;
-      case 'writeFile':
-        writeFile.apply(null, args);
+      case 'uploadFile':
+        uploadFile.apply(null, args);
         break;
       case 'deleteFile':
         deleteFile.apply(null, args);
         break;
-      case 'getFiles':
-        getFiles.apply(null, args);
+      case 'listFiles':
+        listFiles.apply(null, args);
         break;
       default:
         callback(null);
@@ -306,6 +354,7 @@ function checkIsConnected (response, from, args, callback) {
     }
   });
 }
+
 
 /**
  * @description Set and overwrite the Object Storage SDK configurations
@@ -317,18 +366,45 @@ function checkIsConnected (response, from, args, callback) {
  * @param {String} config.tenantName Tenant Name/Tenant ID for authentication
  * @param {String} config.region Region used to retreive the Object Storage endpoint to request
  */
-function setConfig(config) {
-  _config = { ...config }
+function setStorages(storages) {
+  _config.token = '';
+  _config.endpoints = {};
+  _config.actifStorage = 0;
+  if (Array.isArray(storages) === true) {
+    /** List of storage */
+    _config.storages = storages;
+  } else if (typeof storages === 'object') {
+    /** Only a single storage is passed */
+    _config.storages = [];
+    _config.storages.push(storages)
+  }
 }
 
 /**
- * @description Return the configuration value
+ * Set the timeout
  *
- * @param {String} name property name
- * @returns {String} value of the config property
+ * @param {Integer} timeout
  */
-function getConfig(name) {
-  return _config[name];
+function setTimeout(timeout) {
+  _config.timeout = timeout;
+}
+
+/**
+ * @description Return the list of storages
+ *
+ * @returns {String} The list of storages
+ */
+function getStorages() {
+  return _config.storages;
+}
+
+/**
+ * @description Return the configuration object
+ *
+ * @returns {String} The list of storages
+ */
+function getConfig() {
+  return _config;
 }
 
 /**
@@ -343,15 +419,17 @@ function getConfig(name) {
  * @param {String} config.region Region used to retreive the Object Storage endpoint to request
  */
 module.exports = (config) => {
-  setConfig(config)
+  setStorages(config)
   return {
     connection,
-    writeFile,
-    readFile,
+    uploadFile,
+    downloadFile,
     deleteFile,
-    setConfig,
-    getConfig,
-    getFiles
+    listFiles,
+    setTimeout,
+    setStorages,
+    getStorages,
+    getConfig
   }
 }
 
