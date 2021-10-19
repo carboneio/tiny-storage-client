@@ -1,6 +1,6 @@
 {
   "name": "ovh-object-storage-ha",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "description": "Performant and tiny helper to request the OVH Object Storage",
   "main": "index.js",
   "scripts": {
