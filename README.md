@@ -1,4 +1,5 @@
-# OpenStack Object Storage High Availability
+# OpenStack Object Storage High Availability Node SDK
+
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/carboneio/ovh-object-storage-ha?style=for-the-badge)
 [![Documentation](https://img.shields.io/badge/documentation-yes-brightgreen.svg?style=for-the-badge)](#api-usage)
 
@@ -61,10 +62,18 @@ storage.uploadFile('container', 'filename.jpg', Buffer.from("File content"), (er
   }
   // success
 });
+
+/** SOLUTION 3: the function accepts a optionnal fourth argument `option` including query parameters and headers. List of query parameters and headers: https://docs.openstack.org/api-ref/object-store/?expanded=create-or-replace-object-detail#create-or-replace-object **/
+storage.uploadFile('container', 'filename.jpg', Buffer.from("File content"), { queries: { temp_url_expires: '1440619048' }, headers: { 'X-Object-Meta-LocationOrigin': 'Paris/France' }}, (err) => {
+  if (err) {
+    // handle error
+  }
+  // success
+});
 ```
 Download a file
 ```js
-storage.downloadFile('templates', 'filename.jpg', (err, body) => {
+storage.downloadFile('templates', 'filename.jpg', (err, body, headers) => {
   if (err) {
     // handle error
   }
@@ -84,6 +93,9 @@ storage.deleteFile('templates', 'filename.jpg', (err) => {
 
 Get container list objects and details
 ```js
+/**
+ * SOLUTION 1
+ **/
 storage.listFiles('templates', function (err, body) {
   if (err) {
     // handle error
@@ -91,7 +103,10 @@ storage.listFiles('templates', function (err, body) {
   // success
 });
 
-// Possible to pass queries and overwrite request headers, list of options: https://docs.openstack.org/api-ref/object-store/?expanded=show-container-details-and-list-objects-detail#show-container-details-and-list-objects
+/**
+ * SOLUTION 2
+ * Possible to pass queries and overwrite request headers, list of options: https://docs.openstack.org/api-ref/object-store/? expanded=show-container-details-and-list-objects-detail#show-container-details-and-list-objects
+ **/
 storage.listFiles('templates', { queries: { prefix: 'prefixName' }, headers: { Accept: 'application/xml' } }, function (err, body) {
   if (err) {
     // handle error
