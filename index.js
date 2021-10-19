@@ -6,8 +6,8 @@ const { Readable } = require('stream');
 let _config = {
   storages: [],
   actifStorage: 0,
-  endpoints: null,
-  token: null,
+  endpoints: {},
+  token: '',
   timeout: 5000
 }
 
@@ -23,7 +23,6 @@ function connection (callback) {
     debug(`Error: Object Storages are not available`);
     return callback(new Error('Object Storages are not available'));
   }
-  console.log("Connect with the storage", _config.actifStorage)
   const _storage = _config.storages[_config.actifStorage];
   debug(`Object Storage index "${_config.actifStorage}" region "${_storage.region}" connection...`);
   const _json = {
@@ -221,7 +220,6 @@ function downloadFile (container, filename, callback) {
     },
     timeout: _config.timeout
   }, (err, res, body) => {
-
     /** Manage special errors: timeouts, too many redirects or any unexpected behavior */
     res = res || {};
     res = { error: (err && err.toString().length > 0 ? err.toString() : null), ...res };
@@ -369,6 +367,8 @@ function checkIsConnected (response, from, args, callback) {
  * @param {String} config.region Region used to retreive the Object Storage endpoint to request
  */
 function setStorages(storages) {
+  _config.token = '';
+  _config.endpoints = {};
   _config.actifStorage = 0;
   if (Array.isArray(storages) === true) {
     /** List of storage */
