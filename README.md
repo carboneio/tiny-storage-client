@@ -3,7 +3,7 @@
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/carboneio/ovh-object-storage-ha?style=for-the-badge)
 [![Documentation](https://img.shields.io/badge/documentation-yes-brightgreen.svg?style=for-the-badge)](#api-usage)
 
-High availability and performances are the main focus of this tiny Node SDK: **upload** and **download files**, with __fallback storages__ if something goes wrong (Server or DNS not responding, timeout, error 500, too many redirection, and more...).
+High availability and performances are the main focus of this tiny Node SDK: **upload** and **download files**, with __fallback storages__ if something goes wrong (Server or DNS not responding, timeout, error 500, too many redirection, authentication error and more...).
 
 ## Install
 
@@ -17,7 +17,10 @@ yarn add ovh-object-storage-ha
 ```
 ## API Usage
 
-Initialise and authenticate the object storage with a list of storages. You can register one or multiple storage, if something goes wrong, the next region will take over automatically.
+### Connection
+
+Initialise the SDK with one or multiple storage, if something goes wrong, the next region will take over automatically. If any storage is available, an error message is returned `Error: Object Storages are not available`.
+
 ```js
 const storageSDK = require('ovh-object-storage-ha');
 
@@ -43,7 +46,8 @@ storage.connection((err) => {
   // Success, connected!
 })
 ```
-Upload a file
+### Upload a file
+
 ```js
 const path = require(path);
 
@@ -71,7 +75,9 @@ storage.uploadFile('container', 'filename.jpg', Buffer.from("File content"), { q
   // success
 });
 ```
-Download a file
+
+### Download a file
+
 ```js
 storage.downloadFile('templates', 'filename.jpg', (err, body, headers) => {
   if (err) {
@@ -81,7 +87,8 @@ storage.downloadFile('templates', 'filename.jpg', (err, body, headers) => {
 });
 ```
 
-Delete a file
+### Delete a file
+
 ```js
 storage.deleteFile('templates', 'filename.jpg', (err) => {
   if (err) {
@@ -91,7 +98,8 @@ storage.deleteFile('templates', 'filename.jpg', (err) => {
 });
 ```
 
-Get container list objects and details
+### List objects from a container
+
 ```js
 /**
  * SOLUTION 1
