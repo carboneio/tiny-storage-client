@@ -1,3 +1,5 @@
+### v0.1.4
+  - Fix the automatic fallback when multiple clients are using all functions in parallel
 ### v0.1.3
   - Rename `getFiles` function to `listFiles`
   - Rename `writeFile` function to `uploadFile`

@@ -16,9 +16,11 @@ let _config = {
  *
  * @param {function} callback function(err):void = The `err` is null by default, return an object if an error occurs.
  */
-function connection (callback) {
+function connection (callback, originStorage = 0) {
+  const arrayArguments = [callback, originStorage];
+
   if (_config.actifStorage === _config.storages.length) {
-    // Reset the index of the actual storage
+    /**  Reset the index of the actual storage */
     _config.actifStorage = 0;
     debug(`Error: Object Storages are not available`);
     return callback(new Error('Object Storages are not available'));
@@ -60,9 +62,10 @@ function connection (callback) {
     }
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      debug(`Object Storage index "${_config.actifStorage}" region "${_storage.region}" not available | Status ${res.statusCode.toString()} | Message: ${res.statusMessage} `);
-      _config.actifStorage += 1
-      return connection.apply(null, arguments);
+      debug(`Object Storage index "${_config.actifStorage}" region "${_storage.region}" connexion failled | Status ${res.statusCode.toString()} | Message: ${res.statusMessage} `);
+      activateFallbackStorage(originStorage);
+      arrayArguments[1] = _config.actifStorage;
+      return connection.apply(null, arrayArguments);
     }
 
     _config.token = res.headers['x-subject-token'];
@@ -73,8 +76,9 @@ function connection (callback) {
 
     if (!_serviceCatalog) {
       debug(`Object Storage index "${_config.actifStorage}" region "${_storage.region}" warning: Object storage catalog not found`);
-      _config.actifStorage += 1
-      return connection.apply(null, arguments);
+      activateFallbackStorage(originStorage);
+      arrayArguments[1] = _config.actifStorage;
+      return connection.apply(null, arrayArguments);
     }
 
     _config.endpoints = _serviceCatalog.endpoints.find((element) => {
@@ -83,8 +87,9 @@ function connection (callback) {
 
     if (!_config.endpoints) {
       debug(`Object Storage index "${_config.actifStorage}" region "${_storage.region} warning: storage endpoint not found, invalid region`);
-      _config.actifStorage += 1
-      return connection.apply(null, arguments);
+      activateFallbackStorage(originStorage);
+      arrayArguments[1] = _config.actifStorage;
+      return connection.apply(null, arrayArguments);
     }
     debug(`Object Storage index "${_config.actifStorage}" region "${_storage.region}" connected!`);
     return callback(null);
@@ -98,17 +103,18 @@ function connection (callback) {
  * @param {function} callback function(err, body):void = The second argument `body` is the content of the file as a Buffer. The `err` argument is null by default, return an object if an error occurs.
  */
 function listFiles(container, options, callback) {
-  let _options = {};
+  const arrayArguments = [...arguments];
 
-  if (!callback) {
+  if (callback === undefined) {
     callback = options;
-    _options = { headers: {}, queries: {} };
-  } else {
-    _options = options;
+    arrayArguments.push(options);
+    options = { headers: {}, queries: {} };
+    arrayArguments[1] = options;
   }
 
-  const { headers, queries } = getHeaderAndQueryParameters(_options);
+  arrayArguments.push({ originStorage : _config.actifStorage })
 
+  const { headers, queries } = getHeaderAndQueryParameters(options);
   get.concat({
     url     : `${_config.endpoints.url}/${container}${queries}`,
     method  : 'GET',
@@ -123,8 +129,7 @@ function listFiles(container, options, callback) {
     /** Manage special errors: timeouts, too many redirects or any unexpected behavior */
     res = res || {};
     res = { error: (err && err.toString().length > 0 ? err.toString() : null), ...res };
-
-    checkIsConnected(res, 'listFiles', arguments, (error) => {
+    checkIsConnected(res, 'listFiles', arrayArguments, (error) => {
       if (error) {
         return callback(error);
       }
@@ -157,17 +162,18 @@ function listFiles(container, options, callback) {
 function uploadFile (container, filename, localPathOrBuffer, options, callback) {
   let readStream = Buffer.isBuffer(localPathOrBuffer) === true ? Readable.from(localPathOrBuffer) : fs.createReadStream(localPathOrBuffer);
 
-  let _options = {};
+  const arrayArguments = [...arguments];
 
-  if (!callback) {
+  if (callback === undefined) {
     callback = options;
-    _options = { headers: {}, queries: {} };
-  } else {
-    _options = options;
+    arrayArguments.push(options);
+    options = { headers: {}, queries: {} };
+    arrayArguments[3] = options;
   }
 
-  const { headers, queries } = getHeaderAndQueryParameters(_options);
+  arrayArguments.push({ originStorage : _config.actifStorage })
 
+  const { headers, queries } = getHeaderAndQueryParameters(options);
   get({
     url     : `${_config.endpoints.url}/${container}/${filename}${queries}`,
     method  : 'PUT',
@@ -184,7 +190,7 @@ function uploadFile (container, filename, localPathOrBuffer, options, callback) 
     res = res || {};
     res = { error: (err && err.toString().length > 0 && err.code !== 'ENOENT' ? err.toString() : null), ...res };
 
-    checkIsConnected(res, 'uploadFile', arguments, (error) => {
+    checkIsConnected(res, 'uploadFile', arrayArguments, (error) => {
       if (error) {
         return callback(error);
       }
@@ -211,6 +217,9 @@ function uploadFile (container, filename, localPathOrBuffer, options, callback) 
  * @returns {void}
  */
 function downloadFile (container, filename, callback) {
+
+  const arrayArguments = [...arguments, { originStorage : _config.actifStorage }];
+
   get.concat({
     url     : `${_config.endpoints.url}/${container}/${filename}`,
     method  : 'GET',
@@ -224,7 +233,7 @@ function downloadFile (container, filename, callback) {
     res = res || {};
     res = { error: (err && err.toString().length > 0 ? err.toString() : null), ...res };
 
-    checkIsConnected(res, 'downloadFile', arguments, (error) => {
+    checkIsConnected(res, 'downloadFile', arrayArguments, (error) => {
       if (error) {
         return callback(error);
       }
@@ -253,6 +262,9 @@ function downloadFile (container, filename, callback) {
  * @returns {void}
  */
 function deleteFile (container, filename, callback) {
+
+  const arrayArguments = [...arguments, { originStorage : _config.actifStorage }];
+
   get.concat({
     url     : `${_config.endpoints.url}/${container}/${filename}`,
     method  : 'DELETE',
@@ -267,7 +279,7 @@ function deleteFile (container, filename, callback) {
     res = res || {};
     res = { error: (err && err.toString().length > 0 ? err.toString() : null), ...res };
 
-    checkIsConnected(res, 'deleteFile', arguments, (error) => {
+    checkIsConnected(res, 'deleteFile', arrayArguments, (error) => {
       if (error) {
         return callback(error);
       }
@@ -320,13 +332,17 @@ function checkIsConnected (response, from, args, callback) {
   }
 
   if (response && response.statusCode >= 500) {
-    debug(`Object Storage index "${_config.actifStorage}" region "${_config.storages[_config.actifStorage].region}" Error Status ${response.statusCode}`);
-    _config.actifStorage += 1
+    debug(`Object Storage index "${_config.actifStorage}" region "${_config.storages[_config.actifStorage].region}" Action "${from}" Error Status ${response.statusCode}`);
+    activateFallbackStorage(args[args.length - 1].originStorage);
   }
 
   if (response && !!response.error === true) {
-    debug(`Object Storage index "${_config.actifStorage}" region "${_config.storages[_config.actifStorage].region}" ${response.error}`);
-    _config.actifStorage += 1
+    debug(`Object Storage index "${_config.actifStorage}" region "${_config.storages[_config.actifStorage].region}" Action "${from}" ${response.error}`);
+    activateFallbackStorage(args[args.length - 1].originStorage);
+  }
+
+  if (response && response.statusCode === 401) {
+    debug(`Object Storage index "${_config.actifStorage}" region "${_config.storages[_config.actifStorage].region}" try reconnect...`);
   }
 
   // Reconnect to object storage
@@ -352,7 +368,7 @@ function checkIsConnected (response, from, args, callback) {
         callback(null);
         break;
     }
-  });
+  }, args[args.length - 1].originStorage);
 }
 
 
@@ -472,4 +488,11 @@ function getHeaderAndQueryParameters (options) {
     headers = options.headers;
   }
   return { headers, queries }
+}
+
+function activateFallbackStorage(originStorage) {
+  if (originStorage === _config.actifStorage && _config.actifStorage + 1 <= _config.storages.length) {
+    _config.actifStorage += 1
+    debug(`Object Storage 🚩 Activate Fallback Storage index "${_config.actifStorage}"`);
+  }
 }

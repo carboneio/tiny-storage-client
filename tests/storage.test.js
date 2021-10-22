@@ -211,7 +211,6 @@ describe('Ovh Object Storage High Availability', function () {
       storage.connection((err) => {
         assert.notStrictEqual(err, null);
         assert.strictEqual(err.message, 'Object Storages are not available');
-
         storage.connection((err) => {
           assert.strictEqual(err, null);
           assert.deepStrictEqual(storage.getConfig().actifStorage, 0);
@@ -587,6 +586,185 @@ describe('Ovh Object Storage High Availability', function () {
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
           assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+          done();
+        });
+      });
+
+      it('should request the object storage in parallel and fallback to SBG if the main storage return any kind of errors', function (done) {
+
+        let firstNock = nock(publicUrlGRA)
+          .get('/templates')
+          .replyWithError('Error Message 1234')
+          .get('/templates')
+          .replyWithError('Error Message 1234');
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+
+        let thirdNock = nock(publicUrlSBG)
+          .get('/templates')
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+          })
+          .get('/templates')
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+          });
+
+
+        function getListFilesPromise() {
+           return new Promise((resolve, reject) => {
+             try {
+              storage.listFiles('templates', (err, body) => {
+                if (err) {
+                  return reject(err);
+                }
+                return resolve(body.toString());
+              });
+            } catch(err) {
+              return reject(err);
+            }
+          });
+        }
+
+        let promise1 = getListFilesPromise()
+        let promise2 = getListFilesPromise()
+
+
+        Promise.all([promise1, promise2]).then(results => {
+          assert.strictEqual(results.length, 2)
+
+          const _listFiles1 = JSON.parse(results[0].toString());
+          assert.strictEqual(_listFiles1.length > 0, true)
+          assert.strictEqual(_listFiles1[0].bytes > 0, true)
+          assert.strictEqual(_listFiles1[0].last_modified.length > 0, true)
+          assert.strictEqual(_listFiles1[0].hash.length > 0, true)
+          assert.strictEqual(_listFiles1[0].name.length > 0, true)
+          assert.strictEqual(_listFiles1[0].content_type.length > 0, true)
+
+          const _listFiles2 = JSON.parse(results[1].toString());
+          assert.strictEqual(_listFiles2.length > 0, true)
+          assert.strictEqual(_listFiles2[0].bytes > 0, true)
+          assert.strictEqual(_listFiles2[0].last_modified.length > 0, true)
+          assert.strictEqual(_listFiles2[0].hash.length > 0, true)
+          assert.strictEqual(_listFiles2[0].name.length > 0, true)
+          assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
+
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          done();
+        }).catch(err => {
+          assert.strictEqual(err, null);
+          done();
+        });
+      });
+
+      it('should request the object storage in parallel and fallback to SBG if the authentication of the main storage return an error', function (done) {
+
+        let firstNock = nock(publicUrlGRA)
+          .get('/templates')
+          .reply(401, 'Unauthorized')
+          .get('/templates')
+          .reply(401, 'Unauthorized')
+          .get('/templates')
+          .reply(401, 'Unauthorized')
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(500, {})
+          .post('/auth/tokens')
+          .reply(500, {})
+          .post('/auth/tokens')
+          .reply(500, {})
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          .get('/templates')
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+          })
+          .get('/templates')
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+          })
+          .get('/templates')
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+          })
+          .get('/templates')
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+          });
+
+
+
+        function getListFilesPromise() {
+           return new Promise((resolve, reject) => {
+             try {
+              storage.listFiles('templates', (err, body) => {
+                if (err) {
+                  return reject(err);
+                }
+                return resolve(body.toString());
+              });
+            } catch(err) {
+              return reject(err);
+            }
+          });
+        }
+
+        let promise1 = getListFilesPromise()
+        let promise2 = getListFilesPromise()
+        let promise3 = getListFilesPromise()
+
+        Promise.all([promise1, promise2, promise3]).then(async results => {
+          assert.strictEqual(results.length, 3)
+
+          const _listFiles1 = JSON.parse(results[0].toString());
+          assert.strictEqual(_listFiles1.length > 0, true)
+          assert.strictEqual(_listFiles1[0].bytes > 0, true)
+          assert.strictEqual(_listFiles1[0].last_modified.length > 0, true)
+          assert.strictEqual(_listFiles1[0].hash.length > 0, true)
+          assert.strictEqual(_listFiles1[0].name.length > 0, true)
+          assert.strictEqual(_listFiles1[0].content_type.length > 0, true)
+
+          const _listFiles2 = JSON.parse(results[1].toString());
+          assert.strictEqual(_listFiles2.length > 0, true)
+          assert.strictEqual(_listFiles2[0].bytes > 0, true)
+          assert.strictEqual(_listFiles2[0].last_modified.length > 0, true)
+          assert.strictEqual(_listFiles2[0].hash.length > 0, true)
+          assert.strictEqual(_listFiles2[0].name.length > 0, true)
+          assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
+
+          const _listFiles3 = JSON.parse(results[2].toString());
+          assert.strictEqual(_listFiles3.length > 0, true)
+          assert.strictEqual(_listFiles3[0].bytes > 0, true)
+          assert.strictEqual(_listFiles3[0].last_modified.length > 0, true)
+          assert.strictEqual(_listFiles3[0].hash.length > 0, true)
+          assert.strictEqual(_listFiles3[0].name.length > 0, true)
+          assert.strictEqual(_listFiles3[0].content_type.length > 0, true)
+
+          let _listFiles4 = JSON.parse((await getListFilesPromise()).toString());
+          assert.strictEqual(_listFiles4.length > 0, true)
+          assert.strictEqual(_listFiles4[0].bytes > 0, true)
+          assert.strictEqual(_listFiles4[0].last_modified.length > 0, true)
+          assert.strictEqual(_listFiles4[0].hash.length > 0, true)
+          assert.strictEqual(_listFiles4[0].name.length > 0, true)
+          assert.strictEqual(_listFiles4[0].content_type.length > 0, true)
+
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
           done();
         });
       });
