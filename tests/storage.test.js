@@ -2076,7 +2076,205 @@ describe('Ovh Object Storage High Availability', function () {
           done();
         });
       });
-    })
+
+      describe("PARALLEL REQUESTS", function () {
+
+        function deleteFilePromise() {
+          return new Promise((resolve, reject) => {
+            try {
+              storage.deleteFile('templates', 'test.odt', (err) => {
+                if (err) {
+                  return reject(err);
+                }
+                return resolve();
+              });
+            } catch(err) {
+              return reject(err);
+            }
+          });
+        }
+
+        it('should request the object storage in parallel and fallback to SBG if the main storage return any kind of errors', function (done) {
+
+          let firstNock = nock(publicUrlGRA)
+            .delete('/templates/test.odt')
+            .replyWithError('Error Message 1234')
+            .delete('/templates/test.odt')
+            .replyWithError('Error Message 1234');
+
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+
+          let thirdNock = nock(publicUrlSBG)
+            .delete('/templates/test.odt')
+            .reply(200, {})
+            .delete('/templates/test.odt')
+            .reply(200, {});
+
+          let promise1 = deleteFilePromise()
+          let promise2 = deleteFilePromise()
+
+
+          Promise.all([promise1, promise2]).then(results => {
+            assert.strictEqual(results.length, 2);
+            assert.strictEqual(results[0], undefined)
+            assert.strictEqual(results[1], undefined)
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
+          }).catch(err => {
+            assert.strictEqual(err, null);
+            done();
+          });
+        });
+
+        it('should request the object storage in parallel and fallback to SBG if the authentication of the main storage return an error', function (done) {
+
+          let firstNock = nock(publicUrlGRA)
+            .delete('/templates/test.odt')
+            .reply(401, 'Unauthorized')
+            .delete('/templates/test.odt')
+            .reply(401, 'Unauthorized')
+            .delete('/templates/test.odt')
+            .reply(401, 'Unauthorized')
+
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(500, {})
+            .post('/auth/tokens')
+            .reply(500, {})
+            .post('/auth/tokens')
+            .reply(500, {})
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+          let thirdNock = nock(publicUrlSBG)
+            .delete('/templates/test.odt')
+            .reply(200, {})
+            .delete('/templates/test.odt')
+            .reply(200, {})
+            .delete('/templates/test.odt')
+            .reply(200, {})
+            .delete('/templates/test.odt')
+            .reply(200, {});
+
+          let promise1 = deleteFilePromise()
+          let promise2 = deleteFilePromise()
+          let promise3 = deleteFilePromise()
+
+          Promise.all([promise1, promise2, promise3]).then(async results => {
+
+            assert.strictEqual(results.length, 3);
+            assert.strictEqual(results[0], undefined)
+            assert.strictEqual(results[1], undefined)
+            assert.strictEqual(results[2], undefined)
+
+            let _result3 = await deleteFilePromise();
+            assert.strictEqual(_result3, undefined);
+
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
+          });
+        });
+
+        it('should request the object storage in parallel and fallback to SBG if the main storage timeout', function (done) {
+          storage.setTimeout(200);
+
+          let firstNock = nock(publicUrlGRA)
+            .delete('/templates/test.odt')
+            .delayConnection(500)
+            .reply(200, {})
+            .delete('/templates/test.odt')
+            .delayConnection(500)
+            .reply(200, {});
+
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+          let thirdNock = nock(publicUrlSBG)
+            .delete('/templates/test.odt')
+            .reply(200, {})
+            .delete('/templates/test.odt')
+            .reply(200, {});
+
+
+          let promise1 = deleteFilePromise()
+          let promise2 = deleteFilePromise()
+
+
+          Promise.all([promise1, promise2]).then(results => {
+            assert.strictEqual(results.length, 2);
+            assert.strictEqual(results[0], undefined)
+            assert.strictEqual(results[1], undefined)
+
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
+          }).catch(err => {
+            assert.strictEqual(err, null);
+            done();
+          });
+        });
+
+        it('should request the object storage in parallel and fallback to SBG if the main storage return a 500 error', function (done) {
+
+          let firstNock = nock(publicUrlGRA)
+            .delete('/templates/test.odt')
+            .reply(500, {})
+            .delete('/templates/test.odt')
+            .reply(500, {});
+
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+          let thirdNock = nock(publicUrlSBG)
+            .delete('/templates/test.odt')
+            .reply(200, {})
+            .delete('/templates/test.odt')
+            .reply(200, {});
+
+          let promise1 = deleteFilePromise()
+          let promise2 = deleteFilePromise()
+
+          Promise.all([promise1, promise2]).then(results => {
+            assert.strictEqual(results.length, 2);
+            assert.strictEqual(results[0], undefined)
+            assert.strictEqual(results[1], undefined)
+
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
+          }).catch(err => {
+            assert.strictEqual(err, null);
+            done();
+          });
+        });
+
+      });
+    });
   });
 });
 
