@@ -590,35 +590,11 @@ describe('Ovh Object Storage High Availability', function () {
         });
       });
 
-      it('should request the object storage in parallel and fallback to SBG if the main storage return any kind of errors', function (done) {
-
-        let firstNock = nock(publicUrlGRA)
-          .get('/templates')
-          .replyWithError('Error Message 1234')
-          .get('/templates')
-          .replyWithError('Error Message 1234');
-
-        let secondNock = nock(authURL)
-          .post('/auth/tokens')
-          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
-          .post('/auth/tokens')
-          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
-
-
-        let thirdNock = nock(publicUrlSBG)
-          .get('/templates')
-          .reply(200, () => {
-            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
-          })
-          .get('/templates')
-          .reply(200, () => {
-            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
-          });
-
+      describe("PARALLEL REQUESTS", function () {
 
         function getListFilesPromise() {
-           return new Promise((resolve, reject) => {
-             try {
+          return new Promise((resolve, reject) => {
+            try {
               storage.listFiles('templates', (err, body) => {
                 if (err) {
                   return reject(err);
@@ -629,291 +605,329 @@ describe('Ovh Object Storage High Availability', function () {
               return reject(err);
             }
           });
-        }
+      }
 
-        let promise1 = getListFilesPromise()
-        let promise2 = getListFilesPromise()
+        it('should request the object storage in parallel and fallback to SBG if the main storage return any kind of errors', function (done) {
+
+          let firstNock = nock(publicUrlGRA)
+            .get('/templates')
+            .replyWithError('Error Message 1234')
+            .get('/templates')
+            .replyWithError('Error Message 1234');
+
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
 
-        Promise.all([promise1, promise2]).then(results => {
-          assert.strictEqual(results.length, 2)
+          let thirdNock = nock(publicUrlSBG)
+            .get('/templates')
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+            })
+            .get('/templates')
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+            });
 
-          const _listFiles1 = JSON.parse(results[0].toString());
-          assert.strictEqual(_listFiles1.length > 0, true)
-          assert.strictEqual(_listFiles1[0].bytes > 0, true)
-          assert.strictEqual(_listFiles1[0].last_modified.length > 0, true)
-          assert.strictEqual(_listFiles1[0].hash.length > 0, true)
-          assert.strictEqual(_listFiles1[0].name.length > 0, true)
-          assert.strictEqual(_listFiles1[0].content_type.length > 0, true)
+          let promise1 = getListFilesPromise()
+          let promise2 = getListFilesPromise()
 
-          const _listFiles2 = JSON.parse(results[1].toString());
-          assert.strictEqual(_listFiles2.length > 0, true)
-          assert.strictEqual(_listFiles2[0].bytes > 0, true)
-          assert.strictEqual(_listFiles2[0].last_modified.length > 0, true)
-          assert.strictEqual(_listFiles2[0].hash.length > 0, true)
-          assert.strictEqual(_listFiles2[0].name.length > 0, true)
-          assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
 
-          assert.strictEqual(firstNock.pendingMocks().length, 0);
-          assert.strictEqual(secondNock.pendingMocks().length, 0);
-          assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          done();
-        }).catch(err => {
-          assert.strictEqual(err, null);
-          done();
+          Promise.all([promise1, promise2]).then(results => {
+            assert.strictEqual(results.length, 2)
+
+            const _listFiles1 = JSON.parse(results[0].toString());
+            assert.strictEqual(_listFiles1.length > 0, true)
+            assert.strictEqual(_listFiles1[0].bytes > 0, true)
+            assert.strictEqual(_listFiles1[0].last_modified.length > 0, true)
+            assert.strictEqual(_listFiles1[0].hash.length > 0, true)
+            assert.strictEqual(_listFiles1[0].name.length > 0, true)
+            assert.strictEqual(_listFiles1[0].content_type.length > 0, true)
+
+            const _listFiles2 = JSON.parse(results[1].toString());
+            assert.strictEqual(_listFiles2.length > 0, true)
+            assert.strictEqual(_listFiles2[0].bytes > 0, true)
+            assert.strictEqual(_listFiles2[0].last_modified.length > 0, true)
+            assert.strictEqual(_listFiles2[0].hash.length > 0, true)
+            assert.strictEqual(_listFiles2[0].name.length > 0, true)
+            assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
+
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
+          }).catch(err => {
+            assert.strictEqual(err, null);
+            done();
+          });
         });
-      });
 
-      it('should request the object storage in parallel and fallback to SBG if the authentication of the main storage return an error', function (done) {
+        it('should request the object storage in parallel and fallback to SBG if the authentication of the main storage return an error', function (done) {
 
-        let firstNock = nock(publicUrlGRA)
-          .get('/templates')
-          .reply(401, 'Unauthorized')
-          .get('/templates')
-          .reply(401, 'Unauthorized')
-          .get('/templates')
-          .reply(401, 'Unauthorized')
+          let firstNock = nock(publicUrlGRA)
+            .get('/templates')
+            .reply(401, 'Unauthorized')
+            .get('/templates')
+            .reply(401, 'Unauthorized')
+            .get('/templates')
+            .reply(401, 'Unauthorized')
 
-        let secondNock = nock(authURL)
-          .post('/auth/tokens')
-          .reply(500, {})
-          .post('/auth/tokens')
-          .reply(500, {})
-          .post('/auth/tokens')
-          .reply(500, {})
-          .post('/auth/tokens')
-          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
-          .post('/auth/tokens')
-          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
-          .post('/auth/tokens')
-          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(500, {})
+            .post('/auth/tokens')
+            .reply(500, {})
+            .post('/auth/tokens')
+            .reply(500, {})
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
-          .get('/templates')
-          .reply(200, () => {
-            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
-          })
-          .get('/templates')
-          .reply(200, () => {
-            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
-          })
-          .get('/templates')
-          .reply(200, () => {
-            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
-          })
-          .get('/templates')
-          .reply(200, () => {
-            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+          let thirdNock = nock(publicUrlSBG)
+            .get('/templates')
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+            })
+            .get('/templates')
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+            })
+            .get('/templates')
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+            })
+            .get('/templates')
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+            });
+
+          let promise1 = getListFilesPromise()
+          let promise2 = getListFilesPromise()
+          let promise3 = getListFilesPromise()
+
+          Promise.all([promise1, promise2, promise3]).then(async results => {
+            assert.strictEqual(results.length, 3)
+
+            const _listFiles1 = JSON.parse(results[0].toString());
+            assert.strictEqual(_listFiles1.length > 0, true)
+            assert.strictEqual(_listFiles1[0].bytes > 0, true)
+            assert.strictEqual(_listFiles1[0].last_modified.length > 0, true)
+            assert.strictEqual(_listFiles1[0].hash.length > 0, true)
+            assert.strictEqual(_listFiles1[0].name.length > 0, true)
+            assert.strictEqual(_listFiles1[0].content_type.length > 0, true)
+
+            const _listFiles2 = JSON.parse(results[1].toString());
+            assert.strictEqual(_listFiles2.length > 0, true)
+            assert.strictEqual(_listFiles2[0].bytes > 0, true)
+            assert.strictEqual(_listFiles2[0].last_modified.length > 0, true)
+            assert.strictEqual(_listFiles2[0].hash.length > 0, true)
+            assert.strictEqual(_listFiles2[0].name.length > 0, true)
+            assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
+
+            const _listFiles3 = JSON.parse(results[2].toString());
+            assert.strictEqual(_listFiles3.length > 0, true)
+            assert.strictEqual(_listFiles3[0].bytes > 0, true)
+            assert.strictEqual(_listFiles3[0].last_modified.length > 0, true)
+            assert.strictEqual(_listFiles3[0].hash.length > 0, true)
+            assert.strictEqual(_listFiles3[0].name.length > 0, true)
+            assert.strictEqual(_listFiles3[0].content_type.length > 0, true)
+
+            let _listFiles4 = JSON.parse((await getListFilesPromise()).toString());
+            assert.strictEqual(_listFiles4.length > 0, true)
+            assert.strictEqual(_listFiles4[0].bytes > 0, true)
+            assert.strictEqual(_listFiles4[0].last_modified.length > 0, true)
+            assert.strictEqual(_listFiles4[0].hash.length > 0, true)
+            assert.strictEqual(_listFiles4[0].name.length > 0, true)
+            assert.strictEqual(_listFiles4[0].content_type.length > 0, true)
+
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
           });
-
-
-
-        function getListFilesPromise() {
-           return new Promise((resolve, reject) => {
-             try {
-              storage.listFiles('templates', (err, body) => {
-                if (err) {
-                  return reject(err);
-                }
-                return resolve(body.toString());
-              });
-            } catch(err) {
-              return reject(err);
-            }
-          });
-        }
-
-        let promise1 = getListFilesPromise()
-        let promise2 = getListFilesPromise()
-        let promise3 = getListFilesPromise()
-
-        Promise.all([promise1, promise2, promise3]).then(async results => {
-          assert.strictEqual(results.length, 3)
-
-          const _listFiles1 = JSON.parse(results[0].toString());
-          assert.strictEqual(_listFiles1.length > 0, true)
-          assert.strictEqual(_listFiles1[0].bytes > 0, true)
-          assert.strictEqual(_listFiles1[0].last_modified.length > 0, true)
-          assert.strictEqual(_listFiles1[0].hash.length > 0, true)
-          assert.strictEqual(_listFiles1[0].name.length > 0, true)
-          assert.strictEqual(_listFiles1[0].content_type.length > 0, true)
-
-          const _listFiles2 = JSON.parse(results[1].toString());
-          assert.strictEqual(_listFiles2.length > 0, true)
-          assert.strictEqual(_listFiles2[0].bytes > 0, true)
-          assert.strictEqual(_listFiles2[0].last_modified.length > 0, true)
-          assert.strictEqual(_listFiles2[0].hash.length > 0, true)
-          assert.strictEqual(_listFiles2[0].name.length > 0, true)
-          assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
-
-          const _listFiles3 = JSON.parse(results[2].toString());
-          assert.strictEqual(_listFiles3.length > 0, true)
-          assert.strictEqual(_listFiles3[0].bytes > 0, true)
-          assert.strictEqual(_listFiles3[0].last_modified.length > 0, true)
-          assert.strictEqual(_listFiles3[0].hash.length > 0, true)
-          assert.strictEqual(_listFiles3[0].name.length > 0, true)
-          assert.strictEqual(_listFiles3[0].content_type.length > 0, true)
-
-          let _listFiles4 = JSON.parse((await getListFilesPromise()).toString());
-          assert.strictEqual(_listFiles4.length > 0, true)
-          assert.strictEqual(_listFiles4[0].bytes > 0, true)
-          assert.strictEqual(_listFiles4[0].last_modified.length > 0, true)
-          assert.strictEqual(_listFiles4[0].hash.length > 0, true)
-          assert.strictEqual(_listFiles4[0].name.length > 0, true)
-          assert.strictEqual(_listFiles4[0].content_type.length > 0, true)
-
-          assert.strictEqual(firstNock.pendingMocks().length, 0);
-          assert.strictEqual(secondNock.pendingMocks().length, 0);
-          assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          done();
         });
-      });
 
-      it('should request the object storage in parallel and fallback to SBG if the main storage timeout', function (done) {
+        it('should request the object storage in parallel and fallback to SBG if the main storage timeout', function (done) {
 
-        storage.setTimeout(200);
+          storage.setTimeout(200);
 
-        let firstNock = nock(publicUrlGRA)
-          .get('/templates')
-          .delayConnection(500)
-          .reply(200, {})
-          .get('/templates')
-          .delayConnection(500)
-          .reply(200, {});
+          let firstNock = nock(publicUrlGRA)
+            .get('/templates')
+            .delayConnection(500)
+            .reply(200, {})
+            .get('/templates')
+            .delayConnection(500)
+            .reply(200, {});
 
-        let secondNock = nock(authURL)
-          .post('/auth/tokens')
-          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
-          .post('/auth/tokens')
-          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
-          .get('/templates')
-          .reply(200, () => {
-            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
-          })
-          .get('/templates')
-          .reply(200, () => {
-            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+          let thirdNock = nock(publicUrlSBG)
+            .get('/templates')
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+            })
+            .get('/templates')
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+            });
+
+
+          let promise1 = getListFilesPromise()
+          let promise2 = getListFilesPromise()
+
+
+          Promise.all([promise1, promise2]).then(results => {
+            assert.strictEqual(results.length, 2)
+
+            const _listFiles1 = JSON.parse(results[0].toString());
+            assert.strictEqual(_listFiles1.length > 0, true)
+            assert.strictEqual(_listFiles1[0].bytes > 0, true)
+            assert.strictEqual(_listFiles1[0].last_modified.length > 0, true)
+            assert.strictEqual(_listFiles1[0].hash.length > 0, true)
+            assert.strictEqual(_listFiles1[0].name.length > 0, true)
+            assert.strictEqual(_listFiles1[0].content_type.length > 0, true)
+
+            const _listFiles2 = JSON.parse(results[1].toString());
+            assert.strictEqual(_listFiles2.length > 0, true)
+            assert.strictEqual(_listFiles2[0].bytes > 0, true)
+            assert.strictEqual(_listFiles2[0].last_modified.length > 0, true)
+            assert.strictEqual(_listFiles2[0].hash.length > 0, true)
+            assert.strictEqual(_listFiles2[0].name.length > 0, true)
+            assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
+
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
+          }).catch(err => {
+            assert.strictEqual(err, null);
+            done();
           });
-
-        function getListFilesPromise() {
-           return new Promise((resolve, reject) => {
-             try {
-              storage.listFiles('templates', (err, body) => {
-                if (err) {
-                  return reject(err);
-                }
-                return resolve(body.toString());
-              });
-            } catch(err) {
-              return reject(err);
-            }
-          });
-        }
-
-        let promise1 = getListFilesPromise()
-        let promise2 = getListFilesPromise()
-
-
-        Promise.all([promise1, promise2]).then(results => {
-          assert.strictEqual(results.length, 2)
-
-          const _listFiles1 = JSON.parse(results[0].toString());
-          assert.strictEqual(_listFiles1.length > 0, true)
-          assert.strictEqual(_listFiles1[0].bytes > 0, true)
-          assert.strictEqual(_listFiles1[0].last_modified.length > 0, true)
-          assert.strictEqual(_listFiles1[0].hash.length > 0, true)
-          assert.strictEqual(_listFiles1[0].name.length > 0, true)
-          assert.strictEqual(_listFiles1[0].content_type.length > 0, true)
-
-          const _listFiles2 = JSON.parse(results[1].toString());
-          assert.strictEqual(_listFiles2.length > 0, true)
-          assert.strictEqual(_listFiles2[0].bytes > 0, true)
-          assert.strictEqual(_listFiles2[0].last_modified.length > 0, true)
-          assert.strictEqual(_listFiles2[0].hash.length > 0, true)
-          assert.strictEqual(_listFiles2[0].name.length > 0, true)
-          assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
-
-          assert.strictEqual(firstNock.pendingMocks().length, 0);
-          assert.strictEqual(secondNock.pendingMocks().length, 0);
-          assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          done();
-        }).catch(err => {
-          assert.strictEqual(err, null);
-          done();
         });
-      });
 
-      it('should request the object storage in parallel and fallback to SBG if the main storage return a 500 error', function (done) {
+        it('should request the object storage in parallel and fallback to SBG if the main storage return a 500 error', function (done) {
 
-        let firstNock = nock(publicUrlGRA)
-          .get('/templates')
-          .reply(500, {})
-          .get('/templates')
-          .reply(500, {});
+          let firstNock = nock(publicUrlGRA)
+            .get('/templates')
+            .reply(500, {})
+            .get('/templates')
+            .reply(500, {});
 
-        let secondNock = nock(authURL)
-          .post('/auth/tokens')
-          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
-          .post('/auth/tokens')
-          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
-          .get('/templates')
-          .reply(200, () => {
-            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
-          })
-          .get('/templates')
-          .reply(200, () => {
-            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+          let thirdNock = nock(publicUrlSBG)
+            .get('/templates')
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+            })
+            .get('/templates')
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+            });
+
+          let promise1 = getListFilesPromise()
+          let promise2 = getListFilesPromise()
+
+
+          Promise.all([promise1, promise2]).then(results => {
+            assert.strictEqual(results.length, 2)
+
+            const _listFiles1 = JSON.parse(results[0].toString());
+            assert.strictEqual(_listFiles1.length > 0, true)
+            assert.strictEqual(_listFiles1[0].bytes > 0, true)
+            assert.strictEqual(_listFiles1[0].last_modified.length > 0, true)
+            assert.strictEqual(_listFiles1[0].hash.length > 0, true)
+            assert.strictEqual(_listFiles1[0].name.length > 0, true)
+            assert.strictEqual(_listFiles1[0].content_type.length > 0, true)
+
+            const _listFiles2 = JSON.parse(results[1].toString());
+            assert.strictEqual(_listFiles2.length > 0, true)
+            assert.strictEqual(_listFiles2[0].bytes > 0, true)
+            assert.strictEqual(_listFiles2[0].last_modified.length > 0, true)
+            assert.strictEqual(_listFiles2[0].hash.length > 0, true)
+            assert.strictEqual(_listFiles2[0].name.length > 0, true)
+            assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
+
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
+          }).catch(err => {
+            assert.strictEqual(err, null);
+            done();
           });
+        });
 
-        function getListFilesPromise() {
-           return new Promise((resolve, reject) => {
-             try {
-              storage.listFiles('templates', (err, body) => {
-                if (err) {
-                  return reject(err);
-                }
-                return resolve(body.toString());
-              });
-            } catch(err) {
-              return reject(err);
-            }
+        it('should request the object storage in parallel and fallback to SBG if the authentication of the main storage return does not return the object storage list [Special case and should never happen]', function (done) {
+
+          let firstNock = nock(publicUrlGRA)
+            .get('/templates')
+            .reply(401, 'Unauthorized')
+            .get('/templates')
+            .reply(401, 'Unauthorized')
+
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3WithoutObjectStore)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3WithoutObjectStore)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+
+
+          let thirdNock = nock(publicUrlSBG)
+            .get('/templates')
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+            })
+            .get('/templates')
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+            })
+
+          let promise1 = getListFilesPromise()
+          let promise2 = getListFilesPromise()
+
+          Promise.all([promise1, promise2]).then(async results => {
+            assert.strictEqual(results.length, 2)
+
+            const _listFiles1 = JSON.parse(results[0].toString());
+            assert.strictEqual(_listFiles1.length > 0, true)
+            assert.strictEqual(_listFiles1[0].bytes > 0, true)
+            assert.strictEqual(_listFiles1[0].last_modified.length > 0, true)
+            assert.strictEqual(_listFiles1[0].hash.length > 0, true)
+            assert.strictEqual(_listFiles1[0].name.length > 0, true)
+            assert.strictEqual(_listFiles1[0].content_type.length > 0, true)
+
+            const _listFiles2 = JSON.parse(results[1].toString());
+            assert.strictEqual(_listFiles2.length > 0, true)
+            assert.strictEqual(_listFiles2[0].bytes > 0, true)
+            assert.strictEqual(_listFiles2[0].last_modified.length > 0, true)
+            assert.strictEqual(_listFiles2[0].hash.length > 0, true)
+            assert.strictEqual(_listFiles2[0].name.length > 0, true)
+            assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
+
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
           });
-        }
-
-        let promise1 = getListFilesPromise()
-        let promise2 = getListFilesPromise()
-
-
-        Promise.all([promise1, promise2]).then(results => {
-          assert.strictEqual(results.length, 2)
-
-          const _listFiles1 = JSON.parse(results[0].toString());
-          assert.strictEqual(_listFiles1.length > 0, true)
-          assert.strictEqual(_listFiles1[0].bytes > 0, true)
-          assert.strictEqual(_listFiles1[0].last_modified.length > 0, true)
-          assert.strictEqual(_listFiles1[0].hash.length > 0, true)
-          assert.strictEqual(_listFiles1[0].name.length > 0, true)
-          assert.strictEqual(_listFiles1[0].content_type.length > 0, true)
-
-          const _listFiles2 = JSON.parse(results[1].toString());
-          assert.strictEqual(_listFiles2.length > 0, true)
-          assert.strictEqual(_listFiles2[0].bytes > 0, true)
-          assert.strictEqual(_listFiles2[0].last_modified.length > 0, true)
-          assert.strictEqual(_listFiles2[0].hash.length > 0, true)
-          assert.strictEqual(_listFiles2[0].name.length > 0, true)
-          assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
-
-          assert.strictEqual(firstNock.pendingMocks().length, 0);
-          assert.strictEqual(secondNock.pendingMocks().length, 0);
-          assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          done();
-        }).catch(err => {
-          assert.strictEqual(err, null);
-          done();
         });
       });
     });
@@ -1149,7 +1163,200 @@ describe('Ovh Object Storage High Availability', function () {
           done();
         });
       });
-    })
+
+      describe("PARALLEL REQUESTS", function () {
+
+        function getDownloadFilePromise() {
+          return new Promise((resolve, reject) => {
+            try {
+              storage.downloadFile('templates', 'test.odt', (err, body) => {
+                if (err) {
+                  return reject(err);
+                }
+                return resolve(body.toString());
+              });
+            } catch(err) {
+              return reject(err);
+            }
+          });
+        }
+
+        it('should request the object storage in parallel and fallback to SBG if the main storage return any kind of errors', function (done) {
+
+          let firstNock = nock(publicUrlGRA)
+            .get('/templates/test.odt')
+            .replyWithError('Error Message 1234')
+            .get('/templates/test.odt')
+            .replyWithError('Error Message 1234');
+
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+          let thirdNock = nock(publicUrlSBG)
+            .get('/templates/test.odt')
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+            })
+            .get('/templates/test.odt')
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+            });
+
+          let promise1 = getDownloadFilePromise()
+          let promise2 = getDownloadFilePromise()
+
+          Promise.all([promise1, promise2]).then(results => {
+            assert.strictEqual(results.length, 2)
+            assert.strictEqual(results[0].toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[1].toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            done();
+          }).catch(err => {
+            assert.strictEqual(err, null);
+            done();
+          });
+        });
+
+        it('should request the object storage in parallel and fallback to SBG if the authentication of the main storage return an error', function (done) {
+
+          let firstNock = nock(publicUrlGRA)
+            .get('/templates/test.odt')
+            .reply(401, 'Unauthorized')
+            .get('/templates/test.odt')
+            .reply(401, 'Unauthorized');
+
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(500, {})
+            .post('/auth/tokens')
+            .reply(500, {})
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+          let thirdNock = nock(publicUrlSBG)
+            .get('/templates/test.odt')
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+            })
+            .get('/templates/test.odt')
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+            });
+
+          let promise1 = getDownloadFilePromise()
+          let promise2 = getDownloadFilePromise()
+
+          Promise.all([promise1, promise2]).then(async results => {
+            assert.strictEqual(results.length, 2);
+            assert.strictEqual(results[0].toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[1].toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
+          });
+        });
+
+        it('should request the object storage in parallel and fallback to SBG if the main storage timeout', function (done) {
+
+          storage.setTimeout(200);
+
+          let firstNock = nock(publicUrlGRA)
+            .get('/templates/test.odt')
+            .delayConnection(500)
+            .reply(200, {})
+            .get('/templates/test.odt')
+            .delayConnection(500)
+            .reply(200, {});
+
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+          let thirdNock = nock(publicUrlSBG)
+            .get('/templates/test.odt')
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+            })
+            .get('/templates/test.odt')
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+            });
+
+          let promise1 = getDownloadFilePromise()
+          let promise2 = getDownloadFilePromise()
+
+
+          Promise.all([promise1, promise2]).then(results => {
+            assert.strictEqual(results.length, 2);
+            assert.strictEqual(results[0].toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[1].toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
+          }).catch(err => {
+            assert.strictEqual(err, null);
+            done();
+          });
+        });
+
+        it('should request the object storage in parallel and fallback to SBG if the main storage return a 500 error', function (done) {
+
+          let firstNock = nock(publicUrlGRA)
+            .get('/templates/test.odt')
+            .reply(500, {})
+            .get('/templates/test.odt')
+            .reply(500, {});
+
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+          let thirdNock = nock(publicUrlSBG)
+            .get('/templates/test.odt')
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+            })
+            .get('/templates/test.odt')
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+            });
+
+          let promise1 = getDownloadFilePromise()
+          let promise2 = getDownloadFilePromise()
+
+
+          Promise.all([promise1, promise2]).then(results => {
+            assert.strictEqual(results.length, 2);
+            assert.strictEqual(results[0].toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[1].toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
+          }).catch(err => {
+            assert.strictEqual(err, null);
+            done();
+          });
+        });
+      });
+    });
   });
 
   describe('uploadFile', function () {

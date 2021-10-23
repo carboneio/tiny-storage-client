@@ -492,7 +492,7 @@ function getHeaderAndQueryParameters (options) {
 
 function activateFallbackStorage(originStorage) {
   if (originStorage === _config.actifStorage && _config.actifStorage + 1 <= _config.storages.length) {
-    _config.actifStorage += 1
+    _config.actifStorage += 1;
     debug(`Object Storage 🚩 Activate Fallback Storage index "${_config.actifStorage}"`);
   }
 }
