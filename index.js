@@ -58,7 +58,10 @@ function connection (callback, originStorage = 0) {
     timeout: _config.timeout
   }, (err, res, data) => {
     if (err) {
-      return callback(new Error(err.toString()));
+      debug(`Object Storage index "${_config.actifStorage}" region "${_storage.region}" Action "connection" ${err.toString()}`);
+      activateFallbackStorage(originStorage);
+      arrayArguments[1] = _config.actifStorage;
+      return connection.apply(null, arrayArguments);
     }
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -140,6 +143,7 @@ function listFiles(container, options, callback) {
 
       err = err || checkResponseError(res);
 
+      /** TODO: remove? it should never happen as every error switch to another storage */
       if (err) {
         return callback(err);
       }
@@ -245,6 +249,7 @@ function downloadFile (container, filename, callback) {
 
       err = err || checkResponseError(res);
 
+      /** TODO: remove? it should never happen as every error switch to another storage */
       if (err) {
         return callback(err);
       }
@@ -291,6 +296,7 @@ function deleteFile (container, filename, callback) {
 
       err = err || checkResponseError(res);
 
+      /** TODO: remove? it should never happen as every error switch to another storage */
       if (err) {
         return callback(err);
       }
@@ -307,6 +313,7 @@ function deleteFile (container, filename, callback) {
  * @returns {null|Error}
  */
 function checkResponseError (response, body = '') {
+  /** TODO: remove? it should never happen as every error switch to another storage */
   if (!response) {
     return new Error('No response');
   }
@@ -366,6 +373,7 @@ function checkIsConnected (response, from, args, callback) {
         listFiles.apply(null, args);
         break;
       default:
+        /** TODO: remove? it should never happen */
         callback(null);
         break;
     }

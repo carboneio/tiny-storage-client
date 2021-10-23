@@ -120,6 +120,73 @@ describe('Ovh Object Storage High Availability', function () {
       });
     });
 
+    it('should connect to the second object storage if any request is return', function (done) {
+      storage.setStorages([{
+        username                     : 'storage-1-user',
+        password                     : 'storage-1-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-1-tenant',
+        region                       : 'GRA'
+      },
+      {
+        username                     : 'storage-2-user',
+        password                     : 'storage-2-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-2-tenant',
+        region                       : 'SBG'
+      }])
+
+      const firstNock = nock(authURL)
+        .post('/auth/tokens')
+        .replyWithError("This is an error")
+        .post('/auth/tokens')
+        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+      storage.connection((err) => {
+        assert.strictEqual(err, null);
+        assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+        assert.deepStrictEqual(storage.getConfig().token, tokenAuth);
+        assert.deepStrictEqual(storage.getConfig().endpoints.url, connectionResultSuccessV3.token.catalog[9].endpoints[4].url);
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
+        done();
+      });
+    });
+
+    it('should connect to the second object storage if the main storage timeout', function (done) {
+      storage.setTimeout(200);
+
+      storage.setStorages([{
+        username                     : 'storage-1-user',
+        password                     : 'storage-1-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-1-tenant',
+        region                       : 'GRA'
+      },
+      {
+        username                     : 'storage-2-user',
+        password                     : 'storage-2-password',
+        authUrl                      : authURL,
+        tenantName                   : 'storage-2-tenant',
+        region                       : 'SBG'
+      }])
+
+      const firstNock = nock(authURL)
+        .post('/auth/tokens')
+        .delayConnection(500)
+        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+        .post('/auth/tokens')
+        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+      storage.connection((err) => {
+        assert.strictEqual(err, null);
+        assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+        assert.deepStrictEqual(storage.getConfig().token, tokenAuth);
+        assert.deepStrictEqual(storage.getConfig().endpoints.url, connectionResultSuccessV3.token.catalog[9].endpoints[4].url);
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
+        done();
+      });
+    });
+
     it('should connect to the second object storage if endpoints of the first object storage cannot be found', function (done) {
       storage.setStorages([{
         username                     : 'storage-1-user',
