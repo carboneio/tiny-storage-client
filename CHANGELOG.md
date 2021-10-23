@@ -1,3 +1,6 @@
+### v0.1.6
+- Fix `connection` fallback on error & add tests
+
 ### v0.1.5
   - Fix `uploadFile`: return the response body if an error occurs
   - Added parallel tests
