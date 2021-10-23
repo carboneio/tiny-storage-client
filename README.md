@@ -1,9 +1,17 @@
-# OpenStack Object Storage High Availability Node SDK
+# Object Storage High Availability Node SDK
 
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/carboneio/ovh-object-storage-ha?style=for-the-badge)
 [![Documentation](https://img.shields.io/badge/documentation-yes-brightgreen.svg?style=for-the-badge)](#api-usage)
 
-High availability and performances are the main focus of this tiny Node SDK: **upload** and **download files**, with __fallback storages__ if something goes wrong (Server or DNS not responding, timeout, error 500, too many redirection, authentication error and more...).
+
+> High availability, Performances, and Simplicity are the main focus of this tiny Node SDK: **Upload**, **Delete**, and **download files**, with __fallback storages__ if something goes wrong (Server or DNS not responding, timeout, error 500, too many redirection, authentication error and more...).
+
+## Features
+* 🦄 **Simple to use** - Only 4 methods: `Upload`, `Delete`, `List` and `Download` files
+* 🌎 **High availability** - Initiate the SDK with a list of object storages credentials, the SDK will switch automatically if something goes wrong.
+* ✨ **Reconnect automatically** - if a request fail due to an authentication token expiration, the SDK fetch a new authentication token and retry the initial request with it
+* 🚀 **Performances** - Less than 500 lines of code with only 2 dependencies `simple-get` and `debug`
+* ✅ **100% tested**
 
 ## Install
 
