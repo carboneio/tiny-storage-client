@@ -1,4 +1,4 @@
-# Object Storage High Availability Node SDK
+# High available Node Client for OpenStack Switf Object Storage
 
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/carboneio/ovh-object-storage-ha?style=for-the-badge)
 [![Documentation](https://img.shields.io/badge/documentation-yes-brightgreen.svg?style=for-the-badge)](#api-usage)
