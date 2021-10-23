@@ -768,6 +768,154 @@ describe('Ovh Object Storage High Availability', function () {
           done();
         });
       });
+
+      it('should request the object storage in parallel and fallback to SBG if the main storage timeout', function (done) {
+
+        storage.setTimeout(200);
+
+        let firstNock = nock(publicUrlGRA)
+          .get('/templates')
+          .delayConnection(500)
+          .reply(200, {})
+          .get('/templates')
+          .delayConnection(500)
+          .reply(200, {});
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          .get('/templates')
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+          })
+          .get('/templates')
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+          });
+
+        function getListFilesPromise() {
+           return new Promise((resolve, reject) => {
+             try {
+              storage.listFiles('templates', (err, body) => {
+                if (err) {
+                  return reject(err);
+                }
+                return resolve(body.toString());
+              });
+            } catch(err) {
+              return reject(err);
+            }
+          });
+        }
+
+        let promise1 = getListFilesPromise()
+        let promise2 = getListFilesPromise()
+
+
+        Promise.all([promise1, promise2]).then(results => {
+          assert.strictEqual(results.length, 2)
+
+          const _listFiles1 = JSON.parse(results[0].toString());
+          assert.strictEqual(_listFiles1.length > 0, true)
+          assert.strictEqual(_listFiles1[0].bytes > 0, true)
+          assert.strictEqual(_listFiles1[0].last_modified.length > 0, true)
+          assert.strictEqual(_listFiles1[0].hash.length > 0, true)
+          assert.strictEqual(_listFiles1[0].name.length > 0, true)
+          assert.strictEqual(_listFiles1[0].content_type.length > 0, true)
+
+          const _listFiles2 = JSON.parse(results[1].toString());
+          assert.strictEqual(_listFiles2.length > 0, true)
+          assert.strictEqual(_listFiles2[0].bytes > 0, true)
+          assert.strictEqual(_listFiles2[0].last_modified.length > 0, true)
+          assert.strictEqual(_listFiles2[0].hash.length > 0, true)
+          assert.strictEqual(_listFiles2[0].name.length > 0, true)
+          assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
+
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          done();
+        }).catch(err => {
+          assert.strictEqual(err, null);
+          done();
+        });
+      });
+
+      it('should request the object storage in parallel and fallback to SBG if the main storage return a 500 error', function (done) {
+
+        let firstNock = nock(publicUrlGRA)
+          .get('/templates')
+          .reply(500, {})
+          .get('/templates')
+          .reply(500, {});
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          .get('/templates')
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+          })
+          .get('/templates')
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+          });
+
+        function getListFilesPromise() {
+           return new Promise((resolve, reject) => {
+             try {
+              storage.listFiles('templates', (err, body) => {
+                if (err) {
+                  return reject(err);
+                }
+                return resolve(body.toString());
+              });
+            } catch(err) {
+              return reject(err);
+            }
+          });
+        }
+
+        let promise1 = getListFilesPromise()
+        let promise2 = getListFilesPromise()
+
+
+        Promise.all([promise1, promise2]).then(results => {
+          assert.strictEqual(results.length, 2)
+
+          const _listFiles1 = JSON.parse(results[0].toString());
+          assert.strictEqual(_listFiles1.length > 0, true)
+          assert.strictEqual(_listFiles1[0].bytes > 0, true)
+          assert.strictEqual(_listFiles1[0].last_modified.length > 0, true)
+          assert.strictEqual(_listFiles1[0].hash.length > 0, true)
+          assert.strictEqual(_listFiles1[0].name.length > 0, true)
+          assert.strictEqual(_listFiles1[0].content_type.length > 0, true)
+
+          const _listFiles2 = JSON.parse(results[1].toString());
+          assert.strictEqual(_listFiles2.length > 0, true)
+          assert.strictEqual(_listFiles2[0].bytes > 0, true)
+          assert.strictEqual(_listFiles2[0].last_modified.length > 0, true)
+          assert.strictEqual(_listFiles2[0].hash.length > 0, true)
+          assert.strictEqual(_listFiles2[0].name.length > 0, true)
+          assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
+
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          done();
+        }).catch(err => {
+          assert.strictEqual(err, null);
+          done();
+        });
+      });
     });
   });
 
