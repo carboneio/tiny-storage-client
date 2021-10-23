@@ -605,7 +605,7 @@ describe('Ovh Object Storage High Availability', function () {
               return reject(err);
             }
           });
-      }
+        }
 
         it('should request the object storage in parallel and fallback to SBG if the main storage return any kind of errors', function (done) {
 
@@ -655,6 +655,7 @@ describe('Ovh Object Storage High Availability', function () {
             assert.strictEqual(_listFiles2[0].name.length > 0, true)
             assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
 
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -746,6 +747,7 @@ describe('Ovh Object Storage High Availability', function () {
             assert.strictEqual(_listFiles4[0].name.length > 0, true)
             assert.strictEqual(_listFiles4[0].content_type.length > 0, true)
 
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -805,6 +807,7 @@ describe('Ovh Object Storage High Availability', function () {
             assert.strictEqual(_listFiles2[0].name.length > 0, true)
             assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
 
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -862,6 +865,7 @@ describe('Ovh Object Storage High Availability', function () {
             assert.strictEqual(_listFiles2[0].name.length > 0, true)
             assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
 
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -923,6 +927,7 @@ describe('Ovh Object Storage High Availability', function () {
             assert.strictEqual(_listFiles2[0].name.length > 0, true)
             assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
 
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -1621,6 +1626,239 @@ describe('Ovh Object Storage High Availability', function () {
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
           done();
         });
+      });
+
+      describe("PARALLEL REQUESTS", function () {
+
+        function uploadFilePromise() {
+          return new Promise((resolve, reject) => {
+            try {
+              storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
+                if (err) {
+                  return reject(err);
+                }
+                return resolve();
+              });
+            } catch(err) {
+              return reject(err);
+            }
+          });
+        }
+
+        it('should request the object storage in parallel and fallback to SBG if the main storage return any kind of errors', function (done) {
+          const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
+
+          let firstNock = nock(publicUrlGRA)
+            .put('/templates/test.odt')
+            .replyWithError('Error Message 1234')
+            .put('/templates/test.odt')
+            .replyWithError('Error Message 1234');
+
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+
+          let thirdNock = nock(publicUrlSBG)
+            .put('/templates/test.odt')
+            .reply(201, (uri, requestBody) => {
+              assert.strictEqual(requestBody, _expectedFileContent.toString());
+              return '';
+            })
+            .put('/templates/test.odt')
+            .reply(201, (uri, requestBody) => {
+              assert.strictEqual(requestBody, _expectedFileContent.toString());
+              return '';
+            });
+
+          let promise1 = uploadFilePromise()
+          let promise2 = uploadFilePromise()
+
+
+          Promise.all([promise1, promise2]).then(results => {
+            assert.strictEqual(results.length, 2);
+            assert.strictEqual(results[0], undefined)
+            assert.strictEqual(results[1], undefined)
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
+          }).catch(err => {
+            assert.strictEqual(err, null);
+            done();
+          });
+        });
+
+        it('should request the object storage in parallel and fallback to SBG if the authentication of the main storage return an error', function (done) {
+          const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
+
+          let firstNock = nock(publicUrlGRA)
+            .put('/templates/test.odt')
+            .reply(401, 'Unauthorized')
+            .put('/templates/test.odt')
+            .reply(401, 'Unauthorized')
+            .put('/templates/test.odt')
+            .reply(401, 'Unauthorized')
+
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(500, {})
+            .post('/auth/tokens')
+            .reply(500, {})
+            .post('/auth/tokens')
+            .reply(500, {})
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+          let thirdNock = nock(publicUrlSBG)
+            .put('/templates/test.odt')
+            .reply(201, (uri, requestBody) => {
+              assert.strictEqual(requestBody, _expectedFileContent.toString());
+              return '';
+            })
+            .put('/templates/test.odt')
+            .reply(201, (uri, requestBody) => {
+              assert.strictEqual(requestBody, _expectedFileContent.toString());
+              return '';
+            })
+            .put('/templates/test.odt')
+            .reply(201, (uri, requestBody) => {
+              assert.strictEqual(requestBody, _expectedFileContent.toString());
+              return '';
+            })
+            .put('/templates/test.odt')
+            .reply(201, (uri, requestBody) => {
+              assert.strictEqual(requestBody, _expectedFileContent.toString());
+              return '';
+            });
+
+          let promise1 = uploadFilePromise()
+          let promise2 = uploadFilePromise()
+          let promise3 = uploadFilePromise()
+
+          Promise.all([promise1, promise2, promise3]).then(async results => {
+
+            assert.strictEqual(results.length, 3);
+            assert.strictEqual(results[0], undefined)
+            assert.strictEqual(results[1], undefined)
+            assert.strictEqual(results[2], undefined)
+
+            let _result3 = await uploadFilePromise();
+            assert.strictEqual(_result3, undefined);
+
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
+          });
+        });
+
+        it('should request the object storage in parallel and fallback to SBG if the main storage timeout', function (done) {
+          const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
+          storage.setTimeout(200);
+
+          let firstNock = nock(publicUrlGRA)
+            .put('/templates/test.odt')
+            .delayConnection(500)
+            .reply(200, {})
+            .put('/templates/test.odt')
+            .delayConnection(500)
+            .reply(200, {});
+
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+          let thirdNock = nock(publicUrlSBG)
+            .put('/templates/test.odt')
+            .reply(201, (uri, requestBody) => {
+              assert.strictEqual(requestBody, _expectedFileContent.toString());
+              return '';
+            })
+            .put('/templates/test.odt')
+            .reply(201, (uri, requestBody) => {
+              assert.strictEqual(requestBody, _expectedFileContent.toString());
+              return '';
+            });
+
+
+          let promise1 = uploadFilePromise()
+          let promise2 = uploadFilePromise()
+
+
+          Promise.all([promise1, promise2]).then(results => {
+            assert.strictEqual(results.length, 2);
+            assert.strictEqual(results[0], undefined)
+            assert.strictEqual(results[1], undefined)
+
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
+          }).catch(err => {
+            assert.strictEqual(err, null);
+            done();
+          });
+        });
+
+        it('should request the object storage in parallel and fallback to SBG if the main storage return a 500 error', function (done) {
+          const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
+
+          let firstNock = nock(publicUrlGRA)
+            .put('/templates/test.odt')
+            .reply(500, {})
+            .put('/templates/test.odt')
+            .reply(500, {});
+
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+          let thirdNock = nock(publicUrlSBG)
+            .put('/templates/test.odt')
+            .reply(201, (uri, requestBody) => {
+              assert.strictEqual(requestBody, _expectedFileContent.toString());
+              return '';
+            })
+            .put('/templates/test.odt')
+            .reply(201, (uri, requestBody) => {
+              assert.strictEqual(requestBody, _expectedFileContent.toString());
+              return '';
+            });
+
+          let promise1 = uploadFilePromise()
+          let promise2 = uploadFilePromise()
+
+
+          Promise.all([promise1, promise2]).then(results => {
+            assert.strictEqual(results.length, 2);
+            assert.strictEqual(results[0], undefined)
+            assert.strictEqual(results[1], undefined)
+
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
+          }).catch(err => {
+            assert.strictEqual(err, null);
+            done();
+          });
+        });
+
       });
     });
   });
