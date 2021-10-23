@@ -405,7 +405,7 @@ describe('Ovh Object Storage High Availability', function () {
       it('should return an error if the container does not exist', function (done) {
         let firstNock = nock(publicUrlGRA)
           .get('/templates')
-          .reply(404);
+          .reply(404, '<html><h1>Not Found</h1><p>The resource could not be found.</p></html>');
 
         storage.listFiles('templates', (err, body) => {
           assert.notStrictEqual(err, null);
@@ -1468,11 +1468,11 @@ describe('Ovh Object Storage High Availability', function () {
       it('should return an error if containers or the file does not exists', function (done) {
         const firstNock = nock(publicUrlGRA)
           .put('/templates/test.odt')
-          .reply(404, '<html><h1>Unauthorized</h1><p>This server could not verify that you are authorized to access the document you requested.</p></html>');
+          .reply(404, '<html><h1>Not Found</h1><p>The resource could not be found.</p></html>');
 
         storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
           assert.notStrictEqual(err, null);
-          assert.strictEqual(err.message, '404 null');
+          assert.strictEqual(err.message, '404 <html><h1>Not Found</h1><p>The resource could not be found.</p></html>');
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
         });
@@ -1486,6 +1486,19 @@ describe('Ovh Object Storage High Availability', function () {
         storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
           assert.notStrictEqual(err, null);
           assert.strictEqual(err.message, 'Object Storages are not available');
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return an error if the MD5 etag is not correct', function (done) {
+        const firstNock = nock(publicUrlGRA)
+          .put('/templates/test.odt')
+          .reply(422, '<html><h1>Unprocessable Entity</h1><p>Unable to process the contained instructions</p></html>');
+
+        storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
+          assert.notStrictEqual(err, null);
+          assert.strictEqual(err.message, '422 <html><h1>Unprocessable Entity</h1><p>Unable to process the contained instructions</p></html>');
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
         });

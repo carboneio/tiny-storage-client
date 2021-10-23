@@ -174,7 +174,7 @@ function uploadFile (container, filename, localPathOrBuffer, options, callback) 
   arrayArguments.push({ originStorage : _config.actifStorage })
 
   const { headers, queries } = getHeaderAndQueryParameters(options);
-  get({
+  get.concat({
     url     : `${_config.endpoints.url}/${container}/${filename}${queries}`,
     method  : 'PUT',
     body    : readStream,
@@ -184,7 +184,7 @@ function uploadFile (container, filename, localPathOrBuffer, options, callback) 
       ...headers
     },
     timeout: _config.timeout
-  }, (err, res) => {
+  }, (err, res, body) => {
 
     /** Manage special errors: timeouts, too many redirects or any unexpected behavior */
     res = res || {};
@@ -195,12 +195,13 @@ function uploadFile (container, filename, localPathOrBuffer, options, callback) 
         return callback(error);
       }
 
-      err = err || checkResponseError(res);
+      err = err || checkResponseError(res, body.toString());
 
       if (err) {
         if (err.code === 'ENOENT') {
           return callback(new Error('The local file does not exist'));
         }
+
         return callback(err);
       }
       return callback(null);
@@ -305,13 +306,13 @@ function deleteFile (container, filename, callback) {
  * @param {Object} response Response object from request
  * @returns {null|Error}
  */
-function checkResponseError (response) {
+function checkResponseError (response, body = '') {
   if (!response) {
     return new Error('No response');
   }
 
   if (response.statusCode < 200 || response.statusCode >= 300) {
-    return new Error(`${response.statusCode.toString()} ${response.statusMessage}`);
+    return new Error(`${response.statusCode.toString()} ${response.statusMessage || body}`);
   }
 
   return null;
