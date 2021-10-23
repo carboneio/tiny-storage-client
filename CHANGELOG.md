@@ -1,3 +1,6 @@
+### v0.1.5
+  - Fix `uploadFile`: return the response body if an error occurs
+  - Added parallel tests
 ### v0.1.4
   - Fix the automatic fallback when multiple clients are using all functions in parallel
 ### v0.1.3
