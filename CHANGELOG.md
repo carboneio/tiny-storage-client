@@ -1,3 +1,11 @@
+### v0.1.7
+- add `setLogFunction` used to Override the log function. It takes to arguments: `message` as a string, `level` as a string and can be: `info`/`warning`/`error`. Example to use:
+```js
+storage.setLogFunction((message, level) => {
+  console.log(`${level} : ${message}`);
+})
+```
+
 ### v0.1.6
 - Fix `connection` fallback on error & add tests
 

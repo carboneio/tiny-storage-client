@@ -290,6 +290,31 @@ describe('Ovh Object Storage High Availability', function () {
     });
   });
 
+  describe('log', function () {
+    it('should overload the log function', function (done) {
+      let i = 0;
+
+      storage.setLogFunction(function (message, level) {
+        assert.strictEqual(message.length > 0, true)
+        assert.strictEqual(level.length > 0, true)
+        i++;
+      })
+
+      const firstMock = nock(authURL)
+        .post('/auth/tokens')
+        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+      storage.connection((err) => {
+        assert.strictEqual(err, null);
+        assert.deepStrictEqual(storage.getConfig().token, tokenAuth);
+        assert.deepStrictEqual(storage.getConfig().endpoints.url, connectionResultSuccessV3.token.catalog[9].endpoints[20].url);
+        assert.strictEqual(i > 0, true);
+        assert.strictEqual(firstMock.pendingMocks().length, 0);
+        done();
+      });
+    });
+  });
+
   describe('setStorage/getStorages/setTimeout/getConfig', function () {
 
     it('should update the initial configuration', function (done) {

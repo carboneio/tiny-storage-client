@@ -131,6 +131,16 @@ storage.listFiles('templates', { queries: { prefix: 'prefixName' }, headers: { A
 });
 ```
 
+### Log
+
+The package uses debug to print logs into the terminal. To activate logs, you must pass the `DEBUG=*` environment variable.
+You can use the `setLogFunction` to override the default log function. Create a function with two arguments: `message` as a string, `level` as a string and the value can be: `info`/`warning`/`error`. Example to use:
+```js
+storage.setLogFunction((message, level) => {
+  console.log(`${level} : ${message}`);
+})
+```
+
 ## Run tests
 
 Install

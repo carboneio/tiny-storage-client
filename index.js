@@ -22,11 +22,11 @@ function connection (callback, originStorage = 0) {
   if (_config.actifStorage === _config.storages.length) {
     /**  Reset the index of the actual storage */
     _config.actifStorage = 0;
-    debug(`Error: Object Storages are not available`);
+    log(`Object Storages are not available`, 'error');
     return callback(new Error('Object Storages are not available'));
   }
   const _storage = _config.storages[_config.actifStorage];
-  debug(`Object Storage index "${_config.actifStorage}" region "${_storage.region}" connection...`);
+  log(`Object Storage index "${_config.actifStorage}" region "${_storage.region}" connection...`, 'info');
   const _json = {
     auth : {
       identity : {
@@ -58,14 +58,14 @@ function connection (callback, originStorage = 0) {
     timeout: _config.timeout
   }, (err, res, data) => {
     if (err) {
-      debug(`Object Storage index "${_config.actifStorage}" region "${_storage.region}" Action "connection" ${err.toString()}`);
+      log(`Object Storage index "${_config.actifStorage}" region "${_storage.region}" Action "connection" ${err.toString()}`, 'error');
       activateFallbackStorage(originStorage);
       arrayArguments[1] = _config.actifStorage;
       return connection.apply(null, arrayArguments);
     }
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      debug(`Object Storage index "${_config.actifStorage}" region "${_storage.region}" connexion failled | Status ${res.statusCode.toString()} | Message: ${res.statusMessage} `);
+      log(`Object Storage index "${_config.actifStorage}" region "${_storage.region}" connexion failled | Status ${res.statusCode.toString()} | Message: ${res.statusMessage}`, 'error');
       activateFallbackStorage(originStorage);
       arrayArguments[1] = _config.actifStorage;
       return connection.apply(null, arrayArguments);
@@ -78,7 +78,7 @@ function connection (callback, originStorage = 0) {
     });
 
     if (!_serviceCatalog) {
-      debug(`Object Storage index "${_config.actifStorage}" region "${_storage.region}" warning: Object storage catalog not found`);
+      log(`Object Storage index "${_config.actifStorage}" region "${_storage.region}" Storage catalog not found`, 'error');
       activateFallbackStorage(originStorage);
       arrayArguments[1] = _config.actifStorage;
       return connection.apply(null, arrayArguments);
@@ -89,12 +89,12 @@ function connection (callback, originStorage = 0) {
     });
 
     if (!_config.endpoints) {
-      debug(`Object Storage index "${_config.actifStorage}" region "${_storage.region} warning: storage endpoint not found, invalid region`);
+      log(`Object Storage index "${_config.actifStorage}" region "${_storage.region} Storage endpoint not found, invalid region`, 'error');
       activateFallbackStorage(originStorage);
       arrayArguments[1] = _config.actifStorage;
       return connection.apply(null, arrayArguments);
     }
-    debug(`Object Storage index "${_config.actifStorage}" region "${_storage.region}" connected!`);
+    log(`Object Storage index "${_config.actifStorage}" region "${_storage.region}" connected!`, 'info');
     return callback(null);
   });
 }
@@ -340,17 +340,17 @@ function checkIsConnected (response, from, args, callback) {
   }
 
   if (response && response.statusCode >= 500) {
-    debug(`Object Storage index "${_config.actifStorage}" region "${_config.storages[_config.actifStorage].region}" Action "${from}" Error Status ${response.statusCode}`);
+    log(`Object Storage index "${_config.actifStorage}" region "${_config.storages[_config.actifStorage].region}" Action "${from}" Status ${response.statusCode}`, 'error');
     activateFallbackStorage(args[args.length - 1].originStorage);
   }
 
   if (response && !!response.error === true) {
-    debug(`Object Storage index "${_config.actifStorage}" region "${_config.storages[_config.actifStorage].region}" Action "${from}" ${response.error}`);
+    log(`Object Storage index "${_config.actifStorage}" region "${_config.storages[_config.actifStorage].region}" Action "${from}" ${response.error}`, 'error');
     activateFallbackStorage(args[args.length - 1].originStorage);
   }
 
   if (response && response.statusCode === 401) {
-    debug(`Object Storage index "${_config.actifStorage}" region "${_config.storages[_config.actifStorage].region}" try reconnect...`);
+    log(`Object Storage index "${_config.actifStorage}" region "${_config.storages[_config.actifStorage].region}" try reconnect...`, 'info');
   }
 
   // Reconnect to object storage
@@ -433,6 +433,27 @@ function getConfig() {
 }
 
 /**
+ * log messages
+ *
+ * @param {String} msg Message
+ * @param {type} type warning, error
+ */
+function log(msg, level = 'info') {
+  return debug(level === 'error' ? `❗️ Error: ${msg}` : level === 'warning' ? `⚠️  ${msg}` : msg );
+}
+
+/**
+ * Override the log function, it takes to arguments: message, level
+ * @param {Function} newLogFunction (message, level) => {} The level can be: `info`, `warning`, `error`
+ */
+function setLogFunction (newLogFunction) {
+  if (newLogFunction) {
+    // eslint-disable-next-line no-func-assign
+    log = newLogFunction;
+  }
+}
+
+/**
  *
  * @description Initialise and return an instance of the Object Storage SDK.
  *
@@ -454,7 +475,8 @@ module.exports = (config) => {
     setTimeout,
     setStorages,
     getStorages,
-    getConfig
+    getConfig,
+    setLogFunction
   }
 }
 
@@ -502,6 +524,6 @@ function getHeaderAndQueryParameters (options) {
 function activateFallbackStorage(originStorage) {
   if (originStorage === _config.actifStorage && _config.actifStorage + 1 <= _config.storages.length) {
     _config.actifStorage += 1;
-    debug(`Object Storage 🚩 Activate Fallback Storage index "${_config.actifStorage}"`);
+    log(`Object Storage Activate Fallback Storage index "${_config.actifStorage}" 🚩`, 'warning');
   }
 }
