@@ -15,7 +15,10 @@
 
 ## Install
 
-1. **Prior installing**, Object Storages must be synchronized in order to access same objects. Learn more on the OVHCloud documentation: https://docs.ovh.com/us/en/storage/pcs/sync-container/
+1. **Prior installing**, you need a minimum of one object storage container, or you can synchronize Object Storages containers in order to access same objects if a fallback occur:
+    - Sync 2 containers: `1 <=> 2`. They would both need to share the same secret synchronization key.
+    - You can also set up a chain of synced containers if you want more than two. You would point `1 -> 2`, then `2 -> 3`, and finally `3 -> 1` for three containers. They would all need to share the same secret synchronization key.
+Learn more [on the OpenStack documentation](https://docs.openstack.org/swift/latest/overview_container_sync.html) or [on the OVHCloud documentation](https://docs.ovh.com/us/en/storage/pcs/sync-container/).
 2. Install the package with your package manager:
 
 ```sh
