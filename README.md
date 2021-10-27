@@ -63,7 +63,7 @@ Learn more [on the OpenStack documentation](https://docs.openstack.org/swift/lat
   $ OS_REGION_NAME=RegionSource && swift list containerName
   $ OS_REGION_NAME=RegionDestination && swift list containerName
   ```
-</details><br>
+</details>
 
 ### 2. Install the package with your package manager:
 
