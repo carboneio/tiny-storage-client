@@ -15,16 +15,62 @@
 
 ## Install
 
-1. **Prior installing**, you need a minimum of one object storage container, or you can synchronize Object Storages containers in order to access same objects if a fallback occur:
-    - Sync 2 containers: `1 <=> 2`. They would both need to share the same secret synchronization key.
-    - You can also set up a chain of synced containers if you want more than two. You would point `1 -> 2`, then `2 -> 3`, and finally `3 -> 1` for three containers. They would all need to share the same secret synchronization key.
-Learn more [on the OpenStack documentation](https://docs.openstack.org/swift/latest/overview_container_sync.html) or [on the OVHCloud documentation](https://docs.ovh.com/us/en/storage/pcs/sync-container/).
-2. Install the package with your package manager:
+### 1. Prior installing
 
-```sh
-npm install --save ovh-object-storage-ha
+you need a minimum of one object storage container, or you can synchronize Object Storages containers in order to access same objects if a fallback occur:
+- Sync 2 containers: `1 <=> 2`. They would both need to share the same secret synchronization key.
+- You can also set up a chain of synced containers if you want more than two. You would point `1 -> 2`, then `2 -> 3`, and finally `3 -> 1` for three containers. They would all need to share the same secret synchronization key.
+Learn more [on the OpenStack documentation](https://docs.openstack.org/swift/latest/overview_container_sync.html) or [on the OVHCloud documentation](https://docs.ovh.com/us/en/storage/pcs/sync-container/).
+
+<details>
+  <summary>Quick tutorial to synchronise 1 container into another with OVHCloud Object Storage</summary>
+
+  1. Install the `swift-pythonclient`, an easy way to access Storages is with the Swift command line client, run on your terminal:
+  ```
+  $ pip install python-swiftclient
+  ```
+  2. Download the OpenStack RC file on the OVH account to change environment variables. Tab `Public Cloud` > `Users & Roles` > Pick the user and “Download OpenStack’s RC file”
+  3. Open a terminal, load the contents of the file into the current environment:
+  ```bash
+  $ source openrc.sh
+  ```
+  4. In order for the containers to identify themselves, a key must be created and then configured on each container:
+  ```bash
+  $ sharedKey=$(openssl rand -base64 32)
+  ```
+  5. See which region you are connected to:
+  ```bash
+  env | grep OS_REGION
+  ```
+  6. Retrieve the Account ID `AUTH_xxxxxxx` of the destination container in order to configure the source container:
+  ```bash
+  destContainer=$(swift --debug stat containerBHS 2>&1 | grep 'curl -i.*storage' | awk '{ print $4 }') && echo $destContainer
+  ```
+  7. Change to the source region:
+  ```bash
+  OS_REGION_NAME=RegionSource
+  ```
+  8. Upload the key and the destination sync url to the source container:
+  ```bash
+  $ swiftclient post -t ‘//OVH_PUBLIC_CLOUD/RegionDestination/AUTH_xxxxxxxxx/containerNameDestination’ -k "$sharedKey" containerNameSource
+  ```
+  9. You can check that this has been configured by using the following command:
+  ```bash
+  $ swift stat containerName
+  ```
+  10. You can check if the synchronization worked by listing the files in each of the containers:
+  ```bash
+  $ OS_REGION_NAME=RegionSource && swift list containerName
+  $ OS_REGION_NAME=RegionDestination && swift list containerName
+  ```
+</details><br>
+
+### 2. Install the package with your package manager:
+
+```bash
+$ npm install --save ovh-object-storage-ha
 // od
-yarn add ovh-object-storage-ha
+$ yarn add ovh-object-storage-ha
 ```
 ## API Usage
 
