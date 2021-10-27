@@ -23,7 +23,7 @@ you need a minimum of one object storage container, or you can synchronize Objec
 Learn more [on the OpenStack documentation](https://docs.openstack.org/swift/latest/overview_container_sync.html) or [on the OVHCloud documentation](https://docs.ovh.com/us/en/storage/pcs/sync-container/).
 
 <details>
-  <summary>Quick tutorial to synchronise 1 container into another with OVHCloud Object Storage</summary>
+  <summary>Quick tutorial to synchronise 1 container into another with OVHCloud Object Storage (1 -> 2 one way sync)</summary>
 
   1. Install the `swift-pythonclient`, an easy way to access Storages is with the Swift command line client, run on your terminal:
   ```
