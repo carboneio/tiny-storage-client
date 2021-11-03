@@ -1,6 +1,5 @@
 # High available Node Client for OpenStack Switf Object Storage
-
-![GitHub release (latest by date)](https://img.shields.io/github/v/release/carboneio/ovh-object-storage-ha?style=for-the-badge)
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/carboneio/high-availability-object-storage?style=for-the-badge)
 [![Documentation](https://img.shields.io/badge/documentation-yes-brightgreen.svg?style=for-the-badge)](#api-usage)
 
 
@@ -68,9 +67,9 @@ Learn more [on the OpenStack documentation](https://docs.openstack.org/swift/lat
 ### 2. Install the package with your package manager:
 
 ```bash
-$ npm install --save ovh-object-storage-ha
+$ npm install --save high-availability-object-storage
 // od
-$ yarn add ovh-object-storage-ha
+$ yarn add high-availability-object-storage
 ```
 ## API Usage
 
@@ -79,7 +78,7 @@ $ yarn add ovh-object-storage-ha
 Initialise the SDK with one or multiple storage, if something goes wrong, the next region will take over automatically. If any storage is available, an error message is returned `Error: Object Storages are not available`.
 
 ```js
-const storageSDK = require('ovh-object-storage-ha');
+const storageSDK = require('high-availability-object-storage');
 
 let storage = storageSDK([{
   authUrl    : 'https://auth.cloud.ovh.net/v3',
@@ -208,7 +207,7 @@ $ npm run test
 
 Contributions, issues and feature requests are welcome!
 
-Feel free to check [issues page](https://github.com/carboneio/ovh-object-storage-ha/issues).
+Feel free to check [issues page](https://github.com/carboneio/high-availability-object-storage/issues).
 
 ## Show your support
 
