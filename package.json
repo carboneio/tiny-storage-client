@@ -1,7 +1,7 @@
 {
   "name": "ovh-object-storage-ha",
-  "version": "0.1.7",
-  "description": "Performant and tiny helper to request the OVH Object Storage",
+  "version": "0.1.8",
+  "description": "High available, performant, and tiny Node SDK for OpenStack Swift Object Storage",
   "main": "index.js",
   "scripts": {
     "test": "mocha ./tests",

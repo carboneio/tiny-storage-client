@@ -1033,23 +1033,47 @@ describe('Ovh Object Storage High Availability', function () {
   describe('downloadFile', function () {
 
     describe('SINGLE STORAGE', function () {
-      it('should download file', function (done) {
+      it('should download file and return the header', function (done) {
         const firstNock = nock(publicUrlGRA)
+          .defaultReplyHeaders({
+            'content-length': '1492',
+            'accept-ranges': 'bytes',
+            'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
+            'content-type': 'application/json',
+            etag: 'a30776a059eaf26eebf27756a849097d',
+            'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+            date: 'Wed, 03 Nov 2021 14:28:48 GMT',
+            'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
+          })
           .get('/templates/test.odt')
           .reply(200, () => {
             return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
           });
 
-        storage.downloadFile('templates', 'test.odt', (err, body) => {
+        storage.downloadFile('templates', 'test.odt', (err, body, headers) => {
           assert.strictEqual(err, null);
           assert.strictEqual(body.toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
           assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(headers['etag'].length > 0, true);
+          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(headers['content-length'].length > 0, true);
+          assert.strictEqual(headers['date'].length > 0, true);
           done();
         });
       });
 
       it('should reconnect automatically to object storage and retry', function (done) {
         let firstNock = nock(publicUrlGRA)
+          .defaultReplyHeaders({
+            'content-length': '1492',
+            'accept-ranges': 'bytes',
+            'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
+            'content-type': 'application/json',
+            etag: 'a30776a059eaf26eebf27756a849097d',
+            'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+            date: 'Wed, 03 Nov 2021 14:28:48 GMT',
+            'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
+          })
           .get('/templates/test.odt')
           .reply(401, 'Unauthorized')
           .get('/templates/test.odt')
@@ -1061,11 +1085,15 @@ describe('Ovh Object Storage High Availability', function () {
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        storage.downloadFile('templates', 'test.odt', (err, body) => {
+        storage.downloadFile('templates', 'test.odt', (err, body, headers) => {
           assert.strictEqual(err, null);
           assert.strictEqual(body.toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(headers['etag'].length > 0, true);
+          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(headers['content-length'].length > 0, true);
+          assert.strictEqual(headers['date'].length > 0, true);
           done();
         });
       });
@@ -1159,14 +1187,28 @@ describe('Ovh Object Storage High Availability', function () {
 
         let thirdNock = nock(publicUrlSBG)
           /** 4 */
+          .defaultReplyHeaders({
+            'content-length': '1492',
+            'accept-ranges': 'bytes',
+            'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
+            'content-type': 'application/json',
+            etag: 'a30776a059eaf26eebf27756a849097d',
+            'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+            date: 'Wed, 03 Nov 2021 14:28:48 GMT',
+            'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
+          })
           .get('/templates/test.odt')
           .reply(200, () => {
             return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
           });
 
-        storage.downloadFile('templates', 'test.odt', (err, body) => {
+        storage.downloadFile('templates', 'test.odt', (err, body, headers) => {
           assert.strictEqual(err, null);
           assert.strictEqual(body.toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          assert.strictEqual(headers['etag'].length > 0, true);
+          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(headers['content-length'].length > 0, true);
+          assert.strictEqual(headers['date'].length > 0, true);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -1189,14 +1231,28 @@ describe('Ovh Object Storage High Availability', function () {
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
         let thirdNock = nock(publicUrlSBG)
+          .defaultReplyHeaders({
+            'content-length': '1492',
+            'accept-ranges': 'bytes',
+            'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
+            'content-type': 'application/json',
+            etag: 'a30776a059eaf26eebf27756a849097d',
+            'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+            date: 'Wed, 03 Nov 2021 14:28:48 GMT',
+            'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
+          })
           .get('/templates/test2.odt')
           .reply(200, () => {
             return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
           });
 
-        storage.downloadFile('templates', 'test2.odt', (err, body) => {
+        storage.downloadFile('templates', 'test2.odt', (err, body, headers) => {
           assert.strictEqual(err, null);
           assert.strictEqual(body.toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          assert.strictEqual(headers['etag'].length > 0, true);
+          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(headers['content-length'].length > 0, true);
+          assert.strictEqual(headers['date'].length > 0, true);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -1217,15 +1273,29 @@ describe('Ovh Object Storage High Availability', function () {
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
         let thirdNock = nock(publicUrlSBG)
+          .defaultReplyHeaders({
+            'content-length': '1492',
+            'accept-ranges': 'bytes',
+            'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
+            'content-type': 'application/json',
+            etag: 'a30776a059eaf26eebf27756a849097d',
+            'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+            date: 'Wed, 03 Nov 2021 14:28:48 GMT',
+            'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
+          })
           .get('/templates/test.odt')
           .reply(200, () => {
             return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
           });
 
 
-        storage.downloadFile('templates', 'test.odt', (err, body) => {
+        storage.downloadFile('templates', 'test.odt', (err, body, headers) => {
           assert.strictEqual(err, null);
           assert.strictEqual(body.toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          assert.strictEqual(headers['etag'].length > 0, true);
+          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(headers['content-length'].length > 0, true);
+          assert.strictEqual(headers['date'].length > 0, true);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
@@ -1244,15 +1314,29 @@ describe('Ovh Object Storage High Availability', function () {
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
         let thirdNock = nock(publicUrlSBG)
+          .defaultReplyHeaders({
+            'content-length': '1492',
+            'accept-ranges': 'bytes',
+            'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
+            'content-type': 'application/json',
+            etag: 'a30776a059eaf26eebf27756a849097d',
+            'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+            date: 'Wed, 03 Nov 2021 14:28:48 GMT',
+            'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
+          })
           .get('/templates/test.odt')
           .reply(200, () => {
             return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
           });
 
 
-        storage.downloadFile('templates', 'test.odt', (err, body) => {
+        storage.downloadFile('templates', 'test.odt', (err, body, headers) => {
           assert.strictEqual(err, null);
           assert.strictEqual(body.toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          assert.strictEqual(headers['etag'].length > 0, true);
+          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(headers['content-length'].length > 0, true);
+          assert.strictEqual(headers['date'].length > 0, true);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -1266,11 +1350,11 @@ describe('Ovh Object Storage High Availability', function () {
         function getDownloadFilePromise() {
           return new Promise((resolve, reject) => {
             try {
-              storage.downloadFile('templates', 'test.odt', (err, body) => {
+              storage.downloadFile('templates', 'test.odt', (err, body, headers) => {
                 if (err) {
                   return reject(err);
                 }
-                return resolve(body.toString());
+                return resolve({ body: body.toString(), headers: headers });
               });
             } catch(err) {
               return reject(err);
@@ -1293,6 +1377,16 @@ describe('Ovh Object Storage High Availability', function () {
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
           let thirdNock = nock(publicUrlSBG)
+            .defaultReplyHeaders({
+              'content-length': '1492',
+              'accept-ranges': 'bytes',
+              'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
+              'content-type': 'application/json',
+              etag: 'a30776a059eaf26eebf27756a849097d',
+              'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+              date: 'Wed, 03 Nov 2021 14:28:48 GMT',
+              'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
+            })
             .get('/templates/test.odt')
             .reply(200, () => {
               return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
@@ -1307,8 +1401,16 @@ describe('Ovh Object Storage High Availability', function () {
 
           Promise.all([promise1, promise2]).then(results => {
             assert.strictEqual(results.length, 2)
-            assert.strictEqual(results[0].toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
-            assert.strictEqual(results[1].toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[0].body, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[0].headers['etag'].length > 0, true);
+            assert.strictEqual(results[0].headers['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[0].headers['content-length'].length > 0, true);
+            assert.strictEqual(results[0].headers['date'].length > 0, true);
+            assert.strictEqual(results[1].body, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[1].headers['etag'].length > 0, true);
+            assert.strictEqual(results[1].headers['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[1].headers['content-length'].length > 0, true);
+            assert.strictEqual(results[1].headers['date'].length > 0, true);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -1339,6 +1441,16 @@ describe('Ovh Object Storage High Availability', function () {
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
           let thirdNock = nock(publicUrlSBG)
+            .defaultReplyHeaders({
+              'content-length': '1492',
+              'accept-ranges': 'bytes',
+              'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
+              'content-type': 'application/json',
+              etag: 'a30776a059eaf26eebf27756a849097d',
+              'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+              date: 'Wed, 03 Nov 2021 14:28:48 GMT',
+              'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
+            })
             .get('/templates/test.odt')
             .reply(200, () => {
               return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
@@ -1353,8 +1465,16 @@ describe('Ovh Object Storage High Availability', function () {
 
           Promise.all([promise1, promise2]).then(async results => {
             assert.strictEqual(results.length, 2);
-            assert.strictEqual(results[0].toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
-            assert.strictEqual(results[1].toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[0].body, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[0].headers['etag'].length > 0, true);
+            assert.strictEqual(results[0].headers['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[0].headers['content-length'].length > 0, true);
+            assert.strictEqual(results[0].headers['date'].length > 0, true);
+            assert.strictEqual(results[1].body, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[1].headers['etag'].length > 0, true);
+            assert.strictEqual(results[1].headers['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[1].headers['content-length'].length > 0, true);
+            assert.strictEqual(results[1].headers['date'].length > 0, true);
             assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
@@ -1382,6 +1502,16 @@ describe('Ovh Object Storage High Availability', function () {
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
           let thirdNock = nock(publicUrlSBG)
+            .defaultReplyHeaders({
+              'content-length': '1492',
+              'accept-ranges': 'bytes',
+              'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
+              'content-type': 'application/json',
+              etag: 'a30776a059eaf26eebf27756a849097d',
+              'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+              date: 'Wed, 03 Nov 2021 14:28:48 GMT',
+              'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
+            })
             .get('/templates/test.odt')
             .reply(200, () => {
               return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
@@ -1397,8 +1527,16 @@ describe('Ovh Object Storage High Availability', function () {
 
           Promise.all([promise1, promise2]).then(results => {
             assert.strictEqual(results.length, 2);
-            assert.strictEqual(results[0].toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
-            assert.strictEqual(results[1].toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[0].body, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[0].headers['etag'].length > 0, true);
+            assert.strictEqual(results[0].headers['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[0].headers['content-length'].length > 0, true);
+            assert.strictEqual(results[0].headers['date'].length > 0, true);
+            assert.strictEqual(results[1].body, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[1].headers['etag'].length > 0, true);
+            assert.strictEqual(results[1].headers['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[1].headers['content-length'].length > 0, true);
+            assert.strictEqual(results[1].headers['date'].length > 0, true);
             assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
@@ -1425,6 +1563,16 @@ describe('Ovh Object Storage High Availability', function () {
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
           let thirdNock = nock(publicUrlSBG)
+            .defaultReplyHeaders({
+              'content-length': '1492',
+              'accept-ranges': 'bytes',
+              'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
+              'content-type': 'application/json',
+              etag: 'a30776a059eaf26eebf27756a849097d',
+              'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+              date: 'Wed, 03 Nov 2021 14:28:48 GMT',
+              'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
+            })
             .get('/templates/test.odt')
             .reply(200, () => {
               return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
@@ -1440,8 +1588,16 @@ describe('Ovh Object Storage High Availability', function () {
 
           Promise.all([promise1, promise2]).then(results => {
             assert.strictEqual(results.length, 2);
-            assert.strictEqual(results[0].toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
-            assert.strictEqual(results[1].toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[0].body, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[0].headers['etag'].length > 0, true);
+            assert.strictEqual(results[0].headers['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[0].headers['content-length'].length > 0, true);
+            assert.strictEqual(results[0].headers['date'].length > 0, true);
+            assert.strictEqual(results[1].body, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[1].headers['etag'].length > 0, true);
+            assert.strictEqual(results[1].headers['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[1].headers['content-length'].length > 0, true);
+            assert.strictEqual(results[1].headers['date'].length > 0, true);
             assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);

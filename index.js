@@ -131,7 +131,8 @@ function listFiles(container, options, callback) {
 
     /** Manage special errors: timeouts, too many redirects or any unexpected behavior */
     res = res || {};
-    res = { error: (err && err.toString().length > 0 ? err.toString() : null), ...res };
+    res.error = err && err.toString().length > 0 ? err.toString() : null;
+
     checkIsConnected(res, 'listFiles', arrayArguments, (error) => {
       if (error) {
         return callback(error);
@@ -192,7 +193,7 @@ function uploadFile (container, filename, localPathOrBuffer, options, callback) 
 
     /** Manage special errors: timeouts, too many redirects or any unexpected behavior */
     res = res || {};
-    res = { error: (err && err.toString().length > 0 && err.code !== 'ENOENT' ? err.toString() : null), ...res };
+    res.error = err && err.toString().length > 0 && err.code !== 'ENOENT' ? err.toString() : null;
 
     checkIsConnected(res, 'uploadFile', arrayArguments, (error) => {
       if (error) {
@@ -234,9 +235,10 @@ function downloadFile (container, filename, callback) {
     },
     timeout: _config.timeout
   }, (err, res, body) => {
+
     /** Manage special errors: timeouts, too many redirects or any unexpected behavior */
     res = res || {};
-    res = { error: (err && err.toString().length > 0 ? err.toString() : null), ...res };
+    res.error = err && err.toString().length > 0 ? err.toString() : null;
 
     checkIsConnected(res, 'downloadFile', arrayArguments, (error) => {
       if (error) {
@@ -283,7 +285,7 @@ function deleteFile (container, filename, callback) {
 
     /** Manage special errors: timeouts, too many redirects or any unexpected behavior */
     res = res || {};
-    res = { error: (err && err.toString().length > 0 ? err.toString() : null), ...res };
+    res.error = err && err.toString().length > 0 ? err.toString() : null;
 
     checkIsConnected(res, 'deleteFile', arrayArguments, (error) => {
       if (error) {
