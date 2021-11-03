@@ -52,7 +52,7 @@ Learn more [on the OpenStack documentation](https://docs.openstack.org/swift/lat
   ```
   8. Upload the key and the destination sync url to the source container:
   ```bash
-  $ swiftclient post -t ‘//OVH_PUBLIC_CLOUD/RegionDestination/AUTH_xxxxxxxxx/containerNameDestination’ -k "$sharedKey" containerNameSource
+  $ swift post -t ‘//OVH_PUBLIC_CLOUD/RegionDestination/AUTH_xxxxxxxxx/containerNameDestination’ -k "$sharedKey" containerNameSource
   ```
   9. You can check that this has been configured by using the following command:
   ```bash

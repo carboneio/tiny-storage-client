@@ -1,5 +1,5 @@
 ### v0.1.8
-- Fix the `downloadFile` callback function, the third argument is now always returning the response header of the file.
+- Fix the `downloadFile` callback function, the third argument is now always returning the response header of the request.
 
 ### v0.1.7
 - add `setLogFunction` used to Override the log function. It takes to arguments: `message` as a string, `level` as a string and can be: `info`/`warning`/`error`. Example to use:
