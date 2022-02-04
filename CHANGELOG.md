@@ -1,3 +1,6 @@
+### v0.1.9
+- Update `simple-get` node dep to `4.0.1`
+
 ### v0.1.8
 - Fix the `downloadFile` callback function, the third argument is now always returning the response header of the request.
 
