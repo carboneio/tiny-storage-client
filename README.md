@@ -179,6 +179,46 @@ storage.listFiles('templates', { queries: { prefix: 'prefixName' }, headers: { A
 });
 ```
 
+### Get file metadata
+
+```js
+storage.getFileMetadata('templates', 'filename.jpg', (err, headers) => {
+  if (err) {
+    // handle error
+  }
+  /**
+   * Returned headers: {
+   *  Content-Length: 14
+   *  Accept-Ranges: bytes
+   *  Last-Modified: Thu, 16 Jan 2014 21:12:31 GMT
+   *  Etag: 451e372e48e0f6b1114fa0724aa79fa1
+   *  X-Timestamp: 1389906751.73463
+   *  X-Object-Meta-Book: GoodbyeColumbus
+   *  Content-Type: application/octet-stream
+   *  X-Trans-Id: tx37ea34dcd1ed48ca9bc7d-0052d84b6f
+   *  X-Openstack-Request-Id: tx37ea34dcd1ed48ca9bc7d-0052d84b6f
+   *  Date: Thu, 16 Jan 2014 21:13:19 GMT
+   *  X-Object-Meta-Custom-Metadata-1: Value
+   *  X-Object-Meta-Custom-Metadata-2: Value
+   * }
+   * // Details: https://docs.openstack.org/api-ref/object-store/?expanded=show-object-metadata-detail#show-object-metadata
+   */
+});
+```
+
+### Set file metadata
+
+```js
+storage.setFileMetadata('templates', 'filename.jpg', { headers: { 'Content-Type': 'image/jpeg', 'X-Object-Meta-LocationOrigin': 'Paris/France', 'X-Delete-At': 1440619048 }} (err, headers) => {
+  if (err) {
+    // handle error
+  }
+  // success
+  // console.log(headers['X-Object-Meta-name'])
+  // list of headers: https://docs.openstack.org/api-ref/object-store/?expanded=show-object-metadata-detail#show-object-metadata
+});
+```
+
 ### Log
 
 The package uses debug to print logs into the terminal. To activate logs, you must pass the `DEBUG=*` environment variable.
