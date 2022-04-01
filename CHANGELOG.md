@@ -1,5 +1,9 @@
+### v0.2.0
+- Add function `setFileMetadata` to create or replace object metadata
+- Add function `getFileMetadata` to get an object metadata
+- Update package `debug` to `4.3.4`
 ### v0.1.9
-- Update `simple-get` node dep to `4.0.1`
+- Update package `simple-get` to `4.0.1`
 
 ### v0.1.8
 - Fix the `downloadFile` callback function, the third argument is now always returning the response header of the request.
