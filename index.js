@@ -401,6 +401,10 @@ function setFileMetadata (container, filename, options, callback) {
         return callback(error);
       }
 
+      if (res && res.statusCode === 404) {
+        return callback(new Error('File does not exist'));
+      }
+
       err = err || checkResponseError(res);
 
       /** TODO: remove? it should never happen as every error switch to another storage */
