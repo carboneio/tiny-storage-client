@@ -2537,6 +2537,570 @@ describe('Ovh Object Storage High Availability', function () {
       });
     });
   });
+
+  describe.only('getFileMetadata', function () {
+
+    describe('SINGLE STORAGE', function () {
+      it('should get file metadata (headers)', function (done) {
+        const firstNock = nock(publicUrlGRA)
+          .defaultReplyHeaders({
+            'content-length': '1492',
+            'accept-ranges': 'bytes',
+            'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
+            'content-type': 'application/json',
+            etag: 'a30776a059eaf26eebf27756a849097d',
+            'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+            date: 'Wed, 03 Nov 2021 14:28:48 GMT',
+            'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
+          })
+          .intercept("/templates/test.odt", "HEAD")
+          .reply(200,"OK");
+
+        storage.getFileMetadata('templates', 'test.odt', (err, headers) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(headers['etag'].length > 0, true);
+          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(headers['content-length'].length > 0, true);
+          assert.strictEqual(headers['date'].length > 0, true);
+          done();
+        });
+      });
+
+      it('should reconnect automatically to object storage and retry', function (done) {
+        let firstNock = nock(publicUrlGRA)
+          .defaultReplyHeaders({
+            'content-length': '1492',
+            'accept-ranges': 'bytes',
+            'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
+            'content-type': 'application/json',
+            etag: 'a30776a059eaf26eebf27756a849097d',
+            'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+            date: 'Wed, 03 Nov 2021 14:28:48 GMT',
+            'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
+          })
+          .intercept("/templates/test.odt", "HEAD")
+          .reply(401, 'Unauthorized')
+          .intercept("/templates/test.odt", "HEAD")
+          .reply(200,"OK");
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        storage.getFileMetadata('templates', 'test.odt', (err, headers) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(headers['etag'].length > 0, true);
+          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(headers['content-length'].length > 0, true);
+          assert.strictEqual(headers['date'].length > 0, true);
+          done();
+        });
+      });
+
+      it('should return an error if the single storage timout', function (done) {
+        storage.setTimeout(200);
+        const firstNock = nock(publicUrlGRA)
+          .intercept("/templates/test.odt", "HEAD")
+          .delayConnection(500)
+          .reply(200, {})
+
+        storage.getFileMetadata('templates', 'test.odt', (err, headers) => {
+          assert.notStrictEqual(err, null);
+          assert.strictEqual(err.message, 'Object Storages are not available');
+          assert.strictEqual(headers, undefined);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return an error if the single storage return any kind of errors', function (done) {
+        const firstNock = nock(publicUrlGRA)
+          .intercept("/templates/test.odt", "HEAD")
+          .replyWithError('Error Message 1234');
+
+        storage.getFileMetadata('templates', 'test.odt', (err, headers) => {
+          assert.notStrictEqual(err, null);
+          assert.strictEqual(err.message, 'Object Storages are not available');
+          assert.strictEqual(headers, undefined);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return an error if the file does not exist', function (done) {
+        const firstNock = nock(publicUrlGRA)
+          .intercept("/templates/test.odt", "HEAD")
+          .reply(404);
+
+        storage.getFileMetadata('templates', 'test.odt', (err, headers) => {
+          assert.notStrictEqual(err, null);
+          assert.strictEqual(err.message, 'File does not exist');
+          assert.strictEqual(headers, undefined);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+    });
+
+    describe.only('MULTIPLE STORAGES', function () {
+      beforeEach(function (done) {
+        const firstNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        storage.setTimeout(5000);
+        storage.setStorages([{
+          username                     : 'storage-1-user',
+          password                     : 'storage-1-password',
+          authUrl                      : authURL,
+          tenantName                   : 'storage-1-tenant',
+          region                       : 'GRA'
+        },
+        {
+          username                     : 'storage-2-user',
+          password                     : 'storage-2-password',
+          authUrl                      : authURL,
+          tenantName                   : 'storage-2-tenant',
+          region                       : 'SBG'
+        }]);
+        storage.connection((err) => {
+          assert.strictEqual(err, null)
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+      it('should reconnect automatically to the second object storage if the first storage authentication fail and should retry the request', function(done){
+        let firstNock = nock(publicUrlGRA)
+          /** 1 */
+          .intercept("/templates/test.odt", "HEAD")
+          .reply(401, 'Unauthorized');
+
+        let secondNock = nock(authURL)
+          /** 2 */
+          .post('/auth/tokens')
+          .reply(500, {})
+          /** 3 */
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          /** 4 */
+          .defaultReplyHeaders({
+            'content-length': '1492',
+            'accept-ranges': 'bytes',
+            'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
+            'content-type': 'application/json',
+            etag: 'a30776a059eaf26eebf27756a849097d',
+            'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+            date: 'Wed, 03 Nov 2021 14:28:48 GMT',
+            'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
+          })
+          .intercept("/templates/test.odt", "HEAD")
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+          });
+
+        storage.getFileMetadata('templates', 'test.odt', (err, headers) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(headers['etag'].length > 0, true);
+          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(headers['content-length'].length > 0, true);
+          assert.strictEqual(headers['date'].length > 0, true);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+          done();
+        });
+
+
+      })
+
+      it('should retry the request with the second object storage if the first object storage return a 500 error', function(done){
+        let firstNock = nock(publicUrlGRA)
+          .intercept("/templates/test2.odt", "HEAD")
+          .reply(500, () => {
+            return '';
+          });
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          .defaultReplyHeaders({
+            'content-length': '1492',
+            'accept-ranges': 'bytes',
+            'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
+            'content-type': 'application/json',
+            etag: 'a30776a059eaf26eebf27756a849097d',
+            'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+            date: 'Wed, 03 Nov 2021 14:28:48 GMT',
+            'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
+          })
+          .intercept("/templates/test2.odt", "HEAD")
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+          });
+
+        storage.getFileMetadata('templates', 'test2.odt', (err, headers) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(headers['etag'].length > 0, true);
+          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(headers['content-length'].length > 0, true);
+          assert.strictEqual(headers['date'].length > 0, true);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+          done();
+        });
+      })
+
+      it('should retry the request with the second object storage if the first object storage timeout', function(done){
+        storage.setTimeout(200);
+        let firstNock = nock(publicUrlGRA)
+          .intercept("/templates/test.odt", "HEAD")
+          .delayConnection(500)
+          .reply(200, {});
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          .defaultReplyHeaders({
+            'content-length': '1492',
+            'accept-ranges': 'bytes',
+            'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
+            'content-type': 'application/json',
+            etag: 'a30776a059eaf26eebf27756a849097d',
+            'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+            date: 'Wed, 03 Nov 2021 14:28:48 GMT',
+            'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
+          })
+          .intercept("/templates/test.odt", "HEAD")
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+          });
+
+
+        storage.getFileMetadata('templates', 'test.odt', (err, headers) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(headers['etag'].length > 0, true);
+          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(headers['content-length'].length > 0, true);
+          assert.strictEqual(headers['date'].length > 0, true);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          done();
+        });
+      })
+
+      it('should retry the request with the second storage if the first storage return any kind of errors', function (done) {
+        let firstNock = nock(publicUrlGRA)
+          .intercept("/templates/test.odt", "HEAD")
+          .replyWithError('Error Message 1234');
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          .defaultReplyHeaders({
+            'content-length': '1492',
+            'accept-ranges': 'bytes',
+            'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
+            'content-type': 'application/json',
+            etag: 'a30776a059eaf26eebf27756a849097d',
+            'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+            date: 'Wed, 03 Nov 2021 14:28:48 GMT',
+            'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
+          })
+          .intercept("/templates/test.odt", "HEAD")
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+          });
+
+
+        storage.getFileMetadata('templates', 'test.odt', (err, headers) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(headers['etag'].length > 0, true);
+          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(headers['content-length'].length > 0, true);
+          assert.strictEqual(headers['date'].length > 0, true);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+          done();
+        });
+      });
+
+      describe("PARALLEL REQUESTS", function () {
+
+        function getFileMetadataPromise() {
+          return new Promise((resolve, reject) => {
+            try {
+              storage.getFileMetadata('templates', 'test.odt', (err, headers) => {
+                if (err) {
+                  return reject(err);
+                }
+                return resolve(headers);
+              });
+            } catch(err) {
+              return reject(err);
+            }
+          });
+        }
+
+        it('should request the object storage in parallel and fallback to SBG if the main storage return any kind of errors', function (done) {
+
+          let firstNock = nock(publicUrlGRA)
+            .intercept("/templates/test.odt", "HEAD")
+            .replyWithError('Error Message 1234')
+            .intercept("/templates/test.odt", "HEAD")
+            .replyWithError('Error Message 1234');
+
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+          let thirdNock = nock(publicUrlSBG)
+            .defaultReplyHeaders({
+              'content-length': '1492',
+              'accept-ranges': 'bytes',
+              'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
+              'content-type': 'application/json',
+              etag: 'a30776a059eaf26eebf27756a849097d',
+              'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+              date: 'Wed, 03 Nov 2021 14:28:48 GMT',
+              'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
+            })
+            .intercept("/templates/test.odt", "HEAD")
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+            })
+            .intercept("/templates/test.odt", "HEAD")
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+            });
+
+          let promise1 = getFileMetadataPromise()
+          let promise2 = getFileMetadataPromise()
+
+          Promise.all([promise1, promise2]).then(results => {
+            assert.strictEqual(results.length, 2)
+            assert.strictEqual(results[0]['etag'].length > 0, true);
+            assert.strictEqual(results[0]['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[0]['content-length'].length > 0, true);
+            assert.strictEqual(results[0]['date'].length > 0, true);
+            assert.strictEqual(results[1]['etag'].length > 0, true);
+            assert.strictEqual(results[1]['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[1]['content-length'].length > 0, true);
+            assert.strictEqual(results[1]['date'].length > 0, true);
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            done();
+          }).catch(err => {
+            assert.strictEqual(err, null);
+            done();
+          });
+        });
+
+        it('should request the object storage in parallel and fallback to SBG if the authentication of the main storage return an error', function (done) {
+
+          let firstNock = nock(publicUrlGRA)
+            .intercept("/templates/test.odt", "HEAD")
+            .reply(401, 'Unauthorized')
+            .intercept("/templates/test.odt", "HEAD")
+            .reply(401, 'Unauthorized');
+
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(500, {})
+            .post('/auth/tokens')
+            .reply(500, {})
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+          let thirdNock = nock(publicUrlSBG)
+            .defaultReplyHeaders({
+              'content-length': '1492',
+              'accept-ranges': 'bytes',
+              'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
+              'content-type': 'application/json',
+              etag: 'a30776a059eaf26eebf27756a849097d',
+              'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+              date: 'Wed, 03 Nov 2021 14:28:48 GMT',
+              'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
+            })
+            .intercept("/templates/test.odt", "HEAD")
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+            })
+            .intercept("/templates/test.odt", "HEAD")
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+            });
+
+          let promise1 = getFileMetadataPromise()
+          let promise2 = getFileMetadataPromise()
+
+          Promise.all([promise1, promise2]).then(async results => {
+            assert.strictEqual(results.length, 2);
+            assert.strictEqual(results[0]['etag'].length > 0, true);
+            assert.strictEqual(results[0]['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[0]['content-length'].length > 0, true);
+            assert.strictEqual(results[0]['date'].length > 0, true);
+            assert.strictEqual(results[1]['etag'].length > 0, true);
+            assert.strictEqual(results[1]['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[1]['content-length'].length > 0, true);
+            assert.strictEqual(results[1]['date'].length > 0, true);
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
+          });
+        });
+
+        it.only('should request the object storage in parallel and fallback to SBG if the main storage timeout', function (done) {
+
+          storage.setTimeout(200);
+
+          let firstNock = nock(publicUrlGRA)
+            .intercept("/templates/test.odt", "HEAD")
+            .delayConnection(500)
+            .reply(200, {})
+            .intercept("/templates/test.odt", "HEAD")
+            .delayConnection(500)
+            .reply(200, {});
+
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+          let thirdNock = nock(publicUrlSBG)
+            .defaultReplyHeaders({
+              'content-length': '1492',
+              'accept-ranges': 'bytes',
+              'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
+              'content-type': 'application/json',
+              etag: 'a30776a059eaf26eebf27756a849097d',
+              'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+              date: 'Wed, 03 Nov 2021 14:28:48 GMT',
+              'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
+            })
+            .intercept("/templates/test.odt", "HEAD")
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+            })
+            .intercept("/templates/test.odt", "HEAD")
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+            });
+
+          let promise1 = getFileMetadataPromise()
+          let promise2 = getFileMetadataPromise()
+
+
+          Promise.all([promise1, promise2]).then(results => {
+            assert.strictEqual(results.length, 2);
+            assert.strictEqual(results[0]['etag'].length > 0, true);
+            assert.strictEqual(results[0]['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[0]['content-length'].length > 0, true);
+            assert.strictEqual(results[0]['date'].length > 0, true);
+            assert.strictEqual(results[1]['etag'].length > 0, true);
+            assert.strictEqual(results[1]['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[1]['content-length'].length > 0, true);
+            assert.strictEqual(results[1]['date'].length > 0, true);
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
+          }).catch(err => {
+            assert.strictEqual(err, null);
+            done();
+          });
+        });
+
+        it.only('should request the object storage in parallel and fallback to SBG if the main storage return a 500 error', function (done) {
+
+          let firstNock = nock(publicUrlGRA)
+            .intercept("/templates/test.odt", "HEAD")
+            .reply(500, {})
+            .intercept("/templates/test.odt", "HEAD")
+            .reply(500, {});
+
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+          let thirdNock = nock(publicUrlSBG)
+            .defaultReplyHeaders({
+              'content-length': '1492',
+              'accept-ranges': 'bytes',
+              'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
+              'content-type': 'application/json',
+              etag: 'a30776a059eaf26eebf27756a849097d',
+              'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+              date: 'Wed, 03 Nov 2021 14:28:48 GMT',
+              'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
+            })
+            .intercept("/templates/test.odt", "HEAD")
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+            })
+            .intercept("/templates/test.odt", "HEAD")
+            .reply(200, () => {
+              return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+            });
+
+          let promise1 = getFileMetadataPromise()
+          let promise2 = getFileMetadataPromise()
+
+
+          Promise.all([promise1, promise2]).then(results => {
+            assert.strictEqual(results.length, 2);
+            assert.strictEqual(results[0]['etag'].length > 0, true);
+            assert.strictEqual(results[0]['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[0]['content-length'].length > 0, true);
+            assert.strictEqual(results[0]['date'].length > 0, true);
+            assert.strictEqual(results[1]['etag'].length > 0, true);
+            assert.strictEqual(results[1]['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[1]['content-length'].length > 0, true);
+            assert.strictEqual(results[1]['date'].length > 0, true);
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
+          }).catch(err => {
+            assert.strictEqual(err, null);
+            done();
+          });
+        });
+      });
+    });
+  });
 });
 
 let connectionResultSuccessV3 = {
