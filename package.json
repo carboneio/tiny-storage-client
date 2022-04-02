@@ -1,6 +1,6 @@
 {
   "name": "high-availability-object-storage",
-  "version": "0.1.9",
+  "version": "0.2.0",
   "description": "High available, performant, and tiny Node SDK for OpenStack Swift Object Storage",
   "main": "index.js",
   "scripts": {
