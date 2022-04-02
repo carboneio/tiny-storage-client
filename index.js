@@ -309,6 +309,114 @@ function deleteFile (container, filename, callback) {
 }
 
 /**
+ * @description Get object metadata
+ *
+ * @param {string} container Container name
+ * @param {string} filename filename to store
+ * @param {function} callback function(err, headers):void = The `err` argument is null by default, return an object if an error occurs.
+ * @returns {void}
+ */
+function getFileMetadata(container, filename, callback) {
+  const arrayArguments = [...arguments, { originStorage : _config.actifStorage }];
+
+  get.concat({
+    url     : `${_config.endpoints.url}/${container}/${filename}`,
+    method  : 'HEAD',
+    headers : {
+      'X-Auth-Token' : _config.token,
+      Accept         : 'application/json'
+    },
+    timeout: _config.timeout
+  }, (err, res) => {
+
+    /** Manage special errors: timeouts, too many redirects or any unexpected behavior */
+    res = res || {};
+    res.error = err && err.toString().length > 0 ? err.toString() : null;
+
+    checkIsConnected(res, 'getFileMetadata', arrayArguments, (error) => {
+      if (error) {
+        return callback(error);
+      }
+
+      if (res && res.statusCode === 404) {
+        return callback(new Error('File does not exist'));
+      }
+
+      err = err || checkResponseError(res);
+
+      /** TODO: remove? it should never happen as every error switch to another storage */
+      if (err) {
+        return callback(err);
+      }
+
+      return callback(null, res.headers);
+    });
+  });
+ }
+
+ /**
+ * @description Create or update object metadata.
+ * @description To create or update custom metadata
+ * @description use the X-Object-Meta-name header,
+ * @description where name is the name of the metadata item.
+ *
+ * @param {string} container Container name
+ * @param {string} filename file to store
+ * @param {string|Buffer} localPathOrBuffer absolute path to the file
+ * @param {Object} options { headers: {}, queries: {} } List of query parameters and headers: https://docs.openstack.org/api-ref/object-store/?expanded=create-or-update-object-metadata-detail#create-or-update-object-metadata
+ * @param {function} callback function(err, headers):void = The `err` is null by default, return an object if an error occurs.
+ * @returns {void}
+ */
+function setFileMetadata (container, filename, options, callback) {
+
+  const arrayArguments = [...arguments];
+
+  if (callback === undefined) {
+    callback = options;
+    arrayArguments.push(options);
+    options = { headers: {}, queries: {} };
+    arrayArguments[3] = options;
+  }
+
+  arrayArguments.push({ originStorage : _config.actifStorage })
+
+  const { headers, queries } = getHeaderAndQueryParameters(options);
+  get.concat({
+    url     : `${_config.endpoints.url}/${container}/${filename}${queries}`,
+    method  : 'POST',
+    headers : {
+      'X-Auth-Token' : _config.token,
+      Accept         : 'application/json',
+      ...headers
+    },
+    timeout: _config.timeout
+  }, (err, res) => {
+
+    /** Manage special errors: timeouts, too many redirects or any unexpected behavior */
+    res = res || {};
+    res.error = err && err.toString().length > 0 ? err.toString() : null;
+
+    checkIsConnected(res, 'setFileMetadata', arrayArguments, (error) => {
+      if (error) {
+        return callback(error);
+      }
+
+      if (res && res.statusCode === 404) {
+        return callback(new Error('File does not exist'));
+      }
+
+      err = err || checkResponseError(res);
+
+      /** TODO: remove? it should never happen as every error switch to another storage */
+      if (err) {
+        return callback(err);
+      }
+      return callback(null, res.headers);
+    });
+  });
+}
+
+/**
  * @description Check the response status code and return an Error.
  *
  * @param {Object} response Response object from request
@@ -373,6 +481,12 @@ function checkIsConnected (response, from, args, callback) {
         break;
       case 'listFiles':
         listFiles.apply(null, args);
+        break;
+      case 'getFileMetadata':
+        getFileMetadata.apply(null, args);
+        break;
+      case 'setFileMetadata':
+        setFileMetadata.apply(null, args);
         break;
       default:
         /** TODO: remove? it should never happen */
@@ -474,6 +588,8 @@ module.exports = (config) => {
     downloadFile,
     deleteFile,
     listFiles,
+    getFileMetadata,
+    setFileMetadata,
     setTimeout,
     setStorages,
     getStorages,

@@ -1,6 +1,6 @@
 {
   "name": "high-availability-object-storage",
-  "version": "0.1.9",
+  "version": "0.2.0",
   "description": "High available, performant, and tiny Node SDK for OpenStack Swift Object Storage",
   "main": "index.js",
   "scripts": {
@@ -22,7 +22,7 @@
   "author": "Steevepay",
   "license": "Apache-2.0",
   "dependencies": {
-    "debug": "=4.3.3",
+    "debug": "=4.3.4",
     "simple-get": "=4.0.1"
   },
   "devDependencies": {
