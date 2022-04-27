@@ -181,6 +181,8 @@ storage.listFiles('templates', { queries: { prefix: 'prefixName' }, headers: { A
 
 ### Get file metadata
 
+Shows object metadata. Checkout the list of [headers](https://docs.openstack.org/api-ref/object-store/?expanded=create-or-update-object-metadata-detail,show-object-metadata-detail#show-object-metadata).
+
 ```js
 storage.getFileMetadata('templates', 'filename.jpg', (err, headers) => {
   if (err) {
@@ -208,14 +210,15 @@ storage.getFileMetadata('templates', 'filename.jpg', (err, headers) => {
 
 ### Set file metadata
 
+To create or update custom metadata, use the "X-Object-Meta-name" header, where `name` is the name of the metadata item. The function overwrite all custom metadata applied on the file.
+Checkout the list of [headers availables](https://docs.openstack.org/api-ref/object-store/?expanded=create-or-replace-object-detail,create-or-update-object-metadata-detail#create-or-update-object-metadata).
+
 ```js
 storage.setFileMetadata('templates', 'filename.jpg', { headers: { 'Content-Type': 'image/jpeg', 'X-Object-Meta-LocationOrigin': 'Paris/France', 'X-Delete-At': 1440619048 }} (err, headers) => {
   if (err) {
     // handle error
   }
   // success
-  // console.log(headers['X-Object-Meta-name'])
-  // list of headers: https://docs.openstack.org/api-ref/object-store/?expanded=show-object-metadata-detail#show-object-metadata
 });
 ```
 
