@@ -10,7 +10,7 @@ const publicUrlSBG = 'https://storage.sbg.cloud.ovh.net/v1/AUTH_ce3e510224d740a6
 
 const tokenAuth = 'gAAAAABe8JlEGYPUwwOyjqgUBl11gSjDOw5VTtUZ5n8SWxghRGwakDkP_lelLfRctzyhbIFUXjsdPaGmV2xicL-9333lJUnL3M4JYlYCYMWsX3IhnLPYboyti835VdhAHQ7K_d0OC4OYvM04bvL3w_uSbkxPmL27uO0ISUgQdB_mHxoYlol8xYI'
 
-describe('Ovh Object Storage High Availability', function () {
+describe('Ovh Object Storage High Availability Node Client', function () {
   let storage = storageSDK();
 
   beforeEach(function (done) {
@@ -3683,6 +3683,664 @@ describe('Ovh Object Storage High Availability', function () {
             assert.strictEqual(results[1]['x-openstack-request-id'].length > 0, true);
             assert.strictEqual(results[1]['content-length'] === '0', true);
             assert.strictEqual(results[1]['date'].length > 0, true);
+
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
+          }).catch(err => {
+            assert.strictEqual(err, null);
+            done();
+          });
+        });
+
+      });
+    });
+  });
+
+  describe('Request', function () {
+
+    const _headers = {
+      'Content-Type': 'image/jpeg',
+      'X-Object-Meta-LocationOrigin': 'Paris/France',
+      'X-Delete-At': 1440619048
+    }
+
+    describe("SINGLE STORAGE", function () {
+      it('should set file metadata', function (done) {
+        const firstNock = nock(publicUrlGRA)
+          .matchHeader('x-object-meta-locationorigin', 'Paris/France')
+          .matchHeader('Content-Type', 'image/jpeg')
+          .matchHeader('X-Delete-At', 1440619048)
+          .defaultReplyHeaders({
+            'content-length': '0',
+            'date': 'Wed, 03 Nov 2021 14:28:48 GMT',
+            'x-trans-id': 'tx37ea34dcd1ed48ca9bc7d-0052d84b6f',
+            'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+          })
+          .intercept("/templates/test.odt", "COPY")
+          .reply(200,"OK");
+
+        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, body, headers) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(headers['x-trans-id'].length > 0, true);
+          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(headers['content-length'] === '0', true);
+          assert.strictEqual(headers['date'].length > 0, true);
+          assert.strictEqual(body.toString(), "OK");
+          done();
+        });
+      });
+
+      it('should bulk delete files from a container', function (done) {
+        const _expectedBody = '' +
+         '/templates/335162359311268850|a07c420feededcd9ddc5c082f7feb8add3bb0571ea8ae4c775af12ea21e8ce08\n' +
+         '/templates/335162359311268850|a07c420feededcd9ddc5c082f7feb8add3bb0571ea8ae4c775af12ea21e8ce08\n'
+        const _expectedHeader = {
+          'Content-Type': 'text/plain',
+          'Accept'      : 'application/json'
+        }
+        const _expectedResponse = {
+          "Number Not Found": 2,
+          "Response Status": "200 OK",
+          "Errors": [],
+          "Number Deleted": 1,
+          "Response Body": ""
+        }
+        const firstNock = nock(publicUrlGRA)
+          .matchHeader('Content-Type', 'text/plain')
+          .matchHeader('Accept', 'application/json')
+          .defaultReplyHeaders({
+            'content-length': '0',
+            'date': 'Wed, 03 Nov 2021 14:28:48 GMT',
+            'x-trans-id': 'tx37ea34dcd1ed48ca9bc7d-0052d84b6f',
+            'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+          })
+          .post("/templates?bulk-delete")
+          .reply(201, (uri, requestBody) => {
+            assert.strictEqual(requestBody, _expectedBody);
+            return Buffer.from(JSON.stringify(_expectedResponse));
+          });
+
+        storage.request('POST', '/templates?bulk-delete', { headers: _expectedHeader, body: _expectedBody }, (err, body, headers) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(headers['x-trans-id'].length > 0, true);
+          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(headers['content-length'] === '0', true);
+          assert.strictEqual(headers['date'].length > 0, true);
+          assert.strictEqual(body.toString(), JSON.stringify(_expectedResponse));
+          done();
+        });
+      });
+
+      it('should reconnect automatically if the token is invalid and retry', function (done) {
+
+        let firstNock = nock(publicUrlGRA)
+          .matchHeader('x-object-meta-locationorigin', 'Paris/France')
+          .matchHeader('Content-Type', 'image/jpeg')
+          .matchHeader('X-Delete-At', 1440619048)
+          .defaultReplyHeaders({
+            'content-length': '0',
+            'date': 'Wed, 03 Nov 2021 14:28:48 GMT',
+            'x-trans-id': 'tx37ea34dcd1ed48ca9bc7d-0052d84b6f',
+            'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+          })
+          .intercept("/templates/test.odt", "COPY")
+          .reply(401, 'Unauthorized')
+          .intercept("/templates/test.odt", "COPY")
+          .reply(200, 'OK')
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, body, headers) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(headers['x-trans-id'].length > 0, true);
+          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(headers['content-length'] === '0', true);
+          assert.strictEqual(headers['date'].length > 0, true);
+          assert.strictEqual(body.toString(), "OK");
+          done();
+        });
+      });
+
+      it('should return an error if the single storage timeout', function (done) {
+        storage.setTimeout(200);
+        const firstNock = nock(publicUrlGRA)
+          .matchHeader('x-object-meta-locationorigin', 'Paris/France')
+          .matchHeader('Content-Type', 'image/jpeg')
+          .matchHeader('X-Delete-At', 1440619048)
+          .intercept("/templates/test.odt", "COPY")
+          .delayConnection(500)
+          .reply(200, {})
+
+        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, body, headers) => {
+          assert.notStrictEqual(err, null);
+          assert.strictEqual(err.message, 'Object Storages are not available');
+          assert.strictEqual(headers, undefined);
+          assert.strictEqual(body, undefined);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return an error if containers or the file does not exists', function (done) {
+        const firstNock = nock(publicUrlGRA)
+          .matchHeader('x-object-meta-locationorigin', 'Paris/France')
+          .matchHeader('Content-Type', 'image/jpeg')
+          .matchHeader('X-Delete-At', 1440619048)
+          .intercept("/templates/test.odt", "COPY")
+          .reply(404, '<html><h1>Not Found</h1><p>The resource could not be found.</p></html>');
+
+        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, body, headers) => {
+          assert.notStrictEqual(err, null);
+          assert.strictEqual(err.message.includes('404'), true);
+          assert.strictEqual(headers, undefined);
+          assert.strictEqual(body, undefined);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return an error if the single storage return any kind of errors', function (done) {
+        const firstNock = nock(publicUrlGRA)
+          .matchHeader('x-object-meta-locationorigin', 'Paris/France')
+          .matchHeader('Content-Type', 'image/jpeg')
+          .matchHeader('X-Delete-At', 1440619048)
+          .intercept("/templates/test.odt", "COPY")
+          .replyWithError('Error Message 1234');
+
+        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, body, headers) => {
+          assert.notStrictEqual(err, null);
+          assert.strictEqual(err.message, 'Object Storages are not available');
+          assert.strictEqual(headers, undefined);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+    })
+
+    describe("MULTIPLE STORAGES", function () {
+
+      beforeEach(function (done) {
+        const firstNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        storage.setTimeout(5000);
+        storage.setStorages([{
+          username                     : 'storage-1-user',
+          password                     : 'storage-1-password',
+          authUrl                      : authURL,
+          tenantName                   : 'storage-1-tenant',
+          region                       : 'GRA'
+        },
+        {
+          username                     : 'storage-2-user',
+          password                     : 'storage-2-password',
+          authUrl                      : authURL,
+          tenantName                   : 'storage-2-tenant',
+          region                       : 'SBG'
+        }]);
+        storage.connection((err) => {
+          assert.strictEqual(err, null)
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+      it('should reconnect automatically to the second object storage if the first storage authentication fail and should retry the request', function(done){
+
+        let firstNock = nock(publicUrlGRA)
+          .matchHeader('x-object-meta-locationorigin', 'Paris/France')
+          .matchHeader('Content-Type', 'image/jpeg')
+          .matchHeader('X-Delete-At', 1440619048)
+          /** 1 */
+          .intercept("/templates/test.odt", "COPY")
+          .reply(401, 'Unauthorized')
+
+
+        let secondNock = nock(authURL)
+          /** 2 */
+          .post('/auth/tokens')
+          .reply(500, {})
+          /** 3 */
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          .matchHeader('x-object-meta-locationorigin', 'Paris/France')
+          .matchHeader('Content-Type', 'image/jpeg')
+          .matchHeader('X-Delete-At', 1440619048)
+          .defaultReplyHeaders({
+            'content-length': '0',
+            'date': 'Wed, 03 Nov 2021 14:28:48 GMT',
+            'x-trans-id': 'tx37ea34dcd1ed48ca9bc7d-0052d84b6f',
+            'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+          })
+          /** 4 */
+          .intercept("/templates/test.odt", "COPY")
+          .reply(201, 'OK');
+
+        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, body, headers) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          assert.strictEqual(headers['x-trans-id'].length > 0, true);
+          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(headers['content-length'] === '0', true);
+          assert.strictEqual(headers['date'].length > 0, true);
+          assert.strictEqual(body.toString(), "OK");
+          done();
+        });
+      })
+
+      it('should retry the request with the second object storage if the first object storage return a 500 error', function(done){
+
+        let firstNock = nock(publicUrlGRA)
+          .matchHeader('x-object-meta-locationorigin', 'Paris/France')
+          .matchHeader('Content-Type', 'image/jpeg')
+          .matchHeader('X-Delete-At', 1440619048)
+          .intercept("/templates/test.odt", "COPY")
+          .reply(500, {});
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          .matchHeader('x-object-meta-locationorigin', 'Paris/France')
+          .matchHeader('Content-Type', 'image/jpeg')
+          .matchHeader('X-Delete-At', 1440619048)
+          .defaultReplyHeaders({
+            'content-length': '0',
+            'date': 'Wed, 03 Nov 2021 14:28:48 GMT',
+            'x-trans-id': 'tx37ea34dcd1ed48ca9bc7d-0052d84b6f',
+            'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+          })
+          .intercept("/templates/test.odt", "COPY")
+          .reply(201, 'OK');
+
+        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, body, headers) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          assert.strictEqual(headers['x-trans-id'].length > 0, true);
+          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(headers['content-length'] === '0', true);
+          assert.strictEqual(headers['date'].length > 0, true);
+          assert.strictEqual(body.toString(), "OK");
+          done();
+        });
+      })
+
+
+
+      it('should retry the request with the second object storage if the first object storage timeout', function(done){
+        storage.setTimeout(200);
+        let firstNock = nock(publicUrlGRA)
+          .matchHeader('x-object-meta-locationorigin', 'Paris/France')
+          .matchHeader('Content-Type', 'image/jpeg')
+          .matchHeader('X-Delete-At', 1440619048)
+          .intercept("/templates/test.odt", "COPY")
+          .delayConnection(500)
+          .reply(200, {});
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          .matchHeader('x-object-meta-locationorigin', 'Paris/France')
+          .matchHeader('Content-Type', 'image/jpeg')
+          .matchHeader('X-Delete-At', 1440619048)
+          .defaultReplyHeaders({
+            'content-length': '0',
+            'date': 'Wed, 03 Nov 2021 14:28:48 GMT',
+            'x-trans-id': 'tx37ea34dcd1ed48ca9bc7d-0052d84b6f',
+            'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+          })
+          .intercept("/templates/test.odt", "COPY")
+          .reply(201, 'OK');
+
+        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, body, headers) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          assert.strictEqual(headers['x-trans-id'].length > 0, true);
+          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(headers['content-length'] === '0', true);
+          assert.strictEqual(headers['date'].length > 0, true);
+          assert.strictEqual(body.toString(), "OK");
+          done();
+        });
+      })
+
+      it('should retry the request with the second storage if the first storage return any kind of errors', function (done) {
+
+        let firstNock = nock(publicUrlGRA)
+          .matchHeader('x-object-meta-locationorigin', 'Paris/France')
+          .matchHeader('Content-Type', 'image/jpeg')
+          .matchHeader('X-Delete-At', 1440619048)
+          .intercept("/templates/test.odt", "COPY")
+          .replyWithError('Error Message 1234');
+
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          .matchHeader('x-object-meta-locationorigin', 'Paris/France')
+          .matchHeader('Content-Type', 'image/jpeg')
+          .matchHeader('X-Delete-At', 1440619048)
+          .defaultReplyHeaders({
+            'content-length': '0',
+            'date': 'Wed, 03 Nov 2021 14:28:48 GMT',
+            'x-trans-id': 'tx37ea34dcd1ed48ca9bc7d-0052d84b6f',
+            'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+          })
+          .intercept("/templates/test.odt", "COPY")
+          .reply(200, 'OK');
+
+
+        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, body, headers) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          assert.strictEqual(headers['x-trans-id'].length > 0, true);
+          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(headers['content-length'] === '0', true);
+          assert.strictEqual(headers['date'].length > 0, true);
+          assert.strictEqual(body.toString(), "OK");
+          done();
+        });
+      });
+
+      describe("PARALLEL REQUESTS", function () {
+
+        function copyRequestPromise() {
+          return new Promise((resolve, reject) => {
+            try {
+              storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, body, headers) => {
+                if (err) {
+                  return reject(err);
+                }
+                return resolve({ headers: headers, body: body });
+              });
+            } catch(err) {
+              return reject(err);
+            }
+          });
+        }
+
+        it('should request the object storage in parallel and fallback to SBG if the main storage return any kind of errors', function (done) {
+
+          let firstNock = nock(publicUrlGRA)
+            .matchHeader('x-object-meta-locationorigin', 'Paris/France')
+            .matchHeader('Content-Type', 'image/jpeg')
+            .matchHeader('X-Delete-At', 1440619048)
+            .intercept("/templates/test.odt", "COPY")
+            .replyWithError('Error Message 1234')
+            .intercept("/templates/test.odt", "COPY")
+            .replyWithError('Error Message 1234');
+
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+
+          let thirdNock = nock(publicUrlSBG)
+            .matchHeader('x-object-meta-locationorigin', 'Paris/France')
+            .matchHeader('Content-Type', 'image/jpeg')
+            .matchHeader('X-Delete-At', 1440619048)
+            .defaultReplyHeaders({
+              'content-length': '0',
+              'date': 'Wed, 03 Nov 2021 14:28:48 GMT',
+              'x-trans-id': 'tx37ea34dcd1ed48ca9bc7d-0052d84b6f',
+              'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+            })
+            .intercept("/templates/test.odt", "COPY")
+            .reply(200, 'OK')
+            .intercept("/templates/test.odt", "COPY")
+            .reply(200, 'OK')
+
+          let promise1 = copyRequestPromise()
+          let promise2 = copyRequestPromise()
+
+
+          Promise.all([promise1, promise2]).then(results => {
+            assert.strictEqual(results.length, 2);
+            assert.strictEqual(results[0]['headers']['x-trans-id'].length > 0, true);
+            assert.strictEqual(results[0]['headers']['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[0]['headers']['content-length'] === '0', true);
+            assert.strictEqual(results[0]['headers']['date'].length > 0, true);
+            assert.strictEqual(results[0]['body'].toString(), 'OK');
+            assert.strictEqual(results[1]['headers']['x-trans-id'].length > 0, true);
+            assert.strictEqual(results[1]['headers']['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[1]['headers']['content-length'] === '0', true);
+            assert.strictEqual(results[1]['headers']['date'].length > 0, true);
+            assert.strictEqual(results[1]['body'].toString(), 'OK');
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
+          }).catch(err => {
+            assert.strictEqual(err, null);
+            done();
+          });
+        });
+
+        it('should request the object storage in parallel and fallback to SBG if the authentication of the main storage return an error', function (done) {
+
+          let firstNock = nock(publicUrlGRA)
+            .matchHeader('x-object-meta-locationorigin', 'Paris/France')
+            .matchHeader('Content-Type', 'image/jpeg')
+            .matchHeader('X-Delete-At', 1440619048)
+            .intercept("/templates/test.odt", "COPY")
+            .reply(401, 'Unauthorized')
+            .intercept("/templates/test.odt", "COPY")
+            .reply(401, 'Unauthorized')
+            .intercept("/templates/test.odt", "COPY")
+            .reply(401, 'Unauthorized')
+
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(500, {})
+            .post('/auth/tokens')
+            .reply(500, {})
+            .post('/auth/tokens')
+            .reply(500, {})
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+          let thirdNock = nock(publicUrlSBG)
+            .matchHeader('x-object-meta-locationorigin', 'Paris/France')
+            .matchHeader('Content-Type', 'image/jpeg')
+            .matchHeader('X-Delete-At', 1440619048)
+            .defaultReplyHeaders({
+              'content-length': '0',
+              'date': 'Wed, 03 Nov 2021 14:28:48 GMT',
+              'x-trans-id': 'tx37ea34dcd1ed48ca9bc7d-0052d84b6f',
+              'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+            })
+            .intercept("/templates/test.odt", "COPY")
+            .reply(200, 'OK')
+            .intercept("/templates/test.odt", "COPY")
+            .reply(200, 'OK')
+            .intercept("/templates/test.odt", "COPY")
+            .reply(200, 'OK')
+            .intercept("/templates/test.odt", "COPY")
+            .reply(200, 'OK')
+
+          let promise1 = copyRequestPromise()
+          let promise2 = copyRequestPromise()
+          let promise3 = copyRequestPromise()
+
+          Promise.all([promise1, promise2, promise3]).then(async results => {
+
+            assert.strictEqual(results.length, 3);
+            assert.strictEqual(results[0]['headers']['x-trans-id'].length > 0, true);
+            assert.strictEqual(results[0]['headers']['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[0]['headers']['content-length'] === '0', true);
+            assert.strictEqual(results[0]['headers']['date'].length > 0, true);
+            assert.strictEqual(results[0]['body'].toString(), 'OK');
+            assert.strictEqual(results[1]['headers']['x-trans-id'].length > 0, true);
+            assert.strictEqual(results[1]['headers']['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[1]['headers']['content-length'] === '0', true);
+            assert.strictEqual(results[1]['headers']['date'].length > 0, true);
+            assert.strictEqual(results[1]['body'].toString(), 'OK');
+            assert.strictEqual(results[2]['headers']['x-trans-id'].length > 0, true);
+            assert.strictEqual(results[2]['headers']['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[2]['headers']['content-length'] === '0', true);
+            assert.strictEqual(results[2]['headers']['date'].length > 0, true);
+            assert.strictEqual(results[2]['body'].toString(), 'OK');
+
+
+            let _result3 = await copyRequestPromise();
+            assert.strictEqual(_result3['headers']['x-trans-id'].length > 0, true);
+            assert.strictEqual(_result3['headers']['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(_result3['headers']['content-length'] === '0', true);
+            assert.strictEqual(_result3['headers']['date'].length > 0, true);
+            assert.strictEqual(_result3['body'].toString(), 'OK');
+
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
+          });
+        });
+
+        it('should request the object storage in parallel and fallback to SBG if the main storage timeout', function (done) {
+          storage.setTimeout(200);
+
+          let firstNock = nock(publicUrlGRA)
+            .matchHeader('x-object-meta-locationorigin', 'Paris/France')
+            .matchHeader('Content-Type', 'image/jpeg')
+            .matchHeader('X-Delete-At', 1440619048)
+            .intercept("/templates/test.odt", "COPY")
+            .delayConnection(500)
+            .reply(200, 'NOT OK')
+            .intercept("/templates/test.odt", "COPY")
+            .delayConnection(500)
+            .reply(200, 'NOT OK');
+
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+          let thirdNock = nock(publicUrlSBG)
+            .matchHeader('x-object-meta-locationorigin', 'Paris/France')
+            .matchHeader('Content-Type', 'image/jpeg')
+            .matchHeader('X-Delete-At', 1440619048)
+            .defaultReplyHeaders({
+              'content-length': '0',
+              'date': 'Wed, 03 Nov 2021 14:28:48 GMT',
+              'x-trans-id': 'tx37ea34dcd1ed48ca9bc7d-0052d84b6f',
+              'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+            })
+            .intercept("/templates/test.odt", "COPY")
+            .reply(200, 'OK')
+            .intercept("/templates/test.odt", "COPY")
+            .reply(200, 'OK')
+
+
+          let promise1 = copyRequestPromise()
+          let promise2 = copyRequestPromise()
+
+
+          Promise.all([promise1, promise2]).then(results => {
+            assert.strictEqual(results.length, 2);
+            assert.strictEqual(results[0]['headers']['x-trans-id'].length > 0, true);
+            assert.strictEqual(results[0]['headers']['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[0]['headers']['content-length'] === '0', true);
+            assert.strictEqual(results[0]['headers']['date'].length > 0, true);
+            assert.strictEqual(results[0]['body'].toString(), 'OK');
+            assert.strictEqual(results[1]['headers']['x-trans-id'].length > 0, true);
+            assert.strictEqual(results[1]['headers']['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[1]['headers']['content-length'] === '0', true);
+            assert.strictEqual(results[1]['headers']['date'].length > 0, true);
+            assert.strictEqual(results[1]['body'].toString(), 'OK');
+
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
+          }).catch(err => {
+            assert.strictEqual(err, null);
+            done();
+          });
+        });
+
+        it('should request the object storage in parallel and fallback to SBG if the main storage return a 500 error', function (done) {
+
+          let firstNock = nock(publicUrlGRA)
+            .matchHeader('x-object-meta-locationorigin', 'Paris/France')
+            .matchHeader('Content-Type', 'image/jpeg')
+            .matchHeader('X-Delete-At', 1440619048)
+            .intercept("/templates/test.odt", "COPY")
+            .reply(500, {})
+            .intercept("/templates/test.odt", "COPY")
+            .reply(500, {});
+
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+          let thirdNock = nock(publicUrlSBG)
+            .matchHeader('x-object-meta-locationorigin', 'Paris/France')
+            .matchHeader('Content-Type', 'image/jpeg')
+            .matchHeader('X-Delete-At', 1440619048)
+            .defaultReplyHeaders({
+              'content-length': '0',
+              'date': 'Wed, 03 Nov 2021 14:28:48 GMT',
+              'x-trans-id': 'tx37ea34dcd1ed48ca9bc7d-0052d84b6f',
+              'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+            })
+            .intercept("/templates/test.odt", "COPY")
+            .reply(200, 'OK')
+            .intercept("/templates/test.odt", "COPY")
+            .reply(200, 'OK')
+
+          let promise1 = copyRequestPromise()
+          let promise2 = copyRequestPromise()
+
+
+          Promise.all([promise1, promise2]).then(results => {
+            assert.strictEqual(results.length, 2);
+            assert.strictEqual(results[0]['headers']['x-trans-id'].length > 0, true);
+            assert.strictEqual(results[0]['headers']['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[0]['headers']['content-length'] === '0', true);
+            assert.strictEqual(results[0]['headers']['date'].length > 0, true);
+            assert.strictEqual(results[0]['body'].toString(), 'OK');
+            assert.strictEqual(results[1]['headers']['x-trans-id'].length > 0, true);
+            assert.strictEqual(results[1]['headers']['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[1]['headers']['content-length'] === '0', true);
+            assert.strictEqual(results[1]['headers']['date'].length > 0, true);
+            assert.strictEqual(results[1]['body'].toString(), 'OK');
 
             assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);

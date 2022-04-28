@@ -1,3 +1,5 @@
+### v0.3.0
+- Add function to create custom request to the object storage. Prototype: `request(method, path, { headers, queries, body }, (err, body, headers) => {})`. The base URL requests by default the account, passing an empty string will request the account details. For container requests, pass the container name, such as: `/{container}`. For file requests, pass the container and the file, such as: `/{container}/{filename}`. Object Storage Swift API specification: https://docs.openstack.org/api-ref/object-store/
 ### v0.2.0
 - Add function `setFileMetadata` to create or replace object metadata
 - Add function `getFileMetadata` to get an object metadata

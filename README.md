@@ -222,6 +222,36 @@ storage.setFileMetadata('templates', 'filename.jpg', { headers: { 'Content-Type'
 });
 ```
 
+### Custom request
+
+The `request` funciton can be used to request the object storage with custom options.
+Prototype: `request(method, path, { headers, queries, body }, (err, body, headers) => {})`.
+
+The base URL requests by default the account, passing an empty string will request the account details. For container requests, pass the container name, such as: `/{container}`. For file requests, pass the container and the file, such as: `/{container}/{filename}`. Object Storage Swift API specification: https://docs.openstack.org/api-ref/object-store/
+
+The `request` function automatically reconnect to the Object Storage or switch storage if something goes wrong.
+
+Example of custom request, bulk delete file from a `customerDocuments` container:
+```js
+  const _headers = {
+    'Content-Type': 'text/plain',
+    'Accept'      : 'application/json'
+  }
+
+ storage.request('POST', '/customerDocuments?bulk-delete', { headers: _headers, body: 'file1\nfile2\n' }, (err, body, headers) => {
+  /**
+  * body: {
+  *  "Number Not Found": 0,
+  *  "Response Status": "200 OK",
+  *  "Errors": [],
+  *  "Number Deleted": 2,
+  *  "Response Body": ""
+  * }
+  */
+  done();
+});
+```
+
 ### Log
 
 The package uses debug to print logs into the terminal. To activate logs, you must pass the `DEBUG=*` environment variable.

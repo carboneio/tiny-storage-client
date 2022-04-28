@@ -416,6 +416,62 @@ function setFileMetadata (container, filename, options, callback) {
   });
 }
 
+ /**
+ * @description Send a custom request to the object storage
+ *
+ * @param {string} method HTTP method used (POST, COPY, etc...)
+ * @param {string} path path requested, passing an empty string will request the account details. For container request pass the container name, such as: '/containerName'. For file request, pass the container and the file, such as: '/container/filename.txt'.
+ * @param {Object} options { headers: {}, queries: {}, body: '' } Pass to the request the body, query parameters and/or headers. List of headers: https://docs.openstack.org/api-ref/object-store/?expanded=create-or-update-object-metadata-detail#create-or-update-object-metadata
+ * @param {function} callback function(err, body, headers):void = The `err` is null by default.
+ * @returns {void}
+ */
+function request (method, path, options, callback) {
+
+  const arrayArguments = [...arguments];
+
+  if (callback === undefined) {
+    callback = options;
+    arrayArguments.push(options);
+    options = { headers: {}, queries: {}, body: null };
+    arrayArguments[3] = options;
+  }
+
+  arrayArguments.push({ originStorage : _config.actifStorage })
+
+  const { headers, queries, body } = getHeaderAndQueryParameters(options);
+
+  get.concat({
+    url     : `${_config.endpoints.url}${path}${queries}`,
+    method  : method,
+    headers : {
+      'X-Auth-Token' : _config.token,
+      Accept         : 'application/json',
+      ...headers
+    },
+    timeout: _config.timeout,
+    ...(body ? { body } : {})
+  }, (err, res, body) => {
+
+    /** Manage special errors: timeouts, too many redirects or any unexpected behavior */
+    res = res || {};
+    res.error = err && err.toString().length > 0 ? err.toString() : null;
+
+    checkIsConnected(res, 'request', arrayArguments, (error) => {
+      if (error) {
+        return callback(error);
+      }
+
+      err = err || checkResponseError(res);
+
+      /** TODO: remove? it should never happen as every error switch to another storage */
+      if (err) {
+        return callback(err);
+      }
+      return callback(null, body, res.headers);
+    });
+  });
+}
+
 /**
  * @description Check the response status code and return an Error.
  *
@@ -487,6 +543,9 @@ function checkIsConnected (response, from, args, callback) {
         break;
       case 'setFileMetadata':
         setFileMetadata.apply(null, args);
+        break;
+      case 'request':
+        request.apply(null, args);
         break;
       default:
         /** TODO: remove? it should never happen */
@@ -594,7 +653,8 @@ module.exports = (config) => {
     setStorages,
     getStorages,
     getConfig,
-    setLogFunction
+    setLogFunction,
+    request
   }
 }
 
@@ -629,14 +689,18 @@ function getQueryParameters (queries) {
 function getHeaderAndQueryParameters (options) {
   let headers = {};
   let queries = '';
+  let body = null
 
-  if (Object.prototype.hasOwnProperty.call(options, 'queries') === true) {
+  if (options?.queries) {
     queries = getQueryParameters(options.queries);
   }
-  if (Object.prototype.hasOwnProperty.call(options, 'headers') === true) {
+  if (options?.headers) {
     headers = options.headers;
   }
-  return { headers, queries }
+  if (options?.body) {
+    body = options.body;
+  }
+  return { headers, queries, body }
 }
 
 function activateFallbackStorage(originStorage) {
