@@ -224,12 +224,12 @@ storage.setFileMetadata('templates', 'filename.jpg', { headers: { 'Content-Type'
 
 ### Custom request
 
-The `request` funciton can be used to request the object storage with custom options.
+The `request` functon can be used to request the object storage with custom options.
 Prototype: `request(method, path, { headers, queries, body }, (err, body, headers) => {})`.
 
 The base URL requests by default the account, passing an empty string will request the account details. For container requests, pass the container name, such as: `/{container}`. For file requests, pass the container and the file, such as: `/{container}/{filename}`. Object Storage Swift API specification: https://docs.openstack.org/api-ref/object-store/
 
-The `request` function automatically reconnect to the Object Storage or switch storage if something goes wrong.
+The `request` function automatically reconnects to the Object Storage or switch storage if something goes wrong.
 
 Example of custom request, bulk delete file from a `customerDocuments` container:
 ```js
