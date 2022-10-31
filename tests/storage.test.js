@@ -463,7 +463,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
         });
       });
 
-      it('should return an error if the single storage timout', function (done) {
+      it('should return an error if the single storage timeout', function (done) {
         storage.setTimeout(200);
         const firstNock = nock(publicUrlGRA)
           .get('/templates')
@@ -3699,7 +3699,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
     });
   });
 
-  describe('Request', function () {
+  describe('Request [WITHOUT Stream]', function () {
 
     const _headers = {
       'Content-Type': 'image/jpeg',
@@ -4341,6 +4341,485 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(results[1]['headers']['content-length'] === '0', true);
             assert.strictEqual(results[1]['headers']['date'].length > 0, true);
             assert.strictEqual(results[1]['body'].toString(), 'OK');
+
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
+          }).catch(err => {
+            assert.strictEqual(err, null);
+            done();
+          });
+        });
+
+      });
+    });
+  });
+  describe('Request [Stream]', function () {
+
+    describe("SINGLE STORAGE", function () {
+      it('should receive a file from a stream', function (done) {
+        const firstNock = nock(publicUrlGRA)
+          .get('/templates/file.txt')
+          .reply(200, function() {
+            return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
+           });
+
+        storage.request('GET', '/templates/file.txt', { stream : true }, (err, res) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          let data = '';
+          res.on('data', chunk => data += chunk);
+          res.on('end', function () {
+            assert.strictEqual(data, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            done();
+          });
+        });
+      });
+
+      it('should reconnect automatically if the token is invalid and retry', function (done) {
+
+        let firstNock = nock(publicUrlGRA)
+          .intercept("/templates/file.txt", "GET")
+          .reply(401, 'Unauthorized')
+          .intercept("/templates/file.txt", "GET")
+          .reply(200, function() {
+            return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
+           });
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        storage.request('GET', '/templates/file.txt', { stream : true }, (err, res) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          let data = '';
+          res.on('data', chunk => data += chunk);
+          res.on('end', function () {
+            assert.strictEqual(data, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            done();
+          });
+        });
+      });
+
+      it('should return an error if the single storage timeout', function (done) {
+        storage.setTimeout(200);
+        const firstNock = nock(publicUrlGRA)
+          .get('/templates/file.txt')
+          .delayConnection(500)
+          .reply(200, function() {
+            return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
+           });
+
+        storage.request('GET', '/templates/file.txt', { stream : true }, (err, res) => {
+          assert.notStrictEqual(err, null);
+          assert.strictEqual(err.message, 'Object Storages are not available');
+          assert.strictEqual(res, undefined);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return an error if containers or the file does not exists', function (done) {
+        const firstNock = nock(publicUrlGRA)
+          .intercept("/templates/file.txt", "GET")
+          .reply(404);
+
+        storage.request('GET', '/templates/file.txt', { stream : true }, (err, res) => {
+          assert.notStrictEqual(err, null);
+          assert.strictEqual(err.message.includes('404'), true);
+          assert.strictEqual(res, undefined);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return an error if the single storage return any kind of errors', function (done) {
+        const firstNock = nock(publicUrlGRA)
+          .intercept("/templates/file.txt", "GET")
+          .replyWithError('Error Message 1234');
+
+        storage.request('GET', '/templates/file.txt', { stream : true }, (err, res) => {
+          assert.notStrictEqual(err, null);
+          assert.strictEqual(err.message, 'Object Storages are not available');
+          assert.strictEqual(res, undefined);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+    })
+
+    describe("MULTIPLE STORAGES", function () {
+
+      beforeEach(function (done) {
+        const firstNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        storage.setTimeout(5000);
+        storage.setStorages([{
+          username                     : 'storage-1-user',
+          password                     : 'storage-1-password',
+          authUrl                      : authURL,
+          tenantName                   : 'storage-1-tenant',
+          region                       : 'GRA'
+        },
+        {
+          username                     : 'storage-2-user',
+          password                     : 'storage-2-password',
+          authUrl                      : authURL,
+          tenantName                   : 'storage-2-tenant',
+          region                       : 'SBG'
+        }]);
+        storage.connection((err) => {
+          assert.strictEqual(err, null)
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+      it('should reconnect automatically to the second object storage if the first storage authentication fail and should retry the request', function(done){
+
+        let firstNock = nock(publicUrlGRA)
+          /** 1 */
+          .intercept('/templates/file.txt', "GET")
+          .reply(401, 'Unauthorized')
+
+        let secondNock = nock(authURL)
+          /** 2 */
+          .post('/auth/tokens')
+          .reply(500, {})
+          /** 3 */
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          /** 4 */
+          .intercept('/templates/file.txt', "GET")
+          .reply(200, function() {
+            return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
+          });
+
+        storage.request('GET', '/templates/file.txt', { stream : true }, (err, res) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          let data = '';
+          res.on('data', chunk => data += chunk);
+          res.on('end', function () {
+            assert.strictEqual(data, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            done();
+          });
+        });
+      })
+
+      it('should retry the request with the second object storage if the first object storage return a 500 error', function(done){
+
+        let firstNock = nock(publicUrlGRA)
+          .intercept('/templates/file.txt', "GET")
+          .reply(500, {});
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          .intercept('/templates/file.txt', "GET")
+          .reply(200, function() {
+            return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
+          });
+
+          storage.request('GET', '/templates/file.txt', { stream : true }, (err, res) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          let data = '';
+          res.on('data', chunk => data += chunk);
+          res.on('end', function () {
+            assert.strictEqual(data, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            done();
+          });
+        });
+      })
+
+
+
+      it('should retry the request with the second object storage if the first object storage timeout', function(done){
+        storage.setTimeout(200);
+        let firstNock = nock(publicUrlGRA)
+          .intercept('/templates/file.txt', "GET")
+          .delayConnection(500)
+          .reply(200, {});
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          .intercept('/templates/file.txt', "GET")
+          .reply(200, function() {
+            return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
+          });
+
+        storage.request('GET', '/templates/file.txt', { stream : true }, (err, res) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          let data = '';
+          res.on('data', chunk => data += chunk);
+          res.on('end', function () {
+            assert.strictEqual(data, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            done();
+          });
+        });
+      })
+
+      it('should retry the request with the second storage if the first storage return any kind of errors', function (done) {
+
+        let firstNock = nock(publicUrlGRA)
+          .intercept('/templates/file.txt', "GET")
+          .replyWithError('Error Message 1234');
+
+        let secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          .intercept('/templates/file.txt', "GET")
+          .reply(200, function() {
+            return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
+          });
+
+
+        storage.request('GET', '/templates/file.txt', { stream : true }, (err, res) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          let data = '';
+          res.on('data', chunk => data += chunk);
+          res.on('end', function () {
+            assert.strictEqual(data, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            done();
+          });
+        });
+      });
+
+      describe("PARALLEL REQUESTS", function () {
+
+        function copyRequestPromise() {
+          return new Promise((resolve, reject) => {
+            try {
+              storage.request('GET', '/templates/file.txt', { stream: true }, (err, res) => {
+                if (err) {
+                  return reject(err);
+                }
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', function () {
+                  return resolve(data);
+                });
+              });
+            } catch(err) {
+              return reject(err);
+            }
+          });
+        }
+
+        it('should request the object storage in parallel and fallback to SBG if the main storage return any kind of errors', function (done) {
+
+          let firstNock = nock(publicUrlGRA)
+            .intercept('/templates/file.txt', "GET")
+            .replyWithError('Error Message 1234')
+            .intercept('/templates/file.txt', "GET")
+            .replyWithError('Error Message 1234');
+
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+
+          let thirdNock = nock(publicUrlSBG)
+            .intercept('/templates/file.txt', "GET")
+            .reply(200, function() {
+              return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
+            })
+            .intercept('/templates/file.txt', "GET")
+            .reply(200, function() {
+              return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
+            });
+
+          let promise1 = copyRequestPromise()
+          let promise2 = copyRequestPromise()
+
+
+          Promise.all([promise1, promise2]).then(results => {
+            assert.strictEqual(results.length, 2);
+            assert.strictEqual(results[0], 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[1], 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
+          }).catch(err => {
+            assert.strictEqual(err, null);
+            done();
+          });
+        });
+
+        it('should request the object storage in parallel and fallback to SBG if the authentication of the main storage return an error', function (done) {
+
+          let firstNock = nock(publicUrlGRA)
+            .intercept('/templates/file.txt', "GET")
+            .reply(401, 'Unauthorized')
+            .intercept('/templates/file.txt', "GET")
+            .reply(401, 'Unauthorized')
+            .intercept('/templates/file.txt', "GET")
+            .reply(401, 'Unauthorized')
+
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(500, {})
+            .post('/auth/tokens')
+            .reply(500, {})
+            .post('/auth/tokens')
+            .reply(500, {})
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+          let thirdNock = nock(publicUrlSBG)
+            .intercept('/templates/file.txt', "GET")
+            .reply(200, function() {
+              return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
+            })
+            .intercept('/templates/file.txt', "GET")
+            .reply(200, function() {
+              return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
+            })
+            .intercept('/templates/file.txt', "GET")
+            .reply(200, function() {
+              return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
+            })
+            .intercept('/templates/file.txt', "GET")
+            .reply(200, function() {
+              return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
+            })
+
+          let promise1 = copyRequestPromise()
+          let promise2 = copyRequestPromise()
+          let promise3 = copyRequestPromise()
+
+          Promise.all([promise1, promise2, promise3]).then(async results => {
+
+            assert.strictEqual(results.length, 3);
+            assert.strictEqual(results[0], 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[1], 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[2], 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+
+
+            let _result3 = await copyRequestPromise();
+            assert.strictEqual(_result3, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
+          });
+        });
+
+        it('should request the object storage in parallel and fallback to SBG if the main storage timeout', function (done) {
+          storage.setTimeout(200);
+
+          let firstNock = nock(publicUrlGRA)
+            .intercept('/templates/file.txt', "GET")
+            .delayConnection(500)
+            .reply(200, 'NOT OK')
+            .intercept('/templates/file.txt', "GET")
+            .delayConnection(500)
+            .reply(200, 'NOT OK');
+
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+          let thirdNock = nock(publicUrlSBG)
+            .intercept('/templates/file.txt', "GET")
+            .reply(200, function() {
+              return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
+            })
+            .intercept('/templates/file.txt', "GET")
+            .reply(200, function() {
+              return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
+            })
+
+
+          let promise1 = copyRequestPromise()
+          let promise2 = copyRequestPromise()
+
+
+          Promise.all([promise1, promise2]).then(results => {
+            assert.strictEqual(results.length, 2);
+            assert.strictEqual(results[0], 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[1], 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.strictEqual(firstNock.pendingMocks().length, 0);
+            assert.strictEqual(secondNock.pendingMocks().length, 0);
+            assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            done();
+          }).catch(err => {
+            assert.strictEqual(err, null);
+            done();
+          });
+        });
+
+        it('should request the object storage in parallel and fallback to SBG if the main storage return a 500 error', function (done) {
+
+          let firstNock = nock(publicUrlGRA)
+            .intercept('/templates/file.txt', "GET")
+            .reply(500, {})
+            .intercept('/templates/file.txt', "GET")
+            .reply(500, {});
+
+          let secondNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+          let thirdNock = nock(publicUrlSBG)
+            .intercept('/templates/file.txt', "GET")
+            .reply(200, function() {
+              return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
+            })
+            .intercept('/templates/file.txt', "GET")
+            .reply(200, function() {
+              return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
+            })
+
+          let promise1 = copyRequestPromise()
+          let promise2 = copyRequestPromise()
+
+
+          Promise.all([promise1, promise2]).then(results => {
+            assert.strictEqual(results.length, 2);
+            assert.strictEqual(results[0], 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[1], 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
 
             assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);

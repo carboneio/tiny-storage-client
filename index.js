@@ -1,6 +1,5 @@
 const get = require('simple-get');
 const fs = require('fs');
-const debug = require('debug')('ovh-object-storage-ha')
 const { Readable } = require('stream');
 
 let _config = {
@@ -440,7 +439,7 @@ function request (method, path, options, callback) {
 
   const { headers, queries, body } = getHeaderAndQueryParameters(options);
 
-  get.concat({
+  const _requestOptions = {
     url     : `${_config.endpoints.url}${path}${queries}`,
     method  : method,
     headers : {
@@ -450,26 +449,26 @@ function request (method, path, options, callback) {
     },
     timeout: _config.timeout,
     ...(body ? { body } : {})
-  }, (err, res, body) => {
+  }
 
+  const _requestCallback = function (err, res, body) {
     /** Manage special errors: timeouts, too many redirects or any unexpected behavior */
     res = res || {};
     res.error = err && err.toString().length > 0 ? err.toString() : null;
-
     checkIsConnected(res, 'request', arrayArguments, (error) => {
       if (error) {
         return callback(error);
       }
-
       err = err || checkResponseError(res);
 
       /** TODO: remove? it should never happen as every error switch to another storage */
       if (err) {
         return callback(err);
       }
-      return callback(null, body, res.headers);
+      return options?.stream === true ? callback(null, res) : callback(null, body, res.headers);
     });
-  });
+  }
+  return options?.stream === true ? get(_requestOptions, _requestCallback) : get.concat(_requestOptions, _requestCallback);
 }
 
 /**
@@ -501,21 +500,21 @@ function checkResponseError (response, body = '') {
  * @returns {void}
  */
 function checkIsConnected (response, from, args, callback) {
-  if (!response || (response.statusCode < 500 && response.statusCode !== 401) || (!response.statusCode && !!response.error !== true)) {
+  if (!response || (response?.statusCode < 500 && response?.statusCode !== 401) || (!response?.statusCode && !!response?.error !== true)) {
     return callback(null);
   }
 
-  if (response && response.statusCode >= 500) {
-    log(`Object Storage index "${_config.actifStorage}" region "${_config.storages[_config.actifStorage].region}" Action "${from}" Status ${response.statusCode}`, 'error');
+  if (response?.statusCode >= 500) {
+    log(`Object Storage index "${_config.actifStorage}" region "${_config.storages[_config.actifStorage].region}" Action "${from}" Status ${response?.statusCode}`, 'error');
     activateFallbackStorage(args[args.length - 1].originStorage);
   }
 
-  if (response && !!response.error === true) {
+  if (!!response?.error === true) {
     log(`Object Storage index "${_config.actifStorage}" region "${_config.storages[_config.actifStorage].region}" Action "${from}" ${response.error}`, 'error');
     activateFallbackStorage(args[args.length - 1].originStorage);
   }
 
-  if (response && response.statusCode === 401) {
+  if (response?.statusCode === 401) {
     log(`Object Storage index "${_config.actifStorage}" region "${_config.storages[_config.actifStorage].region}" try reconnect...`, 'info');
   }
 
@@ -549,8 +548,7 @@ function checkIsConnected (response, from, args, callback) {
         break;
       default:
         /** TODO: remove? it should never happen */
-        callback(null);
-        break;
+        return callback(null);
     }
   }, args[args.length - 1].originStorage);
 }
@@ -614,7 +612,7 @@ function getConfig() {
  * @param {type} type warning, error
  */
 function log(msg, level = 'info') {
-  return debug(level === 'error' ? `❗️ Error: ${msg}` : level === 'warning' ? `⚠️  ${msg}` : msg );
+  return console.log(level === 'error' ? `❗️ Error: ${msg}` : level === 'warning' ? `⚠️  ${msg}` : msg );
 }
 
 /**
