@@ -22,6 +22,7 @@
   "author": "Steevepay",
   "license": "Apache-2.0",
   "dependencies": {
+    "aws4": "^1.12.0",
     "simple-get": "=4.0.1"
   },
   "devDependencies": {
