@@ -1,7 +1,6 @@
 const get = require('simple-get');
 const aws4 = require('aws4');
 const crypto = require('crypto');
-const { Readable } = require('stream');
 const fs = require('fs');
 
 /**
@@ -36,11 +35,27 @@ function downloadFile (bucket, filename, options, callback) {
  */
 function uploadFile (bucket, filename, localPathOrBuffer, options, callback) {
 
-  options.body = Buffer.isBuffer(localPathOrBuffer) === true ? Readable.from(localPathOrBuffer) : fs.createReadStream(localPathOrBuffer);
-  options.headers = {
-    ...options?.headers
+  const _uploadFileRequest = function (bucket, filename, objectBuffer, options, callback) {
+    options.body = objectBuffer;
+    options.headers = {
+      ...options?.headers
+    }
+    return request('PUT', `/${bucket}/${encodeURIComponent(filename)}`, options, callback);
   }
-  return request('PUT', `/${bucket}/${encodeURIComponent(filename)}`, options, callback);
+  /**
+   * AWS4 does not support computing signature with a Stream
+   * https://github.com/mhart/aws4/issues/43
+   * The file buffer must be read.
+   */
+  if (Buffer.isBuffer(localPathOrBuffer) === false) {
+    return fs.readFile('/etc/passwd', (err, objectBuffer) => {
+      if (err){
+       return callback(err);
+      }
+      _uploadFileRequest(bucket, filename, objectBuffer, options, callback);
+    });
+  }
+  return _uploadFileRequest(bucket, filename, localPathOrBuffer, options, callback);
 }
 
 /**
@@ -207,4 +222,10 @@ function getMD5 (data) {
     console.log(`Error - S3 getMD5: ${err.toString()}`);
     return '';
   }
+}
+
+function getFilesizeInBytes(filename) {
+  var stats = fs.statSync(filename);
+  var fileSizeInBytes = stats.size;
+  return fileSizeInBytes;
 }
