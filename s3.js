@@ -6,6 +6,7 @@ const crypto = require('crypto');
  * TODO
  * - [x] Bulk delete
  * - [ ] Transform XML to JSON on error / when fetching a list of objects / when delete response
+ * - [ ] Test and improve list objects (query params)
  * - [ ] Change Region on error 500 & read only
  * - [ ] Change Region on Timeout & read only
  * - [ ] Test unitaires
@@ -17,7 +18,9 @@ let _config = {
   timeout        : 5000
 }
 
-
+/**
+ * @doc https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html
+ */
 function downloadFile (bucket, filename, options, callback) {
   if (!callback) {
     callback = options;
@@ -26,6 +29,9 @@ function downloadFile (bucket, filename, options, callback) {
   return request('GET', `/${bucket}/${encodeURIComponent(filename)}`, options, callback);
 }
 
+/**
+ * @doc https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html
+ */
 function uploadFile (bucket, filename, localPathOrBuffer, options, callback) {
   options.body = localPathOrBuffer;
   options.headers = {
@@ -34,30 +40,45 @@ function uploadFile (bucket, filename, localPathOrBuffer, options, callback) {
   return request('PUT', `/${bucket}/${encodeURIComponent(filename)}`, options, callback);
 }
 
+/**
+ * @doc https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObject.html
+ */
 function deleteFile (bucket, filename, callback) {
   return request('DELETE', `/${bucket}/${encodeURIComponent(filename)}`, {}, callback);
 }
 
+
+/**
+ * @doc https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
+ */
 function listFiles(bucket, options, callback) {
   return request('GET', `/${bucket}?list-type=2`, options, callback);
 }
 
+/**
+ * @doc https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html
+ */
 function getFileMetadata(bucket, filename, callback) {
   return request('HEAD', `/${bucket}/${encodeURIComponent(filename)}`, {}, callback);
 }
 
+/**
+ * @doc https://docs.aws.amazon.com/AmazonS3/latest/API/API_CopyObject.html
+ *
+ * Copy an existing file to edit metadatas.
+ * Custom metadata must start with "x-amz-meta-", followed by a name to create a custom key.
+ * Metadata can be as large as 2 KB total. To calculate the total size of user-defined metadata,
+ * sum the number of bytes in the UTF-8 encoding for each key and value. Both keys and their values must conform to US-ASCII standards.
+ */
 function setFileMetadata(bucket, filename, options, callback) {
-  /**
-   * Copy an existing file to edit metadatas.
-   * Custom metadata must start with "x-amz-meta-", followed by a name to create a custom key.
-   * Metadata can be as large as 2 KB total. To calculate the total size of user-defined metadata,
-   * sum the number of bytes in the UTF-8 encoding for each key and value. Both keys and their values must conform to US-ASCII standards.
-   */
   getFileMetadata(bucket, filename, (err, resp) => {
     if (err) {
       return callback(err);
     }
-    return request('PUT', `/${bucket}/${encodeURIComponent(filename)}`,
+    /**
+     * TODO: verify Metadata size lower or equal to 2KB maximum
+     */
+    request('PUT', `/${bucket}/${encodeURIComponent(filename)}`,
       {
         headers: {
           ...resp.headers,
@@ -163,23 +184,6 @@ module.exports = (config) => {
     getConfig
   }
 }
-
-// function getHeaderAndQueryParameters (options) {
-//   let headers = {};
-//   let queries = '';
-//   let body = null
-
-//   if (options?.queries) {
-//     queries = getQueryParameters(options.queries);
-//   }
-//   if (options?.headers) {
-//     headers = options.headers;
-//   }
-//   if (options?.body) {
-//     body = options.body;
-//   }
-//   return { headers, queries, body }
-// }
 
 function streamToString (stream, callback) {
   const chunks = [];
