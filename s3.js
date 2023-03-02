@@ -1,6 +1,8 @@
 const get = require('simple-get');
 const aws4 = require('aws4');
 const crypto = require('crypto');
+const { Readable } = require('stream');
+const fs = require('fs');
 
 /**
  * TODO
@@ -33,7 +35,8 @@ function downloadFile (bucket, filename, options, callback) {
  * @doc https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html
  */
 function uploadFile (bucket, filename, localPathOrBuffer, options, callback) {
-  options.body = localPathOrBuffer;
+
+  options.body = Buffer.isBuffer(localPathOrBuffer) === true ? Readable.from(localPathOrBuffer) : fs.createReadStream(localPathOrBuffer);
   options.headers = {
     ...options?.headers
   }
@@ -192,8 +195,12 @@ function streamToString (stream, callback) {
   stream.on('end', () => callback(null, Buffer.concat(chunks).toString('utf8')));
 }
 
+/**
+ * Used for the 'Content-MD5' header:
+ * The base64-encoded 128-bit MD5 digest of the message
+ * (without the headers) according to RFC 1864.
+ */
 function getMD5 (data) {
-  console.log(typeof data);
   try {
     return crypto.createHash('md5').update(typeof data === 'string' ? Buffer.from(data) : data ).digest('base64');
   } catch(err) {
