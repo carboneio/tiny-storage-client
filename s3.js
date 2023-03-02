@@ -2,6 +2,25 @@ const get = require('simple-get');
 const aws4 = require('aws4');
 const crypto = require('crypto');
 const fs = require('fs');
+const { SaxEventType, SAXParser } = require('sax-wasm');
+
+// Get the path to the WebAssembly binary and load it
+const saxPath = require.resolve('sax-wasm/lib/sax-wasm.wasm');
+const saxWasmBuffer = fs.readFileSync(saxPath);
+
+function initSaxParser(callback) {
+  const xmlParser = new SAXParser( SaxEventType.Text | SaxEventType.OpenTag, { highWaterMark: 64 * 1024 } /** 64k chunks */ );
+
+  try {
+    xmlParser.prepareWasm(new Uint8Array(new Uint8Array(saxWasmBuffer))).then(ready => {
+      if (ready) {
+        return callback(null, xmlParser);
+      }
+    })
+  } catch(err) {
+    return callback(err);
+  }
+}
 
 /**
  * TODO
@@ -70,7 +89,13 @@ function deleteFile (bucket, filename, callback) {
  * @doc https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
  */
 function listFiles(bucket, options, callback) {
-  return request('GET', `/${bucket}?list-type=2`, options, callback);
+  options.stream = true;
+  return request('GET', `/${bucket}?list-type=2`, options, (err, respStream) => {
+    if (err) {
+      return callback(err);
+    }
+    streamXmlToJson(respStream)
+  });
 }
 
 /**
@@ -165,7 +190,7 @@ function request (method, path, options, callback) {
     }
     if (res.statusCode >= 400 && res?.headers?.['content-type'] === 'application/xml') {
       if (options?.stream === true) {
-        return streamToString(res, (err, msg) => {
+        return streamToString(res, false, (err, msg) => {
           callback(err ?? msg ?? 'Something went wrong');
         });
       }
@@ -203,11 +228,47 @@ module.exports = (config) => {
   }
 }
 
-function streamToString (stream, callback) {
+function streamToString (stream, json, callback) {
   const chunks = [];
-  stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+
   stream.on('error', (err) => callback(err));
+  stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
   stream.on('end', () => callback(null, Buffer.concat(chunks).toString('utf8')));
+}
+
+function streamXmlToJson (stream, callback) {
+  initSaxParser(function (err, xmlParser) {
+    if (err) {
+      return callback("Error Init Sax Parser:" + err.toString());
+    }
+
+    const json = {};
+    const chunks = [];
+
+    xmlParser.eventHandler = (event, data) => {
+      if (event === SaxEventType.OpenTag) {
+        console.log("Open Tag - ", data);
+        // Buffer.from(data.data).toString('utf8')
+      }
+      // else if (event === SaxEventType.Text) {
+      //   console.log("Text - ", Buffer.from(data.data).toString('utf8'));
+      // }
+    };
+
+    stream.on('error', function (err) { callback(err) });
+
+    stream.on('data', function (chunk) {
+      chunks.push(Buffer.from(chunk))
+      xmlParser.write(chunk);
+    });
+
+    stream.on('end', function () {
+      xmlParser.end();
+      console.log(json);
+      console.log(Buffer.concat(chunks).toString('utf8'));
+      callback(null, json)
+    });
+  })
 }
 
 /**
@@ -224,8 +285,4 @@ function getMD5 (data) {
   }
 }
 
-function getFilesizeInBytes(filename) {
-  var stats = fs.statSync(filename);
-  var fileSizeInBytes = stats.size;
-  return fileSizeInBytes;
-}
+
