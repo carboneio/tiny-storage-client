@@ -74,7 +74,12 @@ function listFiles(bucket, options, callback) {
     if (err) {
       return callback(err);
     }
-    resp.body = xmlToJson(resp.body);
+    // if (resp.body) {
+    //   let _regRes = resp.body.match(/<ListBucketResult[^<>]*?>([^]*?)<\/ListBucketResult>/);
+    //   console.log(_regRes);
+    // }
+    resp.body = xmlToJson(resp.body?.toString());
+    console.log(resp);
     return callback(null, resp);
   });
 }
@@ -251,6 +256,7 @@ function xmlToJson (xml, options) {
   let childName = null;
   let _previousTag = '';
   let _previousTagFull = '';
+  let _skipObject = null;
   /** Regex variables */
   var _xmlTagRegExp = /<([^>]+?)>/g;
   var _previousLastIndex = 0;
@@ -262,7 +268,12 @@ function xmlToJson (xml, options) {
     var _tagFull = _tagStr.slice(0, _tagAttributeIndex > 0 ? _tagAttributeIndex : _tagStr.length);
     const _tag = _tagFull.replace('/', '').toLowerCase();
 
-    if (_tagFull === '?xml' || _tagFull?.[_tagFull.length - 1] === '/') {
+    /** End of skipped elements */
+    if (_skipObject === _tag && _tagFull[0] === '/') {
+      _skipObject = null;
+    }
+
+    if (_tagFull === '?xml' || _tagFull?.[_tagFull.length - 1] === '/' || _skipObject !== null) {
       continue;
     }
 
@@ -274,6 +285,10 @@ function xmlToJson (xml, options) {
     else if (_tag === _previousTag && _tagFull[0] !== '/' && _previousTagFull[0] === '/' && child === null && (root[_tag]?.constructor === Object || root[_tag]?.constructor === Array)) {
       child = root[_tag]?.constructor === Object ? [root[_tag]] : root[_tag];
       childName = _tag;
+    } /** Skip objects of 2 depth */
+    else if (_tag !== _previousTag && child !== null && childName !== _previousTag && _tagFull[0] !== '/' && _previousTagFull[0] !== '/') {
+      _skipObject = _previousTag;
+      continue;
     }
 
     /** When we reach the end of a list of child tags `</name></files>`, the child is assigned to the root object */
