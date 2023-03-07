@@ -6,7 +6,7 @@ const fs = require('fs');
 /**
  * TODO
  * - [x] Bulk delete
- * - [ ] Transform XML to JSON on error / when fetching a list of objects / when delete response
+ * - [x] Transform XML to JSON on error / when fetching a list of objects / when delete response
  * - [ ] Test and improve list objects (query params)
  * - [ ] Change Region on error 500 & read only
  * - [ ] Change Region on Timeout & read only
@@ -48,7 +48,7 @@ function uploadFile (bucket, filename, localPathOrBuffer, options, callback) {
    * The file buffer must be read.
    */
   if (Buffer.isBuffer(localPathOrBuffer) === false) {
-    return fs.readFile('/etc/passwd', (err, objectBuffer) => {
+    return fs.readFile(localPathOrBuffer, (err, objectBuffer) => {
       if (err){
        return callback(err);
       }
