@@ -8,6 +8,7 @@ const fs = require('fs');
  * - [x] Bulk delete
  * - [x] Transform XML to JSON on error / when fetching a list of objects / when delete response
  * - [x] Test and improve list objects (query params)
+ * - [ ] Test getBucketMetadata > usefull to know the S3 status/connexion
  * - [ ] Change Region on error 500 & read only
  * - [ ] Change Region on Timeout & read only
  * - [ ] Test unitaires
