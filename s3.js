@@ -2,25 +2,6 @@ const get = require('simple-get');
 const aws4 = require('aws4');
 const crypto = require('crypto');
 const fs = require('fs');
-const { SaxEventType, SAXParser } = require('sax-wasm');
-
-// Get the path to the WebAssembly binary and load it
-const saxPath = require.resolve('sax-wasm/lib/sax-wasm.wasm');
-const saxWasmBuffer = fs.readFileSync(saxPath);
-
-function initSaxParser(callback) {
-  const xmlParser = new SAXParser( SaxEventType.Text | SaxEventType.OpenTag, { highWaterMark: 64 * 1024 } /** 64k chunks */ );
-
-  try {
-    xmlParser.prepareWasm(new Uint8Array(new Uint8Array(saxWasmBuffer))).then(ready => {
-      if (ready) {
-        return callback(null, xmlParser);
-      }
-    })
-  } catch(err) {
-    return callback(err);
-  }
-}
 
 /**
  * TODO
@@ -89,12 +70,12 @@ function deleteFile (bucket, filename, callback) {
  * @doc https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
  */
 function listFiles(bucket, options, callback) {
-  options.stream = true;
-  return request('GET', `/${bucket}?list-type=2`, options, (err, respStream) => {
+  return request('GET', `/${bucket}?list-type=2`, options, (err, resp) => {
     if (err) {
       return callback(err);
     }
-    streamXmlToJson(respStream)
+    console.log(resp.body.toString());
+    xmlToJson(resp.body.toString());
   });
 }
 
@@ -224,7 +205,8 @@ module.exports = (config) => {
     getFileMetadata,
     setFileMetadata,
     setTimeout,
-    getConfig
+    getConfig,
+    xmlToJson
   }
 }
 
@@ -236,40 +218,137 @@ function streamToString (stream, json, callback) {
   stream.on('end', () => callback(null, Buffer.concat(chunks).toString('utf8')));
 }
 
-function streamXmlToJson (stream, callback) {
-  initSaxParser(function (err, xmlParser) {
-    if (err) {
-      return callback("Error Init Sax Parser:" + err.toString());
+function xmlToJson (xml, options) {
+
+  options = options ?? {};
+
+  const getValue = (str) => {
+    if (!isNaN(str) && !isNaN(parseFloat(str))) {
+      return parseInt(str)
+    } else if (str.toLowerCase() === "true") {
+      return true;
+    } else if (str.toLowerCase() === "false") {
+      return false;
+    }
+    if (str[0] === '"' && str?.[str.length - 1] === '"') {
+      return str.slice(1, str.length - 1);
+    }
+    return str;
+  }
+
+  let root = {};
+  let parent = root;
+  let parentName = '';
+  let _previousTag = '';
+  let _previousTagFull = '';
+  let _previousTagValue = null;
+
+
+  var _xmlTagRegExp = /<([^>]+?)>/g;
+  var _prevLastIndex = 0;
+  let _tagParsed = [];
+  while ((_tagParsed = _xmlTagRegExp.exec(xml))) {
+    var _tagStr = _tagParsed[1];
+    var _tagAttributeIndex = _tagStr.indexOf(' '); /** remove attributes from HTML tags <div class="s"> */
+    var _tagFull = _tagStr.slice(0, _tagAttributeIndex > 0 ? _tagAttributeIndex : _tagStr.length);
+    const _tag = _tagFull.replace('/', '').toLowerCase();
+
+    if (_tagFull === '?xml' || _tagFull?.[_tagFull.length - 1] === '/') {
+      continue;
     }
 
-    const json = {};
-    const chunks = [];
+    console.log(_tagFull, "prev:" + _previousTagFull, "par:" + parentName, "pv:" + _previousTagValue, root);
 
-    xmlParser.eventHandler = (event, data) => {
-      if (event === SaxEventType.OpenTag) {
-        console.log("Open Tag - ", data);
-        // Buffer.from(data.data).toString('utf8')
+    // /** Get the parent tag */
+    if (_tag !== _previousTag && parentName !== _tag && _previousTag !== '' &&  _previousTagValue === null  && _previousTagFull[0] !== '/' ) {
+      root[_previousTag] = options?.forceArray?.includes(_previousTag) === true ? [{}] : {};
+      parent = root[_previousTag];
+      parentName = _previousTag;
+      _previousTagValue = null;
+    }
+    // else if (_tag !== _previousTag && _previousTag === parentName && _previousTagFull[0] === '/') {
+    //   const _tmp = parent;
+
+    //   parent = root;
+    // }
+
+    // else if (parentName === _tag && parent?.constructor !== Array/**  && _tagFull[0] !== '/' */) {
+    //   console.log("PASS HEREEEEE----", parent)
+    //   /** Create an array from the existing object */
+    //   root[parentName] = new Array(parent);
+    //   parent = root[parentName];
+    //   console.log("Already exist", _tag, parentName, parent, root);
+    // }
+    // // else if (parentName === _tag && _tagFull[0] === '/') {
+    // //   parentName = '';
+    // // }
+
+    /** Get and set the attribute value */
+    if (_tag === _previousTag && _tagFull[0] === '/' && _previousTag !== '') {
+      const _value = getValue(xml.slice(_prevLastIndex, _tagParsed.index))
+      _previousTagValue = _value;
+
+      console.log("SHOULD set the VALUE", _value, parent);
+
+      if (parent?.constructor === Array) {
+        /** If the element is an Array, create a new element if the tag already exist */
+        if (parent[parent.length - 1]?.[_tag]) {
+          parent.push({});
+        }
+        parent[parent.length - 1][_tag] = _value;
+      } else {
+        parent[_tag] = _value;
       }
-      // else if (event === SaxEventType.Text) {
-      //   console.log("Text - ", Buffer.from(data.data).toString('utf8'));
-      // }
-    };
+    } else {
+      _previousTagValue = null;
+    }
 
-    stream.on('error', function (err) { callback(err) });
-
-    stream.on('data', function (chunk) {
-      chunks.push(Buffer.from(chunk))
-      xmlParser.write(chunk);
-    });
-
-    stream.on('end', function () {
-      xmlParser.end();
-      console.log(json);
-      console.log(Buffer.concat(chunks).toString('utf8'));
-      callback(null, json)
-    });
-  })
+    _previousTag = _tag;
+    _previousTagFull = _tagFull;
+    _prevLastIndex = _xmlTagRegExp.lastIndex;
+  }
+  console.log(root);
+  return root;
 }
+    // if (previousTag !== '' && previousTag !== _tag && !json?.[previousTag] && _tagOnly[0] === '/') {
+    //   json[previousTag] = {}
+    //   parent = json[previousTag];
+    // } else if (previousTag === _tag) {
+    //   parent[_tag] = xml.slice(_xmlTagRegExp.lastIndex, _tag.index)
+    // }
+
+// <?xml version='1.0' encoding='UTF-8'?>
+// <ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+//   <Name>templates</Name>
+//   <Prefix/>
+//   <KeyCount>1</KeyCount>
+//   <MaxKeys>1000</MaxKeys>
+//   <IsTruncated>false</IsTruncated>
+//   <Contents>
+//     <Key>template.odt</Key>
+//     <LastModified>2023-03-02T07:18:55.000Z</LastModified>
+//     <ETag>"fde6d729123cee4db6bfa3606306bc8c"</ETag>
+//     <Size>11822</Size>
+//     <StorageClass>STANDARD</StorageClass>
+//   </Contents>
+// </ListBucketResult>
+
+// {
+//   "ListBucketResult" : {
+//     "name": "templates",
+//     "KeyCount": 1,
+//     "MaxKeys": 1000,
+//     "IsTruncated": false,
+//     contents : [
+//       "key": "template.odt",
+//       "LastModified": "2023-03-02T07:18:55.000Z",
+//       "ETag": "fde6d729123cee4db6bfa3606306bc8c",
+//       "Size": "11822",
+//       "StorageClass": "STANDARD"
+//     ]
+//   }
+// }
+
 
 /**
  * Used for the 'Content-MD5' header:
