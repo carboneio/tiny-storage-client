@@ -7,7 +7,7 @@ const fs = require('fs');
  * TODO
  * - [x] Bulk delete
  * - [x] Transform XML to JSON on error / when fetching a list of objects / when delete response
- * - [ ] Test and improve list objects (query params)
+ * - [x] Test and improve list objects (query params)
  * - [ ] Change Region on error 500 & read only
  * - [ ] Change Region on Timeout & read only
  * - [ ] Test unitaires
@@ -34,7 +34,10 @@ function downloadFile (bucket, filename, options, callback) {
  * @doc https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html
  */
 function uploadFile (bucket, filename, localPathOrBuffer, options, callback) {
-
+  if (!callback) {
+    callback = options;
+    options = {};
+  }
   const _uploadFileRequest = function (bucket, filename, objectBuffer, options, callback) {
     options.body = objectBuffer;
     options.headers = {
@@ -61,16 +64,30 @@ function uploadFile (bucket, filename, localPathOrBuffer, options, callback) {
 /**
  * @doc https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObject.html
  */
-function deleteFile (bucket, filename, callback) {
-  return request('DELETE', `/${bucket}/${encodeURIComponent(filename)}`, {}, callback);
+function deleteFile (bucket, filename, options, callback) {
+  if (!callback) {
+    callback = options;
+    options = {};
+  }
+  return request('DELETE', `/${bucket}/${encodeURIComponent(filename)}`, options, callback);
 }
 
 
 /**
  * @doc https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
+ *
+ *  Query parameters for pagination/filter:
+ *  - "max-keys=3&" : Sets the maximum number of keys returned in the response. By default the action returns up to 1,000 key names. The response might contain fewer keys but will never contain more.
+ *  - "prefix=E&"   : Limits the response to keys that begin with the specified prefix.
+ *  - "start-after=": StartAfter is where you want Amazon S3 to start listing from. Amazon S3 starts listing after this specified key. StartAfter can be any key in the bucket.
  */
 function listFiles(bucket, options, callback) {
-  return request('GET', `/${bucket}?list-type=2`, options, (err, resp) => {
+  if (!callback) {
+    callback = options;
+    options = {};
+  }
+  options.defaultQueries = 'list-type=2';
+  return request('GET', `/${bucket}`, options, (err, resp) => {
     if (err) {
       return callback(err);
     }
@@ -99,6 +116,10 @@ function getFileMetadata(bucket, filename, callback) {
  * sum the number of bytes in the UTF-8 encoding for each key and value. Both keys and their values must conform to US-ASCII standards.
  */
 function setFileMetadata(bucket, filename, options, callback) {
+  if (!callback) {
+    callback = options;
+    options = {};
+  }
   getFileMetadata(bucket, filename, (err, resp) => {
     if (err) {
       return callback(err);
@@ -106,15 +127,13 @@ function setFileMetadata(bucket, filename, options, callback) {
     /**
      * TODO: verify Metadata size lower or equal to 2KB maximum
      */
-    request('PUT', `/${bucket}/${encodeURIComponent(filename)}`,
-      {
-        headers: {
-          ...resp.headers,
-          'x-amz-copy-source': `/${bucket}/${encodeURIComponent(filename)}`,
-          'x-amz-metadata-directive': 'REPLACE',
-          ...options.headers
-        }
-      }, callback);
+    options["headers"] = {
+      ...resp.headers,
+      'x-amz-copy-source': `/${bucket}/${encodeURIComponent(filename)}`,
+      'x-amz-metadata-directive': 'REPLACE',
+      ...options.headers
+    }
+    request('PUT', `/${bucket}/${encodeURIComponent(filename)}`, options, callback);
   })
 }
 
@@ -147,9 +166,11 @@ function deleteFiles (bucket, files, options, callback) {
 
 function request (method, path, options, callback) {
 
+  const _urlParams = getUrlParameters(options?.queries ?? '', options?.defaultQueries ?? '');
+
   const _requestParams = aws4.sign({
     method: method,
-    url: `https://${_config.url}${path}`,
+    url: `https://${_config.url}${path}${_urlParams ?? ''}`,
     ...(options?.body ? { body: options?.body } : {}),
     headers: {
       ...(options?.headers ? options?.headers : {})
@@ -158,7 +179,7 @@ function request (method, path, options, callback) {
     /** REQUIRED FOR AWS4 SIGNATURE */
     service: 's3',
     hostname: _config.url,
-    path: path,
+    path: `${path}${_urlParams ?? ''}`,
     region: _config.region,
     protocol: 'https:'
   }, {
@@ -179,7 +200,7 @@ function request (method, path, options, callback) {
           callback(err ?? xmlToJson(msg) ?? 'Something went wrong');
         });
       }
-      return callback(body.toString());
+      return callback(xmlToJson(body?.toString() ?? ''));
     }
     return options?.stream === true ? callback(null, res) : callback(null, { headers   : res.headers, statusCode: res.statusCode, body : body });
   }
@@ -257,15 +278,15 @@ function xmlToJson (xml, options) {
   let _previousTagFull = '';
   let _skipObject = null;
   /** Regex variables */
-  var _xmlTagRegExp = /<([^>]+?)>/g;
-  var _previousLastIndex = 0;
+  const _xmlTagRegExp = /<([^>]+?)>/g;
+  let _previousLastIndex = 0;
   let _tagParsed = [];
   /** Loop through all XML tags */
   while ((_tagParsed = _xmlTagRegExp.exec(xml))) {
-    var _tagStr = _tagParsed[1];
-    var _tagAttributeIndex = _tagStr.indexOf(' '); /** remove attributes from HTML tags <div class="s"> */
-    var _tagFull = _tagStr.slice(0, _tagAttributeIndex > 0 ? _tagAttributeIndex : _tagStr.length);
-    const _tag = _tagFull.replace('/', '').toLowerCase();
+    const _tagStr = _tagParsed[1];
+    const _tagAttributeIndex = _tagStr.indexOf(' '); /** remove attributes from HTML tags <div class="s"> */
+    const _tagFull = _tagStr.slice(0, _tagAttributeIndex > 0 ? _tagAttributeIndex : _tagStr.length);
+    const _tag = _tagFull.replace('/', '')
 
     /** End of skipped elements */
     if (_skipObject === _tag && _tagFull[0] === '/') {
@@ -333,4 +354,24 @@ function getMD5 (data) {
   }
 }
 
+function getUrlParameters (queries, defaultQueries) {
+  let _queries = '';
 
+  if (defaultQueries) {
+    _queries += defaultQueries + '&';
+  }
+
+  if (queries && typeof queries === 'string') {
+    _queries += queries;
+  } else if (queries && typeof queries === "object") {
+    const _queriesEntries = Object.keys(queries);
+    const _totalQueries = _queriesEntries.length;
+    for (let i = 0; i < _totalQueries; i++) {
+      _queries += `${_queriesEntries[i]}=${encodeURIComponent(queries[_queriesEntries[i]])}`
+      if (i + 1 !== _totalQueries) {
+        _queries += '&'
+      }
+    }
+  }
+  return _queries ? '?' + _queries : '';
+}
