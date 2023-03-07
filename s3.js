@@ -74,12 +74,11 @@ function listFiles(bucket, options, callback) {
     if (err) {
       return callback(err);
     }
-    // if (resp.body) {
-    //   let _regRes = resp.body.match(/<ListBucketResult[^<>]*?>([^]*?)<\/ListBucketResult>/);
-    //   console.log(_regRes);
-    // }
-    resp.body = xmlToJson(resp.body?.toString());
-    console.log(resp);
+    const _body = resp?.body?.toString();
+    if (_body) {
+      let _regRes = _body?.match(/<ListBucketResult[^<>]*?>([^]*?)<\/ListBucketResult>/);
+      resp.body = xmlToJson(_regRes?.[1], { forceArray: ['contents'] });
+    }
     return callback(null, resp);
   });
 }

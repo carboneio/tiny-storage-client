@@ -7,6 +7,16 @@ const _assert = (actual, expected) => {
 }
 
 describe.only('xmlToJson', function () {
+
+  it('should not crash with empty/null/undefiend/weird', function () {
+    _assert(xmlToJson(''), {})
+    _assert(xmlToJson(null), {})
+    _assert(xmlToJson(undefined), {})
+    _assert(xmlToJson({}), {})
+    _assert(xmlToJson([]), {})
+  })
+
+
   it('should return simple object', function () {
     const _json = xmlToJson('<Name>Eric</Name><Color>Blue</Color>')
 
