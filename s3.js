@@ -74,8 +74,8 @@ function listFiles(bucket, options, callback) {
     if (err) {
       return callback(err);
     }
-    console.log(resp.body.toString());
-    xmlToJson(resp.body.toString());
+    resp.body = xmlToJson(resp.body);
+    return callback(null, resp);
   });
 }
 
@@ -172,7 +172,7 @@ function request (method, path, options, callback) {
     if (res.statusCode >= 400 && res?.headers?.['content-type'] === 'application/xml') {
       if (options?.stream === true) {
         return streamToString(res, false, (err, msg) => {
-          callback(err ?? msg ?? 'Something went wrong');
+          callback(err ?? xmlToJson(msg) ?? 'Something went wrong');
         });
       }
       return callback(body.toString());
@@ -218,10 +218,18 @@ function streamToString (stream, json, callback) {
   stream.on('end', () => callback(null, Buffer.concat(chunks).toString('utf8')));
 }
 
+/**
+ * Convert XML to JSON, supports only 1 object depth such as: "{ child: [], child2: {} }".
+ *
+ * @param {String} xml
+ * @param {Object} options (Optional) accepts "forceArray" a list of strings, define if "child" of one element must be lists
+ * @returns
+ */
 function xmlToJson (xml, options) {
 
   options = options ?? {};
 
+  /** Function to convert string to real types */
   const getValue = (str) => {
     if (!isNaN(str) && !isNaN(parseFloat(str))) {
       return parseInt(str)
@@ -230,23 +238,24 @@ function xmlToJson (xml, options) {
     } else if (str.toLowerCase() === "false") {
       return false;
     }
+    /** S3 Storage returns the "MD5" hash wrapped with double quotes, must be removed. */
     if (str[0] === '"' && str?.[str.length - 1] === '"') {
       return str.slice(1, str.length - 1);
     }
     return str;
   }
 
+  /** JSON variables */
   let root = {};
-  let parent = root;
-  let parentName = '';
+  let child = null;
+  let childName = null;
   let _previousTag = '';
   let _previousTagFull = '';
-  let _previousTagValue = null;
-
-
+  /** Regex variables */
   var _xmlTagRegExp = /<([^>]+?)>/g;
-  var _prevLastIndex = 0;
+  var _previousLastIndex = 0;
   let _tagParsed = [];
+  /** Loop through all XML tags */
   while ((_tagParsed = _xmlTagRegExp.exec(xml))) {
     var _tagStr = _tagParsed[1];
     var _tagAttributeIndex = _tagStr.indexOf(' '); /** remove attributes from HTML tags <div class="s"> */
@@ -257,98 +266,44 @@ function xmlToJson (xml, options) {
       continue;
     }
 
-    console.log(_tagFull, "prev:" + _previousTagFull, "par:" + parentName, "pv:" + _previousTagValue, root);
-
-    // /** Get the parent tag */
-    if (_tag !== _previousTag && parentName !== _tag && _previousTag !== '' &&  _previousTagValue === null  && _previousTagFull[0] !== '/' ) {
-      root[_previousTag] = options?.forceArray?.includes(_previousTag) === true ? [{}] : {};
-      parent = root[_previousTag];
-      parentName = _previousTag;
-      _previousTagValue = null;
+    /** Create a new child {}/[] if two opening tags are different, such as: <files><name>value</name></files> */
+    if(_tag !== _previousTag && (child === null && _previousTag !== '' && _tagFull[0] !== '/' && _previousTagFull[0] !== '/')) {
+      child = options?.forceArray?.includes(_previousTag) === true ? [{}] : {};
+      childName = _previousTag;
+    } /** If a child already exist, and the two tags are equal, the existing element is retreive from the JSON and transformed as LIST */
+    else if (_tag === _previousTag && _tagFull[0] !== '/' && _previousTagFull[0] === '/' && child === null && (root[_tag]?.constructor === Object || root[_tag]?.constructor === Array)) {
+      child = root[_tag]?.constructor === Object ? [root[_tag]] : root[_tag];
+      childName = _tag;
     }
-    // else if (_tag !== _previousTag && _previousTag === parentName && _previousTagFull[0] === '/') {
-    //   const _tmp = parent;
 
-    //   parent = root;
-    // }
-
-    // else if (parentName === _tag && parent?.constructor !== Array/**  && _tagFull[0] !== '/' */) {
-    //   console.log("PASS HEREEEEE----", parent)
-    //   /** Create an array from the existing object */
-    //   root[parentName] = new Array(parent);
-    //   parent = root[parentName];
-    //   console.log("Already exist", _tag, parentName, parent, root);
-    // }
-    // // else if (parentName === _tag && _tagFull[0] === '/') {
-    // //   parentName = '';
-    // // }
-
-    /** Get and set the attribute value */
-    if (_tag === _previousTag && _tagFull[0] === '/' && _previousTag !== '') {
-      const _value = getValue(xml.slice(_prevLastIndex, _tagParsed.index))
-      _previousTagValue = _value;
-
-      console.log("SHOULD set the VALUE", _value, parent);
-
-      if (parent?.constructor === Array) {
-        /** If the element is an Array, create a new element if the tag already exist */
-        if (parent[parent.length - 1]?.[_tag]) {
-          parent.push({});
+    /** When we reach the end of a list of child tags `</name></files>`, the child is assigned to the root object */
+    if (_tagFull[0] === '/' && _previousTagFull[0] === '/' && child) {
+      root[childName] = child?.constructor === Array ? [ ...child ] : { ...child };
+      child = null;
+      childName = null;
+    } /** When we reach the end of a tag <color>red</color>, the value is assign to the child or root object */
+    else if (_tagFull[0] === '/') {
+      const _value = getValue(xml.slice(_previousLastIndex, _tagParsed.index))
+      if (child) {
+        if (child?.constructor === Array) {
+          /** Tag already exist, we must create a new element on the list */
+          if (child[child.length - 1]?.[_tag]) {
+            child.push({});
+          }
+          child[child.length - 1][_tag] = _value;
         }
-        parent[parent.length - 1][_tag] = _value;
+        child[_tag] = _value;
       } else {
-        parent[_tag] = _value;
+        root[_tag] = _value;
       }
-    } else {
-      _previousTagValue = null;
     }
 
     _previousTag = _tag;
     _previousTagFull = _tagFull;
-    _prevLastIndex = _xmlTagRegExp.lastIndex;
+    _previousLastIndex = _xmlTagRegExp.lastIndex;
   }
-  console.log(root);
   return root;
 }
-    // if (previousTag !== '' && previousTag !== _tag && !json?.[previousTag] && _tagOnly[0] === '/') {
-    //   json[previousTag] = {}
-    //   parent = json[previousTag];
-    // } else if (previousTag === _tag) {
-    //   parent[_tag] = xml.slice(_xmlTagRegExp.lastIndex, _tag.index)
-    // }
-
-// <?xml version='1.0' encoding='UTF-8'?>
-// <ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
-//   <Name>templates</Name>
-//   <Prefix/>
-//   <KeyCount>1</KeyCount>
-//   <MaxKeys>1000</MaxKeys>
-//   <IsTruncated>false</IsTruncated>
-//   <Contents>
-//     <Key>template.odt</Key>
-//     <LastModified>2023-03-02T07:18:55.000Z</LastModified>
-//     <ETag>"fde6d729123cee4db6bfa3606306bc8c"</ETag>
-//     <Size>11822</Size>
-//     <StorageClass>STANDARD</StorageClass>
-//   </Contents>
-// </ListBucketResult>
-
-// {
-//   "ListBucketResult" : {
-//     "name": "templates",
-//     "KeyCount": 1,
-//     "MaxKeys": 1000,
-//     "IsTruncated": false,
-//     contents : [
-//       "key": "template.odt",
-//       "LastModified": "2023-03-02T07:18:55.000Z",
-//       "ETag": "fde6d729123cee4db6bfa3606306bc8c",
-//       "Size": "11822",
-//       "StorageClass": "STANDARD"
-//     ]
-//   }
-// }
-
 
 /**
  * Used for the 'Content-MD5' header:

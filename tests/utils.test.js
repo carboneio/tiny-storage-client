@@ -6,13 +6,23 @@ const _assert = (actual, expected) => {
   assert.strictEqual(JSON.stringify(actual), JSON.stringify(expected))
 }
 
-describe.only('xmlToJson', function () {
+describe('xmlToJson', function () {
   it('should return simple object', function () {
     const _json = xmlToJson('<Name>Eric</Name><Color>Blue</Color>')
 
     const _expected = {
       name: 'Eric',
       color: 'Blue',
+    }
+
+    _assert(_json, _expected)
+  })
+
+  it('should return simple object, and overwrite an existing field', function () {
+    const _json = xmlToJson('<Color>Blue</Color><Color>Red</Color>')
+
+    const _expected = {
+      color: 'Red'
     }
 
     _assert(_json, _expected)
@@ -33,7 +43,7 @@ describe.only('xmlToJson', function () {
     _assert(_json, _expected)
   })
 
-  it.only('should return simple nested object', function () {
+  it('should return simple nested object', function () {
     const _json = xmlToJson(
       '<Bucket><Color>Blue</Color></Bucket><Name>John</Name>',
     )
@@ -48,31 +58,8 @@ describe.only('xmlToJson', function () {
     _assert(_json, _expected)
   })
 
-  it('should return simple nested object as Array', function () {
-    const _json = xmlToJson(
-      '<Bucket><Name>Eric</Name><Color>Blue</Color></Bucket><Bucket><Name>John</Name><Color>Green</Color></Bucket>',
-    )
-
-    const _expected = {
-      bucket: [
-        {
-          name: 'Eric',
-          color: 'Blue',
-        },
-        {
-          name: 'John',
-          color: 'Green',
-        },
-      ],
-    }
-
-    _assert(_json, _expected)
-  })
-
   it('should parse a simpled nested object', function () {
-    let _xml =
-      '<Name>templates</Name><Contents><Key>template.odt</Key></Contents>'
-    // let _xml = '<Name>templates</Name><Prefix/><KeyCount>1</KeyCount><MaxKeys>1000</MaxKeys><IsTruncated>false</IsTruncated><Contents><Key>template.odt</Key><LastModified>2023-03-02T07:18:55.000Z</LastModified><ETag>"fde6d729123cee4db6bfa3606306bc8c"</ETag><Size>11822</Size><StorageClass>STANDARD</StorageClass></Contents>';
+    let _xml = '<Name>templates</Name><Contents><Key>template.odt</Key></Contents>'
     const _json = xmlToJson(_xml)
 
     const _expected = {
@@ -81,17 +68,6 @@ describe.only('xmlToJson', function () {
         key: 'template.odt',
       },
     }
-    // {
-    // "name":"templates",
-    // "keycount":1,
-    // "maxkeys":1000,
-    // "istruncated":false,
-    // "key":"template.odt",
-    // "lastmodified":"2023-03-02T07:18:55.000Z",
-    // "etag":"\"fde6d729123cee4db6bfa3606306bc8c\\",
-    // "size":11822,
-    // "storageclass":"STANDARD"}
-
     _assert(_json, _expected)
   })
 
@@ -113,6 +89,41 @@ describe.only('xmlToJson', function () {
         storageclass: 'STANDARD',
       },
     }
+    _assert(_json, _expected)
+  })
+
+  it('should parse a simple nested object, if the name is the same, it should be overwrited', function () {
+    let _xml =
+      '<Colors><Name>Blue</Name><Name>Green</Name></Colors>'
+    const _json = xmlToJson(_xml)
+
+    const _expected = {
+      colors: {
+        name: "Green"
+      }
+    }
+    _assert(_json, _expected)
+  })
+
+
+  it('should return simple nested object as Array', function () {
+    const _json = xmlToJson(
+      '<Bucket><Name>Eric</Name><Color>Blue</Color></Bucket><Bucket><Name>John</Name><Color>Green</Color></Bucket>',
+    )
+
+    const _expected = {
+      bucket: [
+        {
+          name: 'Eric',
+          color: 'Blue',
+        },
+        {
+          name: 'John',
+          color: 'Green',
+        },
+      ],
+    }
+
     _assert(_json, _expected)
   })
 
@@ -146,7 +157,7 @@ describe.only('xmlToJson', function () {
     _assert(_json, _expected)
   })
 
-  it('should parse a simple nested object and force an element to be a Array (options: forceArray)', function () {
+  it.only('should parse a simple nested object and force an element to be a Array (options: forceArray)', function () {
     let _xml =
       '<Name>templates</Name><Prefix/><KeyCount>1</KeyCount><MaxKeys>1000</MaxKeys><IsTruncated>false</IsTruncated><Contents><Key>template.odt</Key><LastModified>2023-03-02T07:18:55.000Z</LastModified><ETag>"fde6d729123cee4db6bfa3606306bc8c"</ETag><Size>11822</Size><StorageClass>STANDARD</StorageClass></Contents>'
     const _json = xmlToJson(_xml, { forceArray: ["contents"] } )
@@ -165,22 +176,5 @@ describe.only('xmlToJson', function () {
       }],
     }
     _assert(_json, _expected)
-  })
-
-  it.skip('should parse a simple nested object and force an element to be a Array (options: forceArray)', function () {
-    let _xml =
-      '<Colors><Name>Blue</Name><Name>Green</Name></Colors>' //<Size>10000</Size>
-    const _json = xmlToJson(_xml)
-
-    const _expected = {
-      colors: [{
-        name: "Blue"
-      },
-      {
-        name: "Green"
-      }],
-      // size: 10000
-    }
-    _assert(_json, _expected)
-  })
+  });
 })
