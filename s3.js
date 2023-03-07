@@ -286,7 +286,7 @@ function xmlToJson (xml, options) {
     const _tagStr = _tagParsed[1];
     const _tagAttributeIndex = _tagStr.indexOf(' '); /** remove attributes from HTML tags <div class="s"> */
     const _tagFull = _tagStr.slice(0, _tagAttributeIndex > 0 ? _tagAttributeIndex : _tagStr.length);
-    const _tag = _tagFull.replace('/', '')
+    const _tag = _tagFull.replace('/', '').toLowerCase();
 
     /** End of skipped elements */
     if (_skipObject === _tag && _tagFull[0] === '/') {
