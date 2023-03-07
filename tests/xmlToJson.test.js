@@ -7,7 +7,6 @@ const _assert = (actual, expected) => {
 }
 
 describe.only('xmlToJson', function () {
-
   it('should not crash with empty/null/undefiend/weird', function () {
     _assert(xmlToJson(''), {})
     _assert(xmlToJson(null), {})
@@ -15,7 +14,6 @@ describe.only('xmlToJson', function () {
     _assert(xmlToJson({}), {})
     _assert(xmlToJson([]), {})
   })
-
 
   it('should return simple object', function () {
     const _json = xmlToJson('<Name>Eric</Name><Color>Blue</Color>')
@@ -32,7 +30,7 @@ describe.only('xmlToJson', function () {
     const _json = xmlToJson('<Color>Blue</Color><Color>Red</Color>')
 
     const _expected = {
-      color: 'Red'
+      color: 'Red',
     }
 
     _assert(_json, _expected)
@@ -62,14 +60,15 @@ describe.only('xmlToJson', function () {
       bucket: {
         color: 'Blue',
       },
-      name: "John"
+      name: 'John',
     }
 
     _assert(_json, _expected)
   })
 
-  it('should parse a simpled nested object', function () {
-    let _xml = '<Name>templates</Name><Contents><Key>template.odt</Key></Contents>'
+  it('should parse a simple nested object', function () {
+    let _xml =
+      '<Name>templates</Name><Contents><Key>template.odt</Key></Contents>'
     const _json = xmlToJson(_xml)
 
     const _expected = {
@@ -103,18 +102,16 @@ describe.only('xmlToJson', function () {
   })
 
   it('should parse a simple nested object, if the name is the same, it should be overwrited', function () {
-    let _xml =
-      '<Colors><Name>Blue</Name><Name>Green</Name></Colors>'
+    let _xml = '<Colors><Name>Blue</Name><Name>Green</Name></Colors>'
     const _json = xmlToJson(_xml)
 
     const _expected = {
       colors: {
-        name: "Green"
-      }
+        name: 'Green',
+      },
     }
     _assert(_json, _expected)
   })
-
 
   it('should return simple nested object as Array', function () {
     const _json = xmlToJson(
@@ -170,47 +167,50 @@ describe.only('xmlToJson', function () {
   it('should parse a simple nested object and force an element to be a Array (options: forceArray)', function () {
     let _xml =
       '<Name>templates</Name><Prefix/><KeyCount>1</KeyCount><MaxKeys>1000</MaxKeys><IsTruncated>false</IsTruncated><Contents><Key>template.odt</Key><LastModified>2023-03-02T07:18:55.000Z</LastModified><ETag>"fde6d729123cee4db6bfa3606306bc8c"</ETag><Size>11822</Size><StorageClass>STANDARD</StorageClass></Contents>'
-    const _json = xmlToJson(_xml, { forceArray: ["contents"] } )
+    const _json = xmlToJson(_xml, { forceArray: ['contents'] })
 
     const _expected = {
       name: 'templates',
       keycount: 1,
       maxkeys: 1000,
       istruncated: false,
-      contents: [{
-        key: 'template.odt',
-        lastmodified: '2023-03-02T07:18:55.000Z',
-        etag: 'fde6d729123cee4db6bfa3606306bc8c',
-        size: 11822,
-        storageclass: 'STANDARD',
-      }],
+      contents: [
+        {
+          key: 'template.odt',
+          lastmodified: '2023-03-02T07:18:55.000Z',
+          etag: 'fde6d729123cee4db6bfa3606306bc8c',
+          size: 11822,
+          storageclass: 'STANDARD',
+        },
+      ],
     }
     _assert(_json, _expected)
-  });
+  })
 
   it('should parse the response of "ListObject V2" and skip the 2 depth object', function () {
-    const _xml = '<?xml version="1.0" encoding="UTF-8"?>' +
-      '<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">'+
-          '<Name>bucket</Name>'+
-          '<Prefix/>'+
-          '<KeyCount>205</KeyCount>'+
-          '<MaxKeys>1000</MaxKeys>'+
-          '<IsTruncated>false</IsTruncated>'+
-          '<Contents>'+
-              '<Key>my-image.jpg</Key>'+
-              '<LastModified>2009-10-12T17:50:30.000Z</LastModified>'+
-              '<ETag>"fba9dede5f27731c9771645a39863328"</ETag>'+
-              '<Size>434234</Size>'+
-              '<StorageClass>STANDARD</StorageClass>'+
-          '</Contents>'+
-          '<Contents>'+
-              '<Key>my-image2.jpg</Key>'+
-              '<LastModified>2009-10-12T17:50:30.000Z</LastModified>'+
-              '<ETag>"fba9dede5f27731c9771645a39863328"</ETag>'+
-              '<Size>434234</Size>'+
-              '<StorageClass>STANDARD</StorageClass>'+
-          '</Contents>'+
-      '</ListBucketResult>';
+    const _xml =
+      '<?xml version="1.0" encoding="UTF-8"?>' +
+      '<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">' +
+        '<Name>bucket</Name>' +
+        '<Prefix/>' +
+        '<KeyCount>205</KeyCount>' +
+        '<MaxKeys>1000</MaxKeys>' +
+        '<IsTruncated>false</IsTruncated>' +
+        '<Contents>' +
+          '<Key>my-image.jpg</Key>' +
+          '<LastModified>2009-10-12T17:50:30.000Z</LastModified>' +
+          '<ETag>"fba9dede5f27731c9771645a39863328"</ETag>' +
+          '<Size>434234</Size>' +
+          '<StorageClass>STANDARD</StorageClass>' +
+        '</Contents>' +
+        '<Contents>' +
+          '<Key>my-image2.jpg</Key>' +
+          '<LastModified>2009-10-12T17:50:30.000Z</LastModified>' +
+          '<ETag>"fba9dede5f27731c9771645a39863328"</ETag>' +
+          '<Size>434234</Size>' +
+          '<StorageClass>STANDARD</StorageClass>' +
+        '</Contents>' +
+      '</ListBucketResult>'
 
     const _json = xmlToJson(_xml)
 
@@ -220,10 +220,35 @@ describe.only('xmlToJson', function () {
         keycount: 205,
         maxkeys: 1000,
         istruncated: false,
-        contents: '<Key>my-image2.jpg</Key><LastModified>2009-10-12T17:50:30.000Z</LastModified><ETag>"fba9dede5f27731c9771645a39863328"</ETag><Size>434234</Size><StorageClass>STANDARD</StorageClass>'
+        contents:
+          '<Key>my-image2.jpg</Key><LastModified>2009-10-12T17:50:30.000Z</LastModified><ETag>"fba9dede5f27731c9771645a39863328"</ETag><Size>434234</Size><StorageClass>STANDARD</StorageClass>',
+      },
+    }
+
+    _assert(_json, _expected)
+  })
+
+  it.only('should return the Error response from S3 as JSON', function () {
+    const _xml =
+      '<?xml version="1.0" encoding="UTF-8"?>' +
+      '<Error>' +
+        '<Code>NoSuchKey</Code>' +
+        '<Message>The resource you requested does not exist</Message>' +
+        '<Resource>/mybucket/myfoto.jpg</Resource>' +
+        '<RequestId>4442587FB7D0A2F9</RequestId>' +
+      '</Error>'
+
+    const _json = xmlToJson(_xml)
+
+    const _expected = {
+      error: {
+        code: 'NoSuchKey',
+        message: 'The resource you requested does not exist',
+        resource: '/mybucket/myfoto.jpg',
+        requestid: '4442587FB7D0A2F9',
       }
     }
 
     _assert(_json, _expected)
-  });
+  })
 })

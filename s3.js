@@ -108,6 +108,13 @@ function getFileMetadata(bucket, filename, callback) {
 }
 
 /**
+ * @doc https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html
+ */
+function getBucketMetadata(bucket, callback) {
+  return request('HEAD', `/${bucket}`, {}, callback);
+}
+
+/**
  * @doc https://docs.aws.amazon.com/AmazonS3/latest/API/API_CopyObject.html
  *
  * Copy an existing file to edit metadatas.
@@ -191,7 +198,8 @@ function request (method, path, options, callback) {
     if (err) {
       return callback(err, res);
     }
-    if (res.statusCode >= 500 && res?.headers?.['content-type'] === 'application/xml') {
+    if (res.statusCode >= 500) {
+      // res?.headers?.['content-type'] === 'application/xml'
       console.log("CHANGE OBJECT STORAGE");
     }
     if (res.statusCode >= 400 && res?.headers?.['content-type'] === 'application/xml') {
