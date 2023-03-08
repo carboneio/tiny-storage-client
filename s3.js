@@ -10,13 +10,15 @@ const xmlToJson = require('./xmltoJson.js')
  * - [x] Transform XML to JSON on error / when fetching a list of objects / when delete response
  * - [x] Test and improve list objects (query params)
  * - [x] Test headBucket > usefull to know the S3 status/connexion
+ * - [ ] Test unitaires
  * - [ ] Change Region on error 500 & read only
  * - [ ] Change Region on Timeout & read only
- * - [ ] Test unitaires
  */
 
 let _config = {
-  /** S3 Auth */
+  /** List of S3 credentials */
+  storages      : [],
+  /** Active S3 Auth */
   secretAccessKey: '',
   accessKeyId    : '',
   url            : '',
@@ -25,8 +27,6 @@ let _config = {
   timeout        : 5000,
   activeStorage  : 0,
 }
-
-let _storages = [];
 
 /**
  * @doc https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html
@@ -162,17 +162,13 @@ function setFileMetadata(bucket, filename, options, callback) {
 }
 
 /**
- * BULK DELETE
+ * BULK DELETE 1000 files maximum
  * @documentation https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjects.html#API_DeleteObjects_Examples
  */
 function deleteFiles (bucket, files, options, callback) {
   if (!callback) {
     callback = options;
     options = {};
-  }
-
-  if (files.length > 1000) {
-    return callback("")
   }
 
   let _body = '<Delete>';
@@ -188,6 +184,14 @@ function deleteFiles (bucket, files, options, callback) {
   return request('POST', `/${bucket}/?delete`, options, callback);
 }
 
+/**
+ *
+ * @param {String} method POST/GET/HEAD/DELETE
+ * @param {String} path Path to a ressource
+ * @param {Object} options { headers: {}, body: "Buffer", queries: {},  defaultQueries: '' }
+ * @param {Function} callback function(err, resp):void = The `err` is null by default. `resp` is the HTTP response including: { statusCode: 200, headers: {}, body: "Buffer/Object/String" }
+ * @returns
+ */
 function request (method, path, options, callback) {
 
   const _urlParams = getUrlParameters(options?.queries ?? '', options?.defaultQueries ?? '');
@@ -221,7 +225,7 @@ function request (method, path, options, callback) {
     }
     if (res.statusCode >= 400 && res?.headers?.['content-type'] === 'application/xml') {
       if (options?.stream === true) {
-        return streamToString(res, false, (err, msg) => {
+        return streamToString(res, (err, msg) => {
           callback(err ?? xmlToJson(msg) ?? 'Something went wrong');
         });
       }
@@ -232,14 +236,26 @@ function request (method, path, options, callback) {
   return options?.stream === true ? get(_requestParams, _requestCallback) : get.concat(_requestParams, _requestCallback);
 }
 
+/**
+ * Set HTTP requests timeout
+ * @param {Number} timeout
+ */
 function setTimeout(timeout) {
   _config.timeout = timeout;
 }
 
+/**
+ * Return S3 configurations requests and list of credentials
+ * @returns
+ */
 function getConfig() {
   return _config;
 }
 
+/**
+ * Set a new list of S3 credentials and set the active storage to the first storage on the list
+ * @param {Object|Array} newConfig
+ */
 function setConfig(newConfig) {
   if (typeof newConfig === 'object') {
     newConfig = [newConfig];
@@ -252,11 +268,11 @@ function setConfig(newConfig) {
     }
   }
 
-  _storages = [...newConfig];
-  _config.accessKeyId     = _storages[0].accessKeyId;
-  _config.secretAccessKey = _storages[0].secretAccessKey;
-  _config.region          = _storages[0].region;
-  _config.url             = _storages[0].url;
+  _config.storages        = [...newConfig];
+  _config.accessKeyId     = _config.storages[0].accessKeyId;
+  _config.secretAccessKey = _config.storages[0].secretAccessKey;
+  _config.region          = _config.storages[0].region;
+  _config.url             = _config.storages[0].url;
   _config.activeStorage   = 0;
 }
 
@@ -277,7 +293,12 @@ module.exports = (config) => {
   }
 }
 
-function streamToString (stream, json, callback) {
+/**
+ * Convert a stream to a string
+ * @param {Stream} stream
+ * @param {Function} callback function(err, result):void = The `err` is null by default. `result` is a String
+ */
+function streamToString (stream, callback) {
   const chunks = [];
 
   stream.on('error', (err) => callback(err));
@@ -299,6 +320,12 @@ function getMD5 (data) {
   }
 }
 
+/**
+ * Convert an object of queries into a concatenated string of URL parameters.
+ * @param {Object|String} queries
+ * @param {String} defaultQueries
+ * @returns {String} URL parameters
+ */
 function getUrlParameters (queries, defaultQueries) {
   let _queries = '';
 
