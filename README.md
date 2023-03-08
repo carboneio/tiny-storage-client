@@ -7,10 +7,10 @@
 
 ## Highlights
 * 🦄 **Simple to use** - Only 5 methods: `uploadFile`, `deleteFile`, `listFiles`, `downloadFile` and `request` for custom requests.
-* 🚀 **Performances and small** - Only 2 dependencies `simple-get` for HTTP requests and `aws4` for signing requests for S3.
-* 🌎 **High availability** - Initiate the SDK with a list of storages credentials, and the SDK will switch storage if something goes wrong (Server/DNS not responding, timeout, error 500, too many redirection, authentication error, and more...).
-* ✨ **Reconnect automatically** - If a request fails due to an authentication token expiration, the SDK fetches a new authentication token and retry the initial request with it.
-* ✅ **100% tested** - Battle-tested against hundreds of GBs of file uploads & downloads
+* 🚀 **Performances** - Vanilla JS + Only 2 dependencies `simple-get` for HTTP requests and `aws4` for signing requests for S3 requests.
+* 🌎 **High availability** - Provide a list of storages credentials: the SDK will switch storage if something goes wrong (Server/DNS not responding, timeout, error 500, too many redirection, authentication error, and more...). As soon as the main storage is available, the SDK returns to the main storage
+* ✨ **Reconnect automatically** - If a request fails due to an authentication token expiration, the SDK fetches a new authentication token and retry the initial request with it (Concerns only Swift Storage).
+* ✅ **100% tested** - battle-tested into production against hundreds of GBs of file uploads & downloads
 
 ## Install
 
