@@ -1,15 +1,15 @@
-# High available Node Client for OpenStack Switf Object Storage
+# Tiny client for distributed S3/Swift storages
+
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/carboneio/high-availability-object-storage?style=for-the-badge)
 [![Documentation](https://img.shields.io/badge/documentation-yes-brightgreen.svg?style=for-the-badge)](#api-usage)
 
-
-> High availability, Performances, and Simplicity are the main focus of this tiny Node SDK to request the OpenStack Object Storage API. It was initially made to request the OVHCloud Object storage, but it can be used for any OpenStack Object Storage.
+> High availability, Performances, and Simplicity are the main focus of this tiny Node client to request AWS S3 API or the OpenStack Swift Object Storage API. It was initially made to request OVHCloud, but it can be used for any Server/Cloud provider.
 
 ## Highlights
 * 🦄 **Simple to use** - Only 5 methods: `uploadFile`, `deleteFile`, `listFiles`, `downloadFile` and `request` for custom requests.
-* 🌎 **High availability** - Initiate the SDK with a list of object storages credentials, and the SDK will switch storage if something goes wrong (Server/DNS not responding, timeout, error 500, too many redirection, authentication error, and more...).
+* 🚀 **Performances and small** - Only 2 dependencies `simple-get` for HTTP requests and `aws4` for signing requests for S3.
+* 🌎 **High availability** - Initiate the SDK with a list of storages credentials, and the SDK will switch storage if something goes wrong (Server/DNS not responding, timeout, error 500, too many redirection, authentication error, and more...).
 * ✨ **Reconnect automatically** - If a request fails due to an authentication token expiration, the SDK fetches a new authentication token and retry the initial request with it.
-* 🚀 **Performances** - Less than 500 lines of code with only 2 dependencies `simple-get` and `debug`.
 * ✅ **100% tested** - Battle-tested against hundreds of GBs of file uploads & downloads
 
 ## Install
