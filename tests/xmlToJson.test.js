@@ -1,12 +1,11 @@
-const s3 = require('../s3.js')
-const { xmlToJson } = s3({})
+const xmlToJson = require('../xmlToJson.js')
 const assert = require('assert')
 
 const _assert = (actual, expected) => {
   assert.strictEqual(JSON.stringify(actual), JSON.stringify(expected))
 }
 
-describe.only('xmlToJson', function () {
+describe('xmlToJson', function () {
   it('should not crash with empty/null/undefiend/weird', function () {
     _assert(xmlToJson(''), {})
     _assert(xmlToJson(null), {})
@@ -228,7 +227,7 @@ describe.only('xmlToJson', function () {
     _assert(_json, _expected)
   })
 
-  it.only('should return the Error response from S3 as JSON', function () {
+  it('should return the Error response from S3 as JSON', function () {
     const _xml =
       '<?xml version="1.0" encoding="UTF-8"?>' +
       '<Error>' +
