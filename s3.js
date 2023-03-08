@@ -8,7 +8,7 @@ const fs = require('fs');
  * - [x] Bulk delete
  * - [x] Transform XML to JSON on error / when fetching a list of objects / when delete response
  * - [x] Test and improve list objects (query params)
- * - [ ] Test getBucketMetadata > usefull to know the S3 status/connexion
+ * - [x] Test headBucket > usefull to know the S3 status/connexion
  * - [ ] Change Region on error 500 & read only
  * - [ ] Change Region on Timeout & read only
  * - [ ] Test unitaires
@@ -104,14 +104,22 @@ function listFiles(bucket, options, callback) {
 /**
  * @doc https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html
  */
-function getFileMetadata(bucket, filename, callback) {
-  return request('HEAD', `/${bucket}/${encodeURIComponent(filename)}`, {}, callback);
+function getFileMetadata(bucket, filename, options, callback) {
+  if (!callback) {
+    callback = options;
+    options = {};
+  }
+  return request('HEAD', `/${bucket}/${encodeURIComponent(filename)}`, options, callback);
 }
 
 /**
- * @doc https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html
+ * HEAD Bucket: This action is useful to determine if a bucket exists and you have permission to access it thanks to the Status code. A message body is not included, so you cannot determine the exception beyond these error codes.
+ * - The action returns a 200 OK if the bucket exists and you have permission to access it.
+ * - If the bucket does not exist or you do not have permission to access it, the HEAD request returns a generic 400 Bad Request, 403 Forbidden or 404 Not Found code.
+ *
+ * @doc https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadBucket.html
  */
-function getBucketMetadata(bucket, callback) {
+function headBucket(bucket, callback) {
   return request('HEAD', `/${bucket}`, {}, callback);
 }
 
@@ -236,6 +244,7 @@ module.exports = (config) => {
     deleteFile,
     deleteFiles,
     listFiles,
+    headBucket,
     getFileMetadata,
     setFileMetadata,
     setTimeout,
