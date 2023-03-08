@@ -18,11 +18,6 @@ const xmlToJson = require('./xmltoJson.js')
 let _config = {
   /** List of S3 credentials */
   storages      : [],
-  /** Active S3 Auth */
-  secretAccessKey: '',
-  accessKeyId    : '',
-  url            : '',
-  region         : '',
   /** Request params */
   timeout        : 5000,
   activeStorage  : 0,
@@ -194,11 +189,34 @@ function deleteFiles (bucket, files, options, callback) {
  */
 function request (method, path, options, callback) {
 
-  const _urlParams = getUrlParameters(options?.queries ?? '', options?.defaultQueries ?? '');
+  if (_config.activeStorage >= _config.storages.length) {
+    /** Reset the index of the main storage if any storage are available */
+    _config.activeStorage = 0;
+    console.log(`Object Storages are not available 🚩`, 'error');
+    return callback(new Error('Object Storages are not available'));
+  } else if (_config.activeStorage !== 0 && options?.checkMainStorageStatus !== true ) {
+    /**
+     * If a child storage is active, the main storage is requested to reconnect automatically if available
+     * GET "/": Request "ListBuckets"
+     * "checkMainStorageStatus" option is used to not create an infinite loop of requests.
+     */
+    return request('GET', `/`, { checkMainStorageStatus: true }, function (err, resp) {
+      if (err) {
+        console.log(err);
+      }
+      if (resp.statusCode === 200) {
+        /** If everything is alright, the active storage is reset to the main */
+        _config.activeStorage = 0;
+      }
+    });
+  }
 
+  const _activeStorage = _config.storages[options?.checkMainStorageStatus === true ? 0 : _config.activeStorage];
+
+  const _urlParams = getUrlParameters(options?.queries ?? '', options?.defaultQueries ?? '');
   const _requestParams = aws4.sign({
     method: method,
-    url: `https://${_config.url}${path}${_urlParams ?? ''}`,
+    url: `https://${_activeStorage.url}${path}${_urlParams ?? ''}`,
     ...(options?.body ? { body: options?.body } : {}),
     headers: {
       ...(options?.headers ? options?.headers : {})
@@ -206,32 +224,36 @@ function request (method, path, options, callback) {
     timeout: _config.timeout,
     /** REQUIRED FOR AWS4 SIGNATURE */
     service: 's3',
-    hostname: _config.url,
+    hostname: _activeStorage.url,
     path: `${path}${_urlParams ?? ''}`,
-    region: _config.region,
+    region: _activeStorage.region,
     protocol: 'https:'
   }, {
-    accessKeyId: _config.accessKeyId,
-    secretAccessKey: _config.secretAccessKey
+    accessKeyId: _activeStorage.accessKeyId,
+    secretAccessKey: _activeStorage.secretAccessKey
   })
 
   const _requestCallback = function (err, res, body) {
     if (err) {
       return callback(err, res);
     }
-    if (res.statusCode >= 500) {
-      // res?.headers?.['content-type'] === 'application/xml'
-      console.log("CHANGE OBJECT STORAGE");
+    if (res.statusCode >= 500 && options?.checkMainStorageStatus !== true) {
+      console.log(`S3 Storage - Activate Fallback Storage index "${_config.activeStorage}" 🚩`);
+      _config.activeStorage += 1;
+      return request(method, path, options, callback);
     }
     if (res.statusCode >= 400 && res?.headers?.['content-type'] === 'application/xml') {
       if (options?.stream === true) {
-        return streamToString(res, (err, msg) => {
-          callback(err ?? xmlToJson(msg) ?? 'Something went wrong');
+        return streamToString(res, (err, bodyErrorString) => {
+          if (err) {
+            return callback(err);
+          }
+          callback(null, { headers : res.headers, statusCode: res.statusCode, body : xmlToJson(bodyErrorString) });
         });
       }
-      return callback(xmlToJson(body?.toString() ?? ''));
+      body = xmlToJson(body?.toString() ?? '');
     }
-    return options?.stream === true ? callback(null, res) : callback(null, { headers   : res.headers, statusCode: res.statusCode, body : body });
+    return options?.stream === true ? callback(null, res) : callback(null, { headers : res.headers, statusCode: res.statusCode, body : body });
   }
   return options?.stream === true ? get(_requestParams, _requestCallback) : get.concat(_requestParams, _requestCallback);
 }
@@ -257,7 +279,7 @@ function getConfig() {
  * @param {Object|Array} newConfig
  */
 function setConfig(newConfig) {
-  if (typeof newConfig === 'object') {
+  if (newConfig?.constructor === Object) {
     newConfig = [newConfig];
   }
 
@@ -289,6 +311,7 @@ module.exports = (config) => {
     setFileMetadata,
     setTimeout,
     getConfig,
+    setConfig,
     xmlToJson
   }
 }

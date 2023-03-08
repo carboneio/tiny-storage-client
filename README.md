@@ -11,6 +11,7 @@
 * 🌎 **High availability** - Provide one or a list of storages credentials: the SDK will switch storage if something goes wrong (Server/DNS not responding, timeout, error 500, too many redirection, authentication error, and more...). As soon as the main storage is available, the SDK returns to the main storage
 * ✨ **Reconnect automatically** - If a request fails due to an authentication token expiration, the SDK fetches a new authentication token and retry the initial request with it (Concerns only Swift Storage).
 * ✅ **100% tested** - Production battle-tested against hundreds of GBs of file uploads & downloads
+* 👉 **JSON responses** - XML responses are automatically converted as JSON Objects (Concerns only S3 Storage: `ListObjects` and `Errors`).
 
 ## Install
 
