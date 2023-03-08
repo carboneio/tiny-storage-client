@@ -163,6 +163,29 @@ describe('xmlToJson', function () {
     _assert(_json, _expected)
   })
 
+  it('should parse a the response of "ListObjects V2" and return an Array for "contents" even if the Content list has one element.', function () {
+    let _xml =
+      '<Name>templates</Name><Prefix/><KeyCount>1</KeyCount><MaxKeys>1000</MaxKeys><IsTruncated>false</IsTruncated><Contents><Key>template.odt</Key><LastModified>2023-03-02T07:18:55.000Z</LastModified><ETag>"fde6d729123cee4db6bfa3606306bc8c"</ETag><Size>11822</Size><StorageClass>STANDARD</StorageClass></Contents>'
+    const _json = xmlToJson(_xml, { forceArray: ['contents'] })
+
+    const _expected = {
+      name: 'templates',
+      keycount: 1,
+      maxkeys: 1000,
+      istruncated: false,
+      contents: [
+        {
+          key: 'template.odt',
+          lastmodified: '2023-03-02T07:18:55.000Z',
+          etag: 'fde6d729123cee4db6bfa3606306bc8c',
+          size: 11822,
+          storageclass: 'STANDARD',
+        }
+      ],
+    }
+    _assert(_json, _expected)
+  })
+
   it('should parse a simple nested object and force an element to be a Array (options: forceArray)', function () {
     let _xml =
       '<Name>templates</Name><Prefix/><KeyCount>1</KeyCount><MaxKeys>1000</MaxKeys><IsTruncated>false</IsTruncated><Contents><Key>template.odt</Key><LastModified>2023-03-02T07:18:55.000Z</LastModified><ETag>"fde6d729123cee4db6bfa3606306bc8c"</ETag><Size>11822</Size><StorageClass>STANDARD</StorageClass></Contents>'
