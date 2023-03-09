@@ -8,6 +8,8 @@ let storage = {};
 const url1S3 = 'https://s3.gra.first.cloud.test';
 const url2S3 = 'https://s3.de.first.cloud.test';
 
+const objectExample = fs.readFileSync(path.join(__dirname, 'assets', 'file.txt')).toString();
+
 describe.only('S3 SDK', function () {
 
   beforeEach(function() {
@@ -101,7 +103,7 @@ describe.only('S3 SDK', function () {
   });
 
   describe('headBucket', function() {
-    it('should return code 200, and request signed with AWS4', function () {
+    it('should return code 200, and request signed with AWS4', function (done) {
       const nockRequest = nock(url1S3,
         {
           reqheaders: {
@@ -117,10 +119,11 @@ describe.only('S3 SDK', function () {
         assert.strictEqual(resp.statusCode, 200);
         assert.strictEqual(resp.body.toString(), '');
         assert.strictEqual(nockRequest.pendingMocks().length, 0);
+        done();
       });
     });
 
-    it('should return code 403 Forbidden', function () {
+    it('should return code 403 Forbidden', function (done) {
       const nockRequest = nock(url1S3).intercept("/customBucket", "HEAD").reply(403, '');
 
       storage.headBucket('customBucket', function(err, resp) {
@@ -128,6 +131,7 @@ describe.only('S3 SDK', function () {
         assert.strictEqual(resp.statusCode, 403);
         assert.strictEqual(resp.body.toString(), '');
         assert.strictEqual(nockRequest.pendingMocks().length, 0);
+        done();
       });
     });
   });
@@ -145,7 +149,7 @@ describe.only('S3 SDK', function () {
   describe('downloadFile', function() {
 
     describe("REQUEST MAIN STORAGE", function () {
-      it('should download a file', function() {
+      it('should download a file', function(done) {
         const _header = {
           'content-length': '1492',
           'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
@@ -158,18 +162,19 @@ describe.only('S3 SDK', function () {
           .defaultReplyHeaders(_header)
           .get('/bucket/file.docx')
           .reply(200, () => {
-            return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+            return objectExample;
           });
         storage.downloadFile('bucket', 'file.docx', function (err, resp) {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
-          assert.strictEqual(resp.body.toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          assert.strictEqual(resp.body.toString(), objectExample);
           assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_header))
           assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
         })
       })
 
-      it('should return code 404 if the file does not exist', function() {
+      it('should return code 404 if the file does not exist', function(done) {
         const _header = {'content-type': 'application/xml'}
         const nockRequest = nock(url1S3)
           .defaultReplyHeaders(_header)
@@ -188,43 +193,46 @@ describe.only('S3 SDK', function () {
           }));
           assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_header))
           assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
         })
       })
     });
 
     describe("SWITCH TO CHILD STORAGE", function () {
-      it('should download a file from the second storage if the main storage returns a 500 error', function() {
+      it('should download a file from the second storage if the main storage returns a 500 error', function(done) {
         const nockRequestS1 = nock(url1S3)
           .get('/bucket/file.docx')
           .reply(500);
         const nockRequestS2 = nock(url2S3)
           .get('/bucket/file.docx')
           .reply(200, () => {
-            return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+            return objectExample
           });
         const nockRequestS3 = nock(url1S3)
           .get('/')
           .reply(500);
+
         storage.downloadFile('bucket', 'file.docx', function (err, resp) {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
-          assert.strictEqual(resp.body.toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          assert.strictEqual(resp.body.toString(), objectExample);
           const _config = storage.getConfig();
           assert.strictEqual(_config.activeStorage, 1);
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+          done();
         })
       })
 
-      it('should download a file from the second storage if the main storage returns a 500 error, then should reconnect to the main storage', function() {
+      it('should download a file from the second storage if the main storage returns a 500 error, then should RECONNECT to the main storage', function(done) {
         const nockRequestS1 = nock(url1S3)
           .get('/bucket/file.docx')
           .reply(500)
         const nockRequestS2 = nock(url2S3)
           .get('/bucket/file.docx')
           .reply(200, () => {
-            return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+            return objectExample
           });
         const nockRequestS3 = nock(url1S3)
           .get('/')
@@ -233,30 +241,226 @@ describe.only('S3 SDK', function () {
         storage.downloadFile('bucket', 'file.docx', function (err, resp) {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
-          assert.strictEqual(resp.body.toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          assert.strictEqual(resp.body.toString(), objectExample);
           const _config = storage.getConfig();
           assert.strictEqual(_config.activeStorage, 0);
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+          done();
         })
       })
 
-      it('should download a file from the second storage if the authentication on the main storage is not allowed', function() {
+      // it('should download a file from the second storage if the authentication on the main storage is not allowed', function() {
 
+      // })
+
+      // it('should download a file from the second storage if the main storage timeout', function() {
+
+      // })
+
+      // it('should download a file from the second storage if the main storage returns any kind of error', function() {
+
+      // })
+
+      it('should return an error if all storage are not available, and reset the active storage to the main', function(done) {
+        const nockRequestS1 = nock(url1S3)
+          .get('/bucket/file.docx')
+          .reply(500)
+        const nockRequestS2 = nock(url2S3)
+          .get('/bucket/file.docx')
+          .reply(500, () => {
+            return objectExample
+          });
+        const nockRequestS3 = nock(url1S3)
+          .get('/')
+          .reply(500);
+
+        storage.downloadFile('bucket', 'file.docx', function (err, resp) {
+          assert.strictEqual(err.toString(), 'Error: All S3 storages are not available');
+          assert.strictEqual(resp, undefined);
+          const _config = storage.getConfig();
+          assert.strictEqual(_config.activeStorage, 0);
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+          done();
+        })
+      })
+    });
+
+    describe("PARALLEL REQUESTS", function () {
+
+      function getDownloadFilePromise() {
+        return new Promise((resolve, reject) => {
+          try {
+            storage.downloadFile('bucket', 'file.odt', function (err, resp) {
+              if (err) {
+                return reject(err);
+              }
+              return resolve(resp);
+            });
+          } catch(err) {
+            return reject(err);
+          }
+        });
+      }
+
+      it('should fallback to a child if the main storage return any kind of errors, then should reconnect to the main storage automatically', function (done) {
+        const nockRequestS1 = nock(url1S3)
+          .get('/bucket/file.odt')
+          .reply(500)
+          .get('/bucket/file.odt')
+          .reply(500);
+        const nockRequestS2 = nock(url2S3)
+          .get('/bucket/file.odt')
+          .reply(200, () => {
+            return objectExample
+          })
+          .get('/bucket/file.odt')
+          .reply(200, () => {
+            return objectExample
+          });
+        const nockRequestS3 = nock(url1S3)
+          .get('/')
+          .reply(200);
+        const nockRequestS4 = nock(url1S3)
+          .get('/bucket/file.odt')
+          .reply(200, () => {
+            return objectExample
+          })
+
+        let promise1 = getDownloadFilePromise()
+        let promise2 = getDownloadFilePromise()
+
+        Promise.all([promise1, promise2]).then(results => {
+          assert.strictEqual(results.length, 2)
+          assert.strictEqual(results[0].body.toString(), objectExample);
+          assert.strictEqual(results[0].statusCode, 200);
+          assert.strictEqual(results[1].body.toString(), objectExample);
+          assert.strictEqual(results[1].statusCode, 200);
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
+          /** Last batch requesting the main storage, everything is ok */
+          storage.downloadFile('bucket', 'file.odt', function (err, resp) {
+            assert.strictEqual(err, null);
+            assert.strictEqual(resp.body.toString(), objectExample);
+            assert.strictEqual(resp.statusCode, 200);
+            assert.strictEqual(nockRequestS4.pendingMocks().length, 0);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
+            done();
+          });
+        }).catch(err => {
+          assert.strictEqual(err, null);
+          done();
+        });
       })
 
-      it('should download a file from the second storage if the main storage timeout', function() {
+      it('should fallback to a child if the main storage return any kind of errors, then should reconnect to the main storage after multiple try', function (done) {
+        /** First Batch */
+        const nockRequestS1 = nock(url1S3)
+          .get('/bucket/file.odt')
+          .reply(500)
+          .get('/bucket/file.odt')
+          .reply(500);
+        const nockRequestS2 = nock(url2S3)
+          .get('/bucket/file.odt')
+          .reply(200, () => {
+            return objectExample
+          })
+          .get('/bucket/file.odt')
+          .reply(200, () => {
+            return objectExample
+          });
+        const nockRequestS3 = nock(url1S3)
+          .get('/')
+          .reply(500);
 
+        /** Second Batch */
+        const nockRequestS4 = nock(url2S3)
+          .get('/bucket/file.odt')
+          .reply(200, () => {
+            return objectExample
+          })
+          .get('/bucket/file.odt')
+          .reply(200, () => {
+            return objectExample
+          });
+        const nockRequestS5 = nock(url1S3)
+          .get('/')
+          .reply(500);
+
+        /** Third Batch */
+        const nockRequestS6 = nock(url2S3)
+          .get('/bucket/file.odt')
+          .reply(200, () => {
+            return objectExample
+          })
+        const nockRequestS7 = nock(url1S3)
+          .get('/')
+          .reply(200);
+        /** Fourth Batch */
+        const nockRequestS8 = nock(url1S3)
+          .get('/bucket/file.odt')
+          .reply(200, () => {
+            return objectExample
+          })
+
+        /** First batch of requests > S3 main return error > Child storage response ok */
+        let promise1 = getDownloadFilePromise()
+        let promise2 = getDownloadFilePromise()
+        Promise.all([promise1, promise2]).then(function (results) {
+          assert.strictEqual(results.length, 2)
+          assert.strictEqual(results[0].body.toString(), objectExample);
+          assert.strictEqual(results[0].statusCode, 200);
+          assert.strictEqual(results[1].body.toString(), objectExample);
+          assert.strictEqual(results[1].statusCode, 200);
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
+          /** Second batch of requests > Still requesting the child storage, the main storage is still not available  */
+          let promise3 = getDownloadFilePromise()
+          let promise4 = getDownloadFilePromise()
+          Promise.all([promise3, promise4]).then(function (results) {
+            assert.strictEqual(results.length, 2)
+            assert.strictEqual(results[0].body.toString(), objectExample);
+            assert.strictEqual(results[0].statusCode, 200);
+            assert.strictEqual(results[1].body.toString(), objectExample);
+            assert.strictEqual(results[1].statusCode, 200);
+            assert.strictEqual(nockRequestS4.pendingMocks().length, 0);
+            assert.strictEqual(nockRequestS5.pendingMocks().length, 0);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
+            /** Third batch of requests >  Still requesting the child storage, the main storage is now Available! Active storage is reset to the main storage  */
+            storage.downloadFile('bucket', 'file.odt', function (err, resp) {
+              assert.strictEqual(err, null);
+              assert.strictEqual(resp.body.toString(), objectExample);
+              assert.strictEqual(resp.statusCode, 200);
+              assert.strictEqual(nockRequestS6.pendingMocks().length, 0);
+              assert.strictEqual(nockRequestS7.pendingMocks().length, 0);
+              assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
+              /** Fourth batch requesting the main storage, everything is ok */
+              storage.downloadFile('bucket', 'file.odt', function (err, resp) {
+                assert.strictEqual(err, null);
+                assert.strictEqual(resp.body.toString(), objectExample);
+                assert.strictEqual(resp.statusCode, 200);
+                assert.strictEqual(nockRequestS8.pendingMocks().length, 0);
+                assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
+                done();
+              });
+            });
+          }).catch(function (err) {
+            assert.strictEqual(err, null);
+            done();
+          });
+        }).catch(function (err) {
+          assert.strictEqual(err, null);
+          done();
+        });
       })
 
-      it('should download a file from the second storage if the main storage returns any kind of error', function() {
-
-      })
-
-      it('should return an error if all storage are not available', function() {
-
-      })
     });
 
   });

@@ -23,6 +23,8 @@ let _config = {
   activeStorage  : 0,
 }
 
+let retryReconnectMainStorage = false;
+
 /**
  * @doc https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html
  */
@@ -192,26 +194,27 @@ function request (method, path, options, callback) {
   if (_config.activeStorage >= _config.storages.length) {
     /** Reset the index of the main storage if any storage are available */
     _config.activeStorage = 0;
-    console.log(`Object Storages are not available 🚩`, 'error');
-    return callback(new Error('Object Storages are not available'));
-  } else if (_config.activeStorage !== 0 && options?.checkMainStorageStatus !== true ) {
+    console.log(`All S3 storages are not available - switch to the main storage 🚩`);
+    return callback(new Error('All S3 storages are not available'));
+  } else if (_config.activeStorage !== 0 && !options?.checkMainStorageStatus && retryReconnectMainStorage === false) {
     /**
-     * If a child storage is active, the main storage is requested to reconnect automatically if available
-     * GET "/": Request "ListBuckets"
-     * "checkMainStorageStatus" option is used to not create an infinite loop of requests.
+     * Retry to reconnect to the main storage if a child storage is active by requesting GET "/": Request "ListBuckets". Notes:
+     * - "checkMainStorageStatus" option is used to not create an infinite loop of requests.
+     * - "retryReconnectMainStorage" global variable is used to request one time and not create SPAM parallele requests to the main storage.
      */
-    return request('GET', `/`, { checkMainStorageStatus: true }, function (err, resp) {
-      if (err) {
-        console.log(err);
-      }
-      if (resp.statusCode === 200) {
-        /** If everything is alright, the active storage is reset to the main */
+    retryReconnectMainStorage = true;
+    request('GET', `/`, { checkMainStorageStatus: true }, function (err, resp) {
+      /** If everything is alright, the active storage is reset to the main */
+      if (resp?.statusCode === 200) {
+        console.log(`Main storage available - switch to the main storage 🟢`);
         _config.activeStorage = 0;
       }
+      retryReconnectMainStorage = false;
     });
   }
 
   const _activeStorage = _config.storages[options?.checkMainStorageStatus === true ? 0 : _config.activeStorage];
+  options.originalStorage = _config.activeStorage;
 
   const _urlParams = getUrlParameters(options?.queries ?? '', options?.defaultQueries ?? '');
   const _requestParams = aws4.sign({
@@ -237,9 +240,12 @@ function request (method, path, options, callback) {
     if (err) {
       return callback(err, res);
     }
-    if (res.statusCode >= 500 && options?.checkMainStorageStatus !== true) {
-      console.log(`S3 Storage - Activate Fallback Storage index "${_config.activeStorage}" 🚩`);
-      _config.activeStorage += 1;
+    if (res.statusCode >= 500 && !options?.checkMainStorageStatus) {
+      /** Protection when requesting storage in parallel, another request may have already swift to a child storage on Error */
+      if (options.originalStorage === _config.activeStorage) {
+        console.log(`S3 Storage - Activate Fallback Storage index from "${_config.activeStorage}" to "${_config.activeStorage + 1}" 🚩`);
+        _config.activeStorage += 1;
+      }
       return request(method, path, options, callback);
     }
     if (res.statusCode >= 400 && res?.headers?.['content-type'] === 'application/xml') {
