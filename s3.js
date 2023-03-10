@@ -194,7 +194,7 @@ function request (method, path, options, callback) {
   if (_config.activeStorage >= _config.storages.length) {
     /** Reset the index of the main storage if any storage are available */
     _config.activeStorage = 0;
-    log(`All S3 storages are not available - switch to the main storage`, 'error');
+    log(`S3 Storage | All storages are not available - switch to the main storage`, 'error');
     return callback(new Error('All S3 storages are not available'));
   } else if (_config.activeStorage !== 0 && !options?.checkMainStorageStatus && retryReconnectMainStorage === false) {
     /**
@@ -206,7 +206,7 @@ function request (method, path, options, callback) {
     request('GET', `/`, { checkMainStorageStatus: true }, function (err, resp) {
       /** If everything is alright, the active storage is reset to the main */
       if (resp?.statusCode === 200) {
-        log(`🟢 Main storage available - switch to the main storage`);
+        log(`🟢 S3 Storage | Main storage available - reconnecting for next requests`);
         _config.activeStorage = 0;
       }
       retryReconnectMainStorage = false;
@@ -237,16 +237,15 @@ function request (method, path, options, callback) {
   })
 
   const _requestCallback = function (err, res, body) {
-    if (err) {
-      return callback(err, res);
-    }
-    if (res.statusCode >= 500 && !options?.checkMainStorageStatus) {
+    if ((err || res?.statusCode >= 500 || res?.statusCode === 401) && !options?.checkMainStorageStatus) {
       /** Protection when requesting storage in parallel, another request may have already swift to a child storage on Error */
       if (options.originalStorage === _config.activeStorage) {
-        log(`S3 Storage - Activate Fallback Storage index from "${_config.activeStorage}" to "${_config.activeStorage + 1}"`, 'warning');
+        log(`S3 Storage | Activate fallback storage: switch from "${_config.activeStorage}" to "${_config.activeStorage + 1}" | ${err?.toString() || "Status code: " + res?.statusCode}`, 'warning');
         _config.activeStorage += 1;
       }
       return request(method, path, options, callback);
+    } else if (err) {
+      return callback(err, res);
     }
     if (res.statusCode >= 400 && res?.headers?.['content-type'] === 'application/xml') {
       if (options?.stream === true) {
@@ -347,7 +346,7 @@ function getMD5 (data) {
   try {
     return crypto.createHash('md5').update(typeof data === 'string' ? Buffer.from(data) : data ).digest('base64');
   } catch(err) {
-    log(`S3 getMD5: ${err.toString()}`, "error");
+    log(`S3 Storage | getMD5: ${err.toString()}`, "error");
     return '';
   }
 }
