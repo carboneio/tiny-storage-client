@@ -194,7 +194,7 @@ function request (method, path, options, callback) {
   if (_config.activeStorage >= _config.storages.length) {
     /** Reset the index of the main storage if any storage are available */
     _config.activeStorage = 0;
-    console.log(`All S3 storages are not available - switch to the main storage 🚩`);
+    log(`All S3 storages are not available - switch to the main storage`, 'error');
     return callback(new Error('All S3 storages are not available'));
   } else if (_config.activeStorage !== 0 && !options?.checkMainStorageStatus && retryReconnectMainStorage === false) {
     /**
@@ -206,7 +206,7 @@ function request (method, path, options, callback) {
     request('GET', `/`, { checkMainStorageStatus: true }, function (err, resp) {
       /** If everything is alright, the active storage is reset to the main */
       if (resp?.statusCode === 200) {
-        console.log(`Main storage available - switch to the main storage 🟢`);
+        log(`🟢 Main storage available - switch to the main storage`);
         _config.activeStorage = 0;
       }
       retryReconnectMainStorage = false;
@@ -243,7 +243,7 @@ function request (method, path, options, callback) {
     if (res.statusCode >= 500 && !options?.checkMainStorageStatus) {
       /** Protection when requesting storage in parallel, another request may have already swift to a child storage on Error */
       if (options.originalStorage === _config.activeStorage) {
-        console.log(`S3 Storage - Activate Fallback Storage index from "${_config.activeStorage}" to "${_config.activeStorage + 1}" 🚩`);
+        log(`S3 Storage - Activate Fallback Storage index from "${_config.activeStorage}" to "${_config.activeStorage + 1}"`, 'warning');
         _config.activeStorage += 1;
       }
       return request(method, path, options, callback);
@@ -318,9 +318,12 @@ module.exports = (config) => {
     setTimeout,
     getConfig,
     setConfig,
-    xmlToJson
+    xmlToJson,
+    setLogFunction
   }
 }
+
+/******************** UTILS **********************/
 
 /**
  * Convert a stream to a string
@@ -344,7 +347,7 @@ function getMD5 (data) {
   try {
     return crypto.createHash('md5').update(typeof data === 'string' ? Buffer.from(data) : data ).digest('base64');
   } catch(err) {
-    console.log(`Error - S3 getMD5: ${err.toString()}`);
+    log(`S3 getMD5: ${err.toString()}`, "error");
     return '';
   }
 }
@@ -375,4 +378,25 @@ function getUrlParameters (queries, defaultQueries) {
     }
   }
   return _queries ? '?' + _queries : '';
+}
+
+/**
+ * log messages
+ *
+ * @param {String} msg Message
+ * @param {type} type warning, error
+ */
+function log(msg, level = '') {
+  return console.log(level === 'error' ? `❗️ Error: ${msg}` : level === 'warning' ? `⚠️  ${msg}` : msg );
+}
+
+/**
+ * Override the log function, it takes to arguments: message, level
+ * @param {Function} newLogFunction (message, level) => {} The level can be: `info`, `warning`, `error`
+ */
+function setLogFunction (newLogFunction) {
+  if (newLogFunction) {
+    // eslint-disable-next-line no-func-assign
+    log = newLogFunction;
+  }
 }
