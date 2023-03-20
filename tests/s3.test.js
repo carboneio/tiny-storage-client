@@ -8,10 +8,14 @@ let storage = {};
 const url1S3 = 'https://s3.gra.first.cloud.test';
 const url2S3 = 'https://s3.de.first.cloud.test';
 
+/** ASSETS for download/upload */
 const fileTxtPath = path.join(__dirname, 'assets', 'file.txt');
 const fileTxt = fs.readFileSync(fileTxtPath).toString();
 const fileXmlPath = path.join(__dirname, 'assets', 'files.xml');
 const fileXml = fs.readFileSync(fileXmlPath).toString();
+/** ASSETS for List objects Requests */
+const _listObjectsResponseXML = fs.readFileSync(path.join(__dirname, "./assets", 'listObjects.response.xml'));
+const _listObjectsResponseJSON = require('./assets/listObjects.response.json');
 
 describe.only('S3 SDK', function () {
 
@@ -142,9 +146,100 @@ describe.only('S3 SDK', function () {
   describe('listFiles', function() {
 
     describe("REQUEST MAIN STORAGE", function () {
+      it('should fetch a list of objects', function (done) {
+        const _header = {
+          'content-type': 'application/xml',
+          'content-length': '1887',
+          'x-amz-id-2': 'txf0b438dfd25b444ba3f60-00641807d7',
+          'x-amz-request-id': 'txf0b438dfd25b444ba3f60-00641807d7',
+          'x-trans-id': 'txf0b438dfd25b444ba3f60-00641807d7',
+          'x-openstack-request-id': 'txf0b438dfd25b444ba3f60-00641807d7',
+          date: 'Mon, 20 Mar 2023 07:14:31 GMT',
+          connection: 'close'
+        }
+
+        const nockRequest = nock(url1S3)
+          .defaultReplyHeaders(_header)
+          .get('/bucket')
+          .query({ 'list-type' : 2 })
+          .reply(200, () => {
+            return _listObjectsResponseXML;
+          });
+
+        storage.listFiles('bucket', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify(_listObjectsResponseJSON));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_header))
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+      it('should fetch a list of objects with query parameters (prefix & limit)', function (done) {
+        const _header = {
+          'content-type': 'application/xml',
+          'content-length': '1887',
+          'x-amz-id-2': 'txf0b438dfd25b444ba3f60-00641807d7',
+          'x-amz-request-id': 'txf0b438dfd25b444ba3f60-00641807d7',
+          'x-trans-id': 'txf0b438dfd25b444ba3f60-00641807d7',
+          'x-openstack-request-id': 'txf0b438dfd25b444ba3f60-00641807d7',
+          date: 'Mon, 20 Mar 2023 07:14:31 GMT',
+          connection: 'close'
+        }
+
+        const nockRequest = nock(url1S3)
+          .defaultReplyHeaders(_header)
+          .get('/bucket')
+          .query({
+            "list-type" : 2,
+            "prefix"    : "document",
+            "max-keys"  : 2
+          })
+          .reply(200, () => {
+            return _listObjectsResponseXML;
+          });
+
+        storage.listFiles('bucket', { queries: { "prefix": "document", "max-keys": 2 } }, (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify(_listObjectsResponseJSON));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_header))
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        })
+      })
     });
 
     describe("SWITCH TO CHILD STORAGE", function () {
+      it.only('should fetch a list of objects', function (done) {
+        const nockRequestS1 = nock(url1S3)
+          .get('/bucket')
+          .query({ 'list-type' : 2 })
+          .reply(500, '');
+
+        const nockRequestS2 = nock(url2S3)
+          .get('/bucket')
+          .query({ 'list-type' : 2 })
+          .reply(200, () => {
+            return _listObjectsResponseXML;
+          });
+
+        const nockRequestS3 = nock(url1S3)
+          .get('/')
+          .reply(500);
+
+        storage.listFiles('bucket', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify(_listObjectsResponseJSON));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify({}))
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+          done();
+        })
+      })
     });
 
   });
@@ -674,9 +769,92 @@ describe.only('S3 SDK', function () {
 
     describe("SWITCH TO CHILD STORAGE", function () {
 
-      // it("should not be able to upload a file into a child storage if the write permission is disallowed", function() {
+      it("should upload a file into a child storage", function(done) {
+        const _header = {
+          'content-type': 'application/xml',
+          'x-amz-id-2': 'txd14fbe8bc05341c0b548a-00640b2752',
+          'x-amz-request-id': 'txd14fbe8bc05341c0b548a-00640b2752',
+          'x-trans-id': 'txd14fbe8bc05341c0b548a-00640b2752',
+          'x-openstack-request-id': 'txd14fbe8bc05341c0b548a-00640b2752',
+          date: 'Fri, 10 Mar 2023 12:49:22 GMT',
+          'transfer-encoding': 'chunked',
+          connection: 'close'
+        }
 
-      // })
+        const nockRequestS1 = nock(url1S3)
+          .defaultReplyHeaders(_header)
+          .put('/bucket/file.pdf')
+          .reply(500, '');
+
+        const nockRequestS2 = nock(url2S3)
+          .defaultReplyHeaders(_header)
+          .put('/bucket/file.pdf')
+          .reply(200, (uri, requestBody) => {
+            assert.strictEqual(requestBody, fileXml);
+            return '';
+          });
+        const nockRequestS3 = nock(url1S3)
+          .get('/')
+          .reply(500);
+
+        storage.uploadFile('bucket', 'file.pdf', Buffer.from(fileXml), function(err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_header));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+      it("should not be able to upload a file into a child storage if the write access is denied.", function(done) {
+        const _header = {
+          'content-type': 'application/xml',
+          'x-amz-id-2': 'txd14fbe8bc05341c0b548a-00640b2752',
+          'x-amz-request-id': 'txd14fbe8bc05341c0b548a-00640b2752',
+          'x-trans-id': 'txd14fbe8bc05341c0b548a-00640b2752',
+          'x-openstack-request-id': 'txd14fbe8bc05341c0b548a-00640b2752',
+          date: 'Fri, 10 Mar 2023 12:49:22 GMT',
+          'transfer-encoding': 'chunked',
+          connection: 'close'
+        }
+
+        const nockRequestS1 = nock(url1S3)
+          .defaultReplyHeaders(_header)
+          .put('/bucket/file.pdf')
+          .reply(500, '');
+
+        const nockRequestS2 = nock(url2S3)
+          .defaultReplyHeaders(_header)
+          .put('/bucket/file.pdf')
+          .reply(403, () => {
+            return "<?xml version='1.0' encoding='UTF-8'?><Error><Code>AccessDenied</Code><Message>Access Denied.</Message><RequestId>txd14fbe8bc05341c0b548a-00640b2752</RequestId></Error>";
+          })
+        const nockRequestS3 = nock(url1S3)
+          .get('/')
+          .reply(500);
+
+        const _expectedBody = {
+          error: {
+            code: 'AccessDenied',
+            message: 'Access Denied.',
+            requestid: 'txd14fbe8bc05341c0b548a-00640b2752'
+          }
+        }
+
+        storage.uploadFile('bucket', 'file.pdf', Buffer.from(fileXml), function(err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 403);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify(_expectedBody));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_header));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+          done();
+        })
+      })
 
     });
 

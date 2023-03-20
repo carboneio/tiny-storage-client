@@ -1,0 +1,22 @@
+{
+  "name": "www",
+  "keycount": 2,
+  "maxkeys": 2,
+  "istruncated": true,
+  "contents": [
+    {
+      "key": "document-1.docx",
+      "lastmodified": "2023-03-07T17:03:59.000Z",
+      "etag": "a55b475be5fc06d42e1baf84231253ce",
+      "size": 236208,
+      "storageclass": "STANDARD"
+    },
+    {
+      "key": "document-2.odt",
+      "lastmodified": "2023-03-02T07:18:55.000Z",
+      "etag": "fde6d729123cee4db6bfa3606306bc8c",
+      "size": 11822,
+      "storageclass": "STANDARD"
+    }
+  ]
+}

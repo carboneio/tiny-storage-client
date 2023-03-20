@@ -10,9 +10,10 @@ const xmlToJson = require('./xmltoJson.js')
  * - [x] Transform XML to JSON on error / when fetching a list of objects / when delete response
  * - [x] Test and improve list objects (query params)
  * - [x] Test headBucket > usefull to know the S3 status/connexion
+ * - [x] Change Region on error 500
+ * - [x] Change Region on Timeout
+ * - [x] When parse XML, keep uppercase or transform into lowercase?
  * - [ ] Test unitaires
- * - [ ] Change Region on error 500 & read only
- * - [ ] Change Region on Timeout & read only
  */
 
 let _config = {
