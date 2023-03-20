@@ -1417,7 +1417,7 @@ describe.only('S3 SDK', function () {
 
     describe("SWITCH TO CHILD STORAGE", function () {
 
-      it.only('should get file metadata in the second storage', function(done){
+      it('should get file metadata in the second storage', function(done){
         const _headers = {
           'content-type': 'application/x-www-form-urlencoded; charset=utf-8',
           'content-length': '11822',
@@ -1469,8 +1469,62 @@ describe.only('S3 SDK', function () {
 
     describe("REQUEST MAIN STORAGE", function () {
 
-      it.skip('should set file metadata', function(done){
+      it('should set file metadata', function(done){
 
+        const _headers1 = {
+          'content-type': 'application/x-www-form-urlencoded; charset=utf-8',
+          'content-length': '11822',
+          'x-amz-storage-class': 'STANDARD',
+          'x-amz-meta-name': 'Carbone test 12345',
+          'x-amz-meta-version': '1.2.3',
+          etag: '"fde6d729123cee4db6bfa3606306bc8c"',
+          'x-amz-version-id': '1679317926.773804',
+          'last-modified': 'Mon, 20 Mar 2023 13:12:07 GMT',
+          'x-amz-id-2': 'tx1db035bd3ede4520a0fee-0064185be1',
+          'x-amz-request-id': 'tx1db035bd3ede4520a0fee-0064185be1',
+          'x-trans-id': 'tx1db035bd3ede4520a0fee-0064185be1',
+          'x-openstack-request-id': 'tx1db035bd3ede4520a0fee-0064185be1',
+          date: 'Mon, 20 Mar 2023 13:13:05 GMT',
+          connection: 'close'
+        }
+
+        const _headers2 = {
+          'content-type': 'application/xml',
+          'content-length': '224',
+          'x-amz-version-id': '1679317926.773804',
+          'last-modified': 'Mon, 20 Mar 2023 13:13:06 GMT',
+          'x-amz-copy-source-version-id': '1679317926.773804',
+          'x-amz-storage-class': 'STANDARD',
+          'x-amz-id-2': 'tx1cbdc88e9f104c038aa3d-0064185be2',
+          'x-amz-request-id': 'tx1cbdc88e9f104c038aa3d-0064185be2',
+          'x-trans-id': 'tx1cbdc88e9f104c038aa3d-0064185be2',
+          'x-openstack-request-id': 'tx1cbdc88e9f104c038aa3d-0064185be2',
+          date: 'Mon, 20 Mar 2023 13:13:06 GMT',
+          connection: 'close'
+        }
+
+        const nockRequestS1 = nock(url1S3)
+          .defaultReplyHeaders(_headers1)
+          .intercept("/bucket/file.pdf", "HEAD")
+          .reply(200, "");
+
+        const nockRequestS2 = nock(url1S3)
+          .defaultReplyHeaders(_headers2)
+          .put('/bucket/file.pdf')
+          .reply(200, "<?xml version=\"1.0\" encoding=\"UTF-8\"?><CopyObjectResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><LastModified>2023-03-20T13:13:06.000Z</LastModified><ETag>\"fde6d729123cee4db6bfa3606306bc8c\"</ETag></CopyObjectResult>");
+
+        storage.setFileMetadata('bucket', 'file.pdf', { headers: { "x-amz-meta-name": "Invoice 2023", "x-amz-meta-version": "1.2.3"  } }, (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify({
+            lastmodified: '2023-03-20T13:13:06.000Z',
+            etag: 'fde6d729123cee4db6bfa3606306bc8c'
+          }));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers2));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          done();
+        })
       })
 
 
@@ -1478,24 +1532,223 @@ describe.only('S3 SDK', function () {
 
       })
 
-      it.skip('should return an error if the object does not exist', function(done){
+      it('should return an error if the object does not exist', function(done){
+        const _headers = {
+          'content-type': 'application/xml',
+          'x-amz-id-2': 'txb4919778632448bbac785-0064185d71',
+          'x-amz-request-id': 'txb4919778632448bbac785-0064185d71',
+          'x-trans-id': 'txb4919778632448bbac785-0064185d71',
+          'x-openstack-request-id': 'txb4919778632448bbac785-0064185d71',
+          date: 'Mon, 20 Mar 2023 13:19:45 GMT',
+          'transfer-encoding': 'chunked',
+          connection: 'close'
+        }
 
+        const nockRequestS1 = nock(url1S3)
+          .defaultReplyHeaders(_headers)
+          .intercept("/bucket/fiiile.pdf", "HEAD")
+          .reply(404, "");
+
+        const nockRequestS2 = nock(url1S3)
+          .defaultReplyHeaders(_headers)
+          .put('/bucket/fiiile.pdf')
+          .reply(404, "<?xml version='1.0' encoding='UTF-8'?><Error><Code>NoSuchKey</Code><Message>The specified key does not exist.</Message><RequestId>txb4919778632448bbac785-0064185d71</RequestId><Key>fiiile.pdf</Key></Error>");
+
+        storage.setFileMetadata('bucket', 'fiiile.pdf', { headers: { "x-amz-meta-name": "Invoice 2023", "x-amz-meta-version": "1.2.3"  } }, (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 404);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify({
+            error: {
+              code: 'NoSuchKey',
+              message: 'The specified key does not exist.',
+              requestid: 'txb4919778632448bbac785-0064185d71',
+              key: 'fiiile.pdf'
+            }
+          }));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          done();
+        })
       })
 
-      it.skip('should return an error if the bucket does not exist', function(done){
+      it('should return an error if the bucket does not exist', function(done){
+        const _headers = {
+          'content-type': 'application/xml',
+          'x-amz-id-2': 'txb63fe612d3364257bec19-0064185fcf',
+          'x-amz-request-id': 'txb63fe612d3364257bec19-0064185fcf',
+          'x-trans-id': 'txb63fe612d3364257bec19-0064185fcf',
+          'x-openstack-request-id': 'txb63fe612d3364257bec19-0064185fcf',
+          date: 'Mon, 20 Mar 2023 13:29:51 GMT',
+          'transfer-encoding': 'chunked',
+          connection: 'close'
+        }
 
+        const nockRequestS1 = nock(url1S3)
+          .defaultReplyHeaders(_headers)
+          .intercept("/buckeeet/file.pdf", "HEAD")
+          .reply(404, "");
+
+        const nockRequestS2 = nock(url1S3)
+          .defaultReplyHeaders(_headers)
+          .put('/buckeeet/file.pdf')
+          .reply(404, "<?xml version='1.0' encoding='UTF-8'?><Error><Code>NoSuchBucket</Code><Message>The specified bucket does not exist.</Message><RequestId>txb63fe612d3364257bec19-0064185fcf</RequestId><BucketName>buckeeet</BucketName></Error>");
+
+        storage.setFileMetadata('buckeeet', 'file.pdf', { headers: { "x-amz-meta-name": "Invoice 2023", "x-amz-meta-version": "1.2.3"  } }, (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 404);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify({
+            error: {
+              code: 'NoSuchBucket',
+              message: 'The specified bucket does not exist.',
+              requestid: 'txb63fe612d3364257bec19-0064185fcf',
+              bucketname: 'buckeeet'
+            }
+          }));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          done();
+        })
       })
 
     });
 
     describe("SWITCH TO CHILD STORAGE", function () {
 
-      it.skip('should set file metadata in the child storage', function(done){
+      it('should set file metadata in the child storage', function(done){
+        const _headers1 = {
+          'content-type': 'application/x-www-form-urlencoded; charset=utf-8',
+          'content-length': '11822',
+          'x-amz-storage-class': 'STANDARD',
+          'x-amz-meta-name': 'Carbone test 12345',
+          'x-amz-meta-version': '1.2.3',
+          etag: '"fde6d729123cee4db6bfa3606306bc8c"',
+          'x-amz-version-id': '1679317926.773804',
+          'last-modified': 'Mon, 20 Mar 2023 13:12:07 GMT',
+          'x-amz-id-2': 'tx1db035bd3ede4520a0fee-0064185be1',
+          'x-amz-request-id': 'tx1db035bd3ede4520a0fee-0064185be1',
+          'x-trans-id': 'tx1db035bd3ede4520a0fee-0064185be1',
+          'x-openstack-request-id': 'tx1db035bd3ede4520a0fee-0064185be1',
+          date: 'Mon, 20 Mar 2023 13:13:05 GMT',
+          connection: 'close'
+        }
 
+        const _headers2 = {
+          'content-type': 'application/xml',
+          'content-length': '224',
+          'x-amz-version-id': '1679317926.773804',
+          'last-modified': 'Mon, 20 Mar 2023 13:13:06 GMT',
+          'x-amz-copy-source-version-id': '1679317926.773804',
+          'x-amz-storage-class': 'STANDARD',
+          'x-amz-id-2': 'tx1cbdc88e9f104c038aa3d-0064185be2',
+          'x-amz-request-id': 'tx1cbdc88e9f104c038aa3d-0064185be2',
+          'x-trans-id': 'tx1cbdc88e9f104c038aa3d-0064185be2',
+          'x-openstack-request-id': 'tx1cbdc88e9f104c038aa3d-0064185be2',
+          date: 'Mon, 20 Mar 2023 13:13:06 GMT',
+          connection: 'close'
+        }
+
+        const nockRequestS1 = nock(url1S3)
+          .intercept("/bucket/file.pdf", "HEAD")
+          .reply(500, "");
+
+        const nockRequestS2 = nock(url2S3)
+          .defaultReplyHeaders(_headers1)
+          .intercept("/bucket/file.pdf", "HEAD")
+          .reply(200, "");
+
+        const nockRequestS3 = nock(url2S3)
+          .defaultReplyHeaders(_headers2)
+          .put('/bucket/file.pdf')
+          .reply(200, "<?xml version=\"1.0\" encoding=\"UTF-8\"?><CopyObjectResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><LastModified>2023-03-20T13:13:06.000Z</LastModified><ETag>\"fde6d729123cee4db6bfa3606306bc8c\"</ETag></CopyObjectResult>");
+
+        const nockRequestS4 = nock(url1S3)
+          .defaultReplyHeaders(_headers1)
+          .get('/')
+          .reply(500, "");
+
+        storage.setFileMetadata('bucket', 'file.pdf', { headers: { "x-amz-meta-name": "Invoice 2023", "x-amz-meta-version": "1.2.3"  } }, (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify({
+            lastmodified: '2023-03-20T13:13:06.000Z',
+            etag: 'fde6d729123cee4db6bfa3606306bc8c'
+          }));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers2));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS4.pendingMocks().length, 0);
+          done();
+        })
       })
 
-      it.skip("should not be able to write file metadata of a child storage if the write permission is disallowed", function(done) {
+      it("should not be able to write file metadata of a child storage if the write permission is disallowed", function(done) {
+        const _headers1 = {
+          'content-type': 'application/x-www-form-urlencoded; charset=utf-8',
+          'content-length': '11822',
+          'x-amz-storage-class': 'STANDARD',
+          'x-amz-meta-name': 'Carbone test 12345',
+          'x-amz-meta-version': '1.2.3',
+          etag: '"fde6d729123cee4db6bfa3606306bc8c"',
+          'x-amz-version-id': '1679317926.773804',
+          'last-modified': 'Mon, 20 Mar 2023 13:12:07 GMT',
+          'x-amz-id-2': 'tx1db035bd3ede4520a0fee-0064185be1',
+          'x-amz-request-id': 'tx1db035bd3ede4520a0fee-0064185be1',
+          'x-trans-id': 'tx1db035bd3ede4520a0fee-0064185be1',
+          'x-openstack-request-id': 'tx1db035bd3ede4520a0fee-0064185be1',
+          date: 'Mon, 20 Mar 2023 13:13:05 GMT',
+          connection: 'close'
+        }
 
+        const _headers2 = {
+          'content-type': 'application/xml',
+          'x-amz-id-2': 'tx439620795cdd41b08c58c-0064186222',
+          'x-amz-request-id': 'tx439620795cdd41b08c58c-0064186222',
+          'x-trans-id': 'tx439620795cdd41b08c58c-0064186222',
+          'x-openstack-request-id': 'tx439620795cdd41b08c58c-0064186222',
+          date: 'Mon, 20 Mar 2023 13:39:46 GMT',
+          'transfer-encoding': 'chunked',
+          connection: 'close'
+        }
+
+        const nockRequestS1 = nock(url1S3)
+          .intercept("/bucket/file.pdf", "HEAD")
+          .reply(500, "");
+
+        const nockRequestS2 = nock(url2S3)
+          .defaultReplyHeaders(_headers1)
+          .intercept("/bucket/file.pdf", "HEAD")
+          .reply(200, "");
+
+        const nockRequestS3 = nock(url2S3)
+          .defaultReplyHeaders(_headers2)
+          .put('/bucket/file.pdf')
+          .reply(403, "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Error><Code>AccessDenied</Code><Message>Access Denied.</Message><RequestId>tx439620795cdd41b08c58c-0064186222</RequestId></Error>");
+
+        const nockRequestS4 = nock(url1S3)
+          .defaultReplyHeaders(_headers1)
+          .get('/')
+          .reply(500, "");
+
+        storage.setFileMetadata('bucket', 'file.pdf', { headers: { "x-amz-meta-name": "Invoice 2023", "x-amz-meta-version": "1.2.3"  } }, (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 403);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify({
+            error: {
+              code: 'AccessDenied',
+              message: 'Access Denied.',
+              requestid: 'tx439620795cdd41b08c58c-0064186222'
+            }
+          }));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers2));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS4.pendingMocks().length, 0);
+          done();
+        })
       })
 
     });

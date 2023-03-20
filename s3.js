@@ -155,7 +155,17 @@ function setFileMetadata(bucket, filename, options, callback) {
       'x-amz-metadata-directive': 'REPLACE',
       ...options.headers
     }
-    request('PUT', `/${bucket}/${encodeURIComponent(filename)}`, options, callback);
+    request('PUT', `/${bucket}/${encodeURIComponent(filename)}`, options, function(err, resp) {
+      if (err) {
+        return callback(err);
+      }
+      const _body = resp?.body?.toString();
+      if (_body && resp.statusCode === 200) {
+        let _regRes = _body?.match(/<CopyObjectResult[^<>]*?>([^]*?)<\/CopyObjectResult>/);
+        resp.body = xmlToJson(_regRes?.[1] ?? '');
+      }
+      return callback(null, resp);
+    });
   })
 }
 
