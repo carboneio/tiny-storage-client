@@ -1355,23 +1355,109 @@ describe.only('S3 SDK', function () {
 
     describe("REQUEST MAIN STORAGE", function () {
 
-      it.skip('should get file metadata', function(done){
+      it('should get file metadata', function(done){
+        const _headers = {
+          'content-type': 'application/x-www-form-urlencoded; charset=utf-8',
+          'content-length': '11822',
+          'x-amz-storage-class': 'STANDARD',
+          'x-amz-meta-name': 'Carbone.io',
+          'x-amz-meta-version': '858585',
+          etag: '"fde6d729123cee4db6bfa3606306bc8c"',
+          'x-amz-version-id': '1679316796.606606',
+          'last-modified': 'Mon, 20 Mar 2023 12:53:16 GMT',
+          'x-amz-id-2': 'txd2aa2b0a02554657b5efe-0064185752',
+          'x-amz-request-id': 'txd2aa2b0a02554657b5efe-0064185752',
+          'x-trans-id': 'txd2aa2b0a02554657b5efe-0064185752',
+          'x-openstack-request-id': 'txd2aa2b0a02554657b5efe-0064185752',
+          date: 'Mon, 20 Mar 2023 12:53:38 GMT',
+          connection: 'close'
+        }
 
+        const nockRequestS1 = nock(url1S3)
+          .defaultReplyHeaders(_headers)
+          .intercept("/bucket/file.pdf", "HEAD")
+          .reply(200, "");
+
+        storage.getFileMetadata('bucket', 'file.pdf', function(err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          done();
+        });
       })
 
-      it.skip('should return an error if the object does not exist', function(done){
+      it('should return an error if the object or bucket don\'t exist', function(done){
+        const _headers = {
+          'content-type': 'application/xml',
+          'x-amz-id-2': 'tx10b87fee8896442cb93ce-00641855ea',
+          'x-amz-request-id': 'tx10b87fee8896442cb93ce-00641855ea',
+          'x-trans-id': 'tx10b87fee8896442cb93ce-00641855ea',
+          'x-openstack-request-id': 'tx10b87fee8896442cb93ce-00641855ea',
+          date: 'Mon, 20 Mar 2023 12:47:38 GMT',
+          connection: 'close'
+        }
 
-      })
+        const nockRequestS1 = nock(url1S3)
+          .defaultReplyHeaders(_headers)
+          .intercept("/bucket/file.pdf", "HEAD")
+          .reply(404, "");
 
-      it.skip('should return an error if the bucket does not exist', function(done){
-
+        storage.getFileMetadata('bucket', 'file.pdf', function(err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 404);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify({}));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          done();
+        });
       })
     });
 
     describe("SWITCH TO CHILD STORAGE", function () {
 
-      it.skip('should get file metadata in the second storage', function(done){
+      it.only('should get file metadata in the second storage', function(done){
+        const _headers = {
+          'content-type': 'application/x-www-form-urlencoded; charset=utf-8',
+          'content-length': '11822',
+          'x-amz-storage-class': 'STANDARD',
+          'x-amz-meta-name': 'Carbone.io',
+          'x-amz-meta-version': '858585',
+          etag: '"fde6d729123cee4db6bfa3606306bc8c"',
+          'x-amz-version-id': '1679316796.606606',
+          'last-modified': 'Mon, 20 Mar 2023 12:53:16 GMT',
+          'x-amz-id-2': 'txd2aa2b0a02554657b5efe-0064185752',
+          'x-amz-request-id': 'txd2aa2b0a02554657b5efe-0064185752',
+          'x-trans-id': 'txd2aa2b0a02554657b5efe-0064185752',
+          'x-openstack-request-id': 'txd2aa2b0a02554657b5efe-0064185752',
+          date: 'Mon, 20 Mar 2023 12:53:38 GMT',
+          connection: 'close'
+        }
 
+        const nockRequestS1 = nock(url1S3)
+          .intercept("/bucket/file.pdf", "HEAD")
+          .reply(500, "");
+
+        const nockRequestS2 = nock(url2S3)
+          .defaultReplyHeaders(_headers)
+          .intercept("/bucket/file.pdf", "HEAD")
+          .reply(200, "");
+
+        const nockRequestS3 = nock(url1S3)
+          .get('/')
+          .reply(500, '');
+
+        storage.getFileMetadata('bucket', 'file.pdf', function(err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+          done();
+        });
       })
 
     });
