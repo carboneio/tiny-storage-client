@@ -99,7 +99,7 @@ function listFiles(bucket, options, callback) {
       return callback(err);
     }
     const _body = resp?.body?.toString();
-    if (_body) {
+    if (_body && resp.statusCode === 200) {
       let _regRes = _body?.match(/<ListBucketResult[^<>]*?>([^]*?)<\/ListBucketResult>/);
       resp.body = xmlToJson(_regRes?.[1], { forceArray: ['contents'] });
     }
@@ -171,15 +171,25 @@ function deleteFiles (bucket, files, options, callback) {
 
   let _body = '<Delete>';
   for (let i = 0; i < files.length; i++) {
-    _body += `<Object><Key>${files?.[i]?.name ?? files?.[i]}</Key></Object>`;
+    _body += `<Object><Key>${encodeURIComponent(files?.[i]?.name ?? files?.[i]?.key ?? files?.[i])}</Key></Object>`;
   }
-  _body += '<Quiet>true</Quiet></Delete>';
+  _body += '<Quiet>false</Quiet></Delete>';
   options.body = _body;
   options.headers = {
     ...options?.headers,
     'Content-MD5': getMD5(_body)
   }
-  return request('POST', `/${bucket}/?delete`, options, callback);
+  return request('POST', `/${bucket}/?delete`, options, (err, resp) => {
+    if (err) {
+      return callback(err);
+    }
+    const _body = resp?.body?.toString();
+    if (_body && resp.statusCode === 200) {
+      let _regRes = _body?.match(/<DeleteResult[^<>]*?>([^]*?)<\/DeleteResult>/);
+      resp.body = xmlToJson(_regRes?.[1], { forceArray: ['deleted', 'error'] });
+    }
+    return callback(null, resp);
+  });
 }
 
 /**

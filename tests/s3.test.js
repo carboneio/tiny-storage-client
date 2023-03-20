@@ -210,8 +210,42 @@ describe.only('S3 SDK', function () {
         })
       })
 
-      it.skip("should return an error if the bucket does not exist", function (done) {
-        done();
+      it("should return an error if the bucket does not exist", function (done) {
+        const _headers = {
+          'content-type': 'application/xml',
+          'x-amz-id-2': 'tx8fa5f00b19af4756b9ef3-0064184d77',
+          'x-amz-request-id': 'tx8fa5f00b19af4756b9ef3-0064184d77',
+          'x-trans-id': 'tx8fa5f00b19af4756b9ef3-0064184d77',
+          'x-openstack-request-id': 'tx8fa5f00b19af4756b9ef3-0064184d77',
+          date: 'Mon, 20 Mar 2023 12:11:35 GMT',
+          'transfer-encoding': 'chunked',
+          connection: 'close'
+        }
+        const _expectedBody = {
+          error: {
+            code: 'NoSuchBucket',
+            message: 'The specified bucket does not exist.',
+            requestid: 'txe285e692106542e88a2f5-0064184e80',
+            bucketname: 'buckeeeet'
+          }
+        }
+        const nockRequest = nock(url1S3)
+          .defaultReplyHeaders(_headers)
+          .get('/buckeeeet')
+          .query({
+            "list-type" : 2
+          })
+          .reply(404, () => {
+            return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Error><Code>NoSuchBucket</Code><Message>The specified bucket does not exist.</Message><RequestId>txe285e692106542e88a2f5-0064184e80</RequestId><BucketName>buckeeeet</BucketName></Error>";
+          });
+        storage.listFiles('buckeeeet', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 404);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify(_expectedBody));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers))
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        })
       })
     });
 
@@ -332,6 +366,40 @@ describe.only('S3 SDK', function () {
               message: 'The specified key does not exist.',
               requestid: 'txc03d49a36c324653854de-006408d963',
               key: 'template222.odt'
+            }
+          }));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_header))
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+      it("should return an error if the bucket does not exist", function (done) {
+        const _header = {
+          'content-type': 'application/xml',
+          'x-amz-id-2': 'txfa644d038be848a9938e3-00641850f0',
+          'x-amz-request-id': 'txfa644d038be848a9938e3-00641850f0',
+          'x-trans-id': 'txfa644d038be848a9938e3-00641850f0',
+          'x-openstack-request-id': 'txfa644d038be848a9938e3-00641850f0',
+          date: 'Mon, 20 Mar 2023 12:26:24 GMT',
+          'transfer-encoding': 'chunked',
+          connection: 'close'
+        }
+        const nockRequest = nock(url1S3)
+          .defaultReplyHeaders(_header)
+          .get('/buckeeeet/file.docx')
+          .reply(404, () => {
+            return "<?xml version='1.0' encoding='UTF-8'?><Error><Code>NoSuchBucket</Code><Message>The specified bucket does not exist.</Message><RequestId>txfa644d038be848a9938e3-00641850f0</RequestId><BucketName>buckeeeet</BucketName></Error>";
+          });
+        storage.downloadFile('buckeeeet', 'file.docx', function (err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 404);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify({
+            error: {
+              code: 'NoSuchBucket',
+              message: 'The specified bucket does not exist.',
+              requestid: 'txfa644d038be848a9938e3-00641850f0',
+              bucketname: 'buckeeeet'
             }
           }));
           assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_header))
@@ -769,6 +837,44 @@ describe.only('S3 SDK', function () {
         })
       })
 
+      it("should return an error if the bucket does not exist", function (done) {
+
+        const _headers = {
+          'content-type': 'application/xml',
+          'x-amz-id-2': 'tx33e4496c9d8746ad9cfcb-006418540f',
+          'x-amz-request-id': 'tx33e4496c9d8746ad9cfcb-006418540f',
+          'x-trans-id': 'tx33e4496c9d8746ad9cfcb-006418540f',
+          'x-openstack-request-id': 'tx33e4496c9d8746ad9cfcb-006418540f',
+          date: 'Mon, 20 Mar 2023 12:39:43 GMT',
+          'transfer-encoding': 'chunked',
+          connection: 'close'
+        }
+
+        const nockRequestS1 = nock(url1S3)
+          .defaultReplyHeaders(_headers)
+          .put('/buckeeeet/file.pdf')
+          .reply(404, (uri, requestBody) => {
+            assert.strictEqual(requestBody, fileXml);
+            return Buffer.from("<?xml version='1.0' encoding='UTF-8'?><Error><Code>NoSuchBucket</Code><Message>The specified bucket does not exist.</Message><RequestId>tx9d1553e8d8de401bb8949-00641851bd</RequestId><BucketName>buckeeeet</BucketName></Error>");
+          });
+
+        storage.uploadFile('buckeeeet', 'file.pdf', fileXmlPath, function(err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 404);
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify({
+            error: {
+              code: 'NoSuchBucket',
+              message: 'The specified bucket does not exist.',
+              requestid: 'tx9d1553e8d8de401bb8949-00641851bd',
+              bucketname: 'buckeeeet'
+            }
+          }));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          done();
+        })
+      })
+
     });
 
     describe("SWITCH TO CHILD STORAGE", function () {
@@ -895,6 +1001,40 @@ describe.only('S3 SDK', function () {
         })
       })
 
+      it("should return an error if the bucket does not exist", function (done) {
+        const _headers = {
+          'content-type': 'application/xml',
+          'x-amz-id-2': 'tx424f2a5a6e684da581e77-0064185482',
+          'x-amz-request-id': 'tx424f2a5a6e684da581e77-0064185482',
+          'x-trans-id': 'tx424f2a5a6e684da581e77-0064185482',
+          'x-openstack-request-id': 'tx424f2a5a6e684da581e77-0064185482',
+          date: 'Mon, 20 Mar 2023 12:41:38 GMT',
+          'transfer-encoding': 'chunked',
+          connection: 'close'
+        }
+
+        const nockRequestS1 = nock(url1S3)
+          .defaultReplyHeaders(_headers)
+          .delete('/buckeeet/file.pdf')
+          .reply(404, "<?xml version='1.0' encoding='UTF-8'?><Error><Code>NoSuchBucket</Code><Message>The specified bucket does not exist.</Message><RequestId>tx424f2a5a6e684da581e77-0064185482</RequestId><BucketName>buckeeet</BucketName></Error>");
+
+        storage.deleteFile('buckeeet', 'file.pdf', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 404);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify({
+            error: {
+              code: 'NoSuchBucket',
+              message: 'The specified bucket does not exist.',
+              requestid: 'tx424f2a5a6e684da581e77-0064185482',
+              bucketname: 'buckeeet'
+            }
+          }));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          done();
+        })
+      })
+
     });
 
     describe("SWITCH TO CHILD STORAGE", function () {
@@ -989,13 +1129,223 @@ describe.only('S3 SDK', function () {
   describe('deleteFiles', function() {
 
     describe("REQUEST MAIN STORAGE", function () {
+
+      it('should delete a list of objects', function(done) {
+        const _headers = {
+          'content-type': 'text/html; charset=UTF-8',
+          'content-length': '269',
+          'x-amz-id-2': 'txb383f29c0dad46f9919b5-00641844ba',
+          'x-amz-request-id': 'txb383f29c0dad46f9919b5-00641844ba',
+          'x-trans-id': 'txb383f29c0dad46f9919b5-00641844ba',
+          'x-openstack-request-id': 'txb383f29c0dad46f9919b5-00641844ba',
+          date: 'Mon, 20 Mar 2023 11:34:18 GMT',
+          connection: 'close'
+        }
+
+        const _filesToDelete = [
+          { key: 'invoice 2023.pdf' },
+          { key: 'carbone(1).png' },
+          { key: 'file.txt' }
+        ]
+
+        const _expectedBody = {
+          deleted: _filesToDelete.map((value) => {
+            return {
+              key: encodeURIComponent(value.key)
+            }
+          })
+        }
+
+        const nockRequestS1 = nock(url1S3)
+          .defaultReplyHeaders(_headers)
+          .post('/www/')
+          .query((actualQueryObject) => {
+            assert.strictEqual(actualQueryObject.delete !== undefined, true);
+            return true;
+          })
+          .reply(200, function(uri, body) {
+            console.log(uri, body);
+            return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><DeleteResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Deleted><Key>invoice%202023.pdf</Key></Deleted><Deleted><Key>carbone(1).png</Key></Deleted><Deleted><Key>file.txt</Key></Deleted></DeleteResult>";
+          })
+
+        storage.deleteFiles('www', _filesToDelete, (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify(_expectedBody));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+      it('should delete a list of objects with mix success/errors (access denied)', function(done) {
+        const _headers = {
+          'content-type': 'text/html; charset=UTF-8',
+          'content-length': '269',
+          'x-amz-id-2': 'tx3cf216266bf24a888354a-0064184a78',
+          'x-amz-request-id': 'tx3cf216266bf24a888354a-0064184a78',
+          'x-trans-id': 'tx3cf216266bf24a888354a-0064184a78',
+          'x-openstack-request-id': 'tx3cf216266bf24a888354a-0064184a78',
+          date: 'Mon, 20 Mar 2023 11:58:49 GMT',
+          connection: 'close'
+        }
+
+        const _filesToDelete = [
+          { key: 'sample1.txt' },
+          { key: 'sample2.txt' }
+        ]
+
+        const _expectedBody = {
+          deleted: [
+            { key: 'sample1.txt' }
+          ],
+          error: [
+            {
+              key    : 'sample2.txt',
+              code   : 'AccessDenied',
+              message: 'Access Denied'
+            }
+          ]
+        }
+
+        const nockRequestS1 = nock(url1S3)
+          .defaultReplyHeaders(_headers)
+          .post('/www/')
+          .query((actualQueryObject) => {
+            assert.strictEqual(actualQueryObject.delete !== undefined, true);
+            return true;
+          })
+          .reply(200, function(uri, body) {
+            console.log(uri, body);
+            return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><DeleteResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Deleted><Key>sample1.txt</Key></Deleted><Error><Key>sample2.txt</Key><Code>AccessDenied</Code><Message>Access Denied</Message></Error></DeleteResult>";
+          })
+
+        storage.deleteFiles('www', _filesToDelete, (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify(_expectedBody));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+      it("should return an error if the bucket does not exist", function (done) {
+        const _headers = {
+          'content-type': 'application/xml',
+          'x-amz-id-2': 'tx84736ac6d5544b44ba91a-0064185021',
+          'x-amz-request-id': 'tx84736ac6d5544b44ba91a-0064185021',
+          'x-trans-id': 'tx84736ac6d5544b44ba91a-0064185021',
+          'x-openstack-request-id': 'tx84736ac6d5544b44ba91a-0064185021',
+          date: 'Mon, 20 Mar 2023 12:22:57 GMT',
+          'transfer-encoding': 'chunked',
+          connection: 'close'
+        }
+
+        const _filesToDelete = [
+          { key: 'invoice 2023.pdf' },
+          { key: 'carbone(1).png' },
+          { key: 'file.txt' }
+        ]
+
+        const _expectedBody = {
+          error: {
+            code: 'NoSuchBucket',
+            message: 'The specified bucket does not exist.',
+            requestid: 'tx84736ac6d5544b44ba91a-0064185021',
+            bucketname: 'buckeeeet'
+          }
+        }
+
+        const nockRequestS1 = nock(url1S3)
+          .defaultReplyHeaders(_headers)
+          .post('/buckeeeet/')
+          .query((actualQueryObject) => {
+            assert.strictEqual(actualQueryObject.delete !== undefined, true);
+            return true;
+          })
+          .reply(404, function(uri, body) {
+            console.log(uri, body);
+            return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Error><Code>NoSuchBucket</Code><Message>The specified bucket does not exist.</Message><RequestId>tx84736ac6d5544b44ba91a-0064185021</RequestId><BucketName>buckeeeet</BucketName></Error>";
+          })
+
+        storage.deleteFiles('buckeeeet', _filesToDelete, (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 404);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify(_expectedBody));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+
     });
 
     describe("SWITCH TO CHILD STORAGE", function () {
 
-      // it("should not be able to delete a file of a child storage if the write permission is disallowed", function() {
+      it("should not be able to delete a file of a child storage if the write permission is disallowed (access denied)", function(done) {
+        const _headers = {
+          'content-type': 'text/html; charset=UTF-8',
+          'content-length': '431',
+          'x-amz-id-2': 'txe69b17ed1cf04260b9090-0064184b17',
+          'x-amz-request-id': 'txe69b17ed1cf04260b9090-0064184b17',
+          'x-trans-id': 'txe69b17ed1cf04260b9090-0064184b17',
+          'x-openstack-request-id': 'txe69b17ed1cf04260b9090-0064184b17',
+          date: 'Mon, 20 Mar 2023 12:01:28 GMT',
+          connection: 'close'
+        }
 
-      // })
+        const _filesToDelete = [
+          { key: 'invoice 2023.pdf' },
+          { key: 'carbone(1).png' },
+          { key: 'file.txt' }
+        ]
+
+        const _expectedBody = {
+          error: _filesToDelete.map((value) => {
+            return {
+              key    : encodeURIComponent(value.key),
+              code   : 'AccessDenied',
+              message: 'Access Denied'
+            }
+          })
+        }
+
+        const nockRequestS1 = nock(url1S3)
+          .post('/www/')
+          .query((actualQueryObject) => {
+            assert.strictEqual(actualQueryObject.delete !== undefined, true);
+            return true;
+          })
+          .reply(500, '')
+
+        const nockRequestS2 = nock(url2S3)
+          .defaultReplyHeaders(_headers)
+          .post('/www/')
+          .query((actualQueryObject) => {
+            assert.strictEqual(actualQueryObject.delete !== undefined, true);
+            return true;
+          })
+          .reply(200, function(uri, body) {
+            console.log(uri, body);
+            return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><DeleteResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Error><Key>invoice%202023.pdf</Key><Code>AccessDenied</Code><Message>Access Denied</Message></Error><Error><Key>carbone(1).png</Key><Code>AccessDenied</Code><Message>Access Denied</Message></Error><Error><Key>file.txt</Key><Code>AccessDenied</Code><Message>Access Denied</Message></Error></DeleteResult>";
+          })
+        const nockRequestS3 = nock(url1S3)
+          .get('/')
+          .reply(500, '');
+
+        storage.deleteFiles('www', _filesToDelete, (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify(_expectedBody));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+          done();
+        })
+      })
 
     });
 
@@ -1004,9 +1354,26 @@ describe.only('S3 SDK', function () {
   describe('getFileMetadata', function() {
 
     describe("REQUEST MAIN STORAGE", function () {
+
+      it.skip('should get file metadata', function(done){
+
+      })
+
+      it.skip('should return an error if the object does not exist', function(done){
+
+      })
+
+      it.skip('should return an error if the bucket does not exist', function(done){
+
+      })
     });
 
     describe("SWITCH TO CHILD STORAGE", function () {
+
+      it.skip('should get file metadata in the second storage', function(done){
+
+      })
+
     });
 
   });
@@ -1015,13 +1382,35 @@ describe.only('S3 SDK', function () {
   describe('setFileMetadata', function() {
 
     describe("REQUEST MAIN STORAGE", function () {
+
+      it.skip('should set file metadata', function(done){
+
+      })
+
+
+      it.skip('should return an error if the file metadata is greater than 2KB', function(done){
+
+      })
+
+      it.skip('should return an error if the object does not exist', function(done){
+
+      })
+
+      it.skip('should return an error if the bucket does not exist', function(done){
+
+      })
+
     });
 
     describe("SWITCH TO CHILD STORAGE", function () {
 
-      // it("should not be able to write file metadata of a child storage if the write permission is disallowed", function() {
+      it.skip('should set file metadata in the child storage', function(done){
 
-      // })
+      })
+
+      it.skip("should not be able to write file metadata of a child storage if the write permission is disallowed", function(done) {
+
+      })
 
     });
 
