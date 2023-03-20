@@ -209,10 +209,14 @@ describe.only('S3 SDK', function () {
           done();
         })
       })
+
+      it.skip("should return an error if the bucket does not exist", function (done) {
+        done();
+      })
     });
 
     describe("SWITCH TO CHILD STORAGE", function () {
-      it.only('should fetch a list of objects', function (done) {
+      it('should fetch a list of objects', function (done) {
         const nockRequestS1 = nock(url1S3)
           .get('/bucket')
           .query({ 'list-type' : 2 })
@@ -863,13 +867,120 @@ describe.only('S3 SDK', function () {
   describe('deleteFile', function() {
 
     describe("REQUEST MAIN STORAGE", function () {
+
+      it('should delete an object (return the same response if the object does not exist)', function(done) {
+        const _headers = {
+          'content-type': 'text/html; charset=UTF-8',
+          'content-length': '0',
+          'x-amz-id-2': 'txf010ba580ff0471ba3a0b-0064181698',
+          'x-amz-request-id': 'txf010ba580ff0471ba3a0b-0064181698',
+          'x-trans-id': 'txf010ba580ff0471ba3a0b-0064181698',
+          'x-openstack-request-id': 'txf010ba580ff0471ba3a0b-0064181698',
+          date: 'Mon, 20 Mar 2023 08:17:29 GMT',
+          connection: 'close'
+        }
+
+        const nockRequestS1 = nock(url1S3)
+          .defaultReplyHeaders(_headers)
+          .delete('/www/file.pdf')
+          .reply(204, '');
+
+        storage.deleteFile('www', 'file.pdf', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 204);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          done();
+        })
+      })
+
     });
 
     describe("SWITCH TO CHILD STORAGE", function () {
 
-      // it("should not be able to delete a file of a child storage if the write permission is disallowed", function() {
+      it('should delete an object from the second bucket', function(done) {
+        const _headers = {
+          'content-type': 'text/html; charset=UTF-8',
+          'content-length': '0',
+          'x-amz-id-2': 'txf010ba580ff0471ba3a0b-0064181698',
+          'x-amz-request-id': 'txf010ba580ff0471ba3a0b-0064181698',
+          'x-trans-id': 'txf010ba580ff0471ba3a0b-0064181698',
+          'x-openstack-request-id': 'txf010ba580ff0471ba3a0b-0064181698',
+          date: 'Mon, 20 Mar 2023 08:17:29 GMT',
+          connection: 'close'
+        }
 
-      // })
+        const nockRequestS1 = nock(url1S3)
+          .delete('/www/file.pdf')
+          .reply(500, '');
+
+        const nockRequestS2 = nock(url2S3)
+          .defaultReplyHeaders(_headers)
+          .delete('/www/file.pdf')
+          .reply(204, '');
+
+        const nockRequestS3 = nock(url1S3)
+          .get('/')
+          .reply(500, '');
+
+        storage.deleteFile('www', 'file.pdf', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 204);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+      it("should not be able to delete a file of a child storage if the write permission is disallowed", function(done) {
+        const _bodyErrorAccessDenied = "<?xml version='1.0' encoding='UTF-8'?><Error><Code>AccessDenied</Code><Message>Access Denied.</Message><RequestId>txb40580debedc4ff9b36dc-00641818cb</RequestId></Error>"
+        const _bodyJson = {
+          error: {
+            code: 'AccessDenied',
+            message: 'Access Denied.',
+            requestid: 'txb40580debedc4ff9b36dc-00641818cb'
+          }
+        }
+
+        const _headers = {
+          'content-type': 'application/xml',
+          'x-amz-id-2': 'txb40580debedc4ff9b36dc-00641818cb',
+          'x-amz-request-id': 'txb40580debedc4ff9b36dc-00641818cb',
+          'x-trans-id': 'txb40580debedc4ff9b36dc-00641818cb',
+          'x-openstack-request-id': 'txb40580debedc4ff9b36dc-00641818cb',
+          date: 'Mon, 20 Mar 2023 08:26:51 GMT',
+          'transfer-encoding': 'chunked',
+          connection: 'close'
+        }
+
+        const nockRequestS1 = nock(url1S3)
+          .delete('/www/file.pdf')
+          .reply(500, '');
+
+        const nockRequestS2 = nock(url2S3)
+          .defaultReplyHeaders(_headers)
+          .delete('/www/file.pdf')
+          .reply(403, _bodyErrorAccessDenied);
+
+        const nockRequestS3 = nock(url1S3)
+          .get('/')
+          .reply(500, '');
+
+        storage.deleteFile('www', 'file.pdf', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 403);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify(_bodyJson));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+          done();
+        })
+      })
 
     });
 
