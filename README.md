@@ -17,8 +17,9 @@
 
 ## Documentation
 
-- Aws S3: **[Coming soon]**
-- [Open Stack Swift](./USAGE-SWIFT.md)
+Connect and request:
+- [AWS S3 API](./USAGE-S3.md)
+- [Open Stack Swift Storage API](./USAGE-SWIFT.md)
 
 ## Supported Methods
 
