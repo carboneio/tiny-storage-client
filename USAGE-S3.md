@@ -273,7 +273,7 @@ const s3storage = storageSDK({
   url            : 's3.gra.io.cloud.ovh.net',
   region         : 'gra',
   buckets        : {
-    invoices : "invoices-ovh-gra"
+    invoices : "invoices-ovh-gra",
     www      : "www-ovh-gra"
   }
 },
