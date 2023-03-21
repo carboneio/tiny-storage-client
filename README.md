@@ -20,9 +20,20 @@
 - Aws S3: **[Coming soon]**
 - [Open Stack Swift](./USAGE-SWIFT.md)
 
-## API Usage
+## Supported Methods
 
-**[Coming soon]**
+| Openstack Swift Storage | S3 Storage | Method            | Description                                                            |
+|-------------------------|------------|-------------------|------------------------------------------------------------------------|
+| ✅                       | ✅          | `uploadFile`      | Upload a file from a Buffer or file absolute path.                     |
+| ✅                       | ✅          | `downloadFile`    | Download a file as Buffer or Stream                                    |
+| ✅                       | ✅          | `deleteFile`      | Delete a file                                                          |
+| ❌                       | ✅          | `deleteFiles`     | Bulk delete files (1000 max/per request)                               |
+| ✅                       | ✅          | `listFiles`       | List files (1000 max/per requests) use query parameters for pagination |
+| ✅                       | ✅          | `getFileMetadata` | Fetch custom metadatas                                                 |
+| ✅                       | ✅          | `setFileMetadata` | Set custom file metadatas                                              |
+| ❌                       | ✅          | `headBucket`      | Determine if a bucket exists and you have permission to access it      |
+| ✅                       | ✅          | `request`         | Create custom requests                                                 |
+
 
 ## Run tests
 
