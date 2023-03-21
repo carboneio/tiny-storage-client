@@ -22,18 +22,18 @@
 
 ## Supported Methods
 
-| Swift | S3  | Method            | Description                                                            |
+| Swift API | S3 API | Method            | Description                                                            |
 |-------------------------|------------|-------------------|------------------------------------------------------------------------|
-| ✅                       | ✅          | `uploadFile`      | Upload a file from a Buffer or file absolute path.                     |
-| ✅                       | ✅          | `downloadFile`    | Download a file as Buffer or Stream                                    |
-| ✅                       | ✅          | `deleteFile`      | Delete a file                                                          |
-| ❌                       | ✅          | `deleteFiles`     | Bulk delete files (1000 max/per request)                               |
-| ✅                       | ✅          | `listFiles`       | List files (1000 max/per requests) use query parameters for pagination |
-| ✅                       | ✅          | `getFileMetadata` | Fetch custom metadatas                                                 |
-| ✅                       | ✅          | `setFileMetadata` | Set custom file metadatas                                              |
-| ❌                       | ✅          | `headBucket`      | Determine if a bucket exists and you have permission to access it      |
-| ✅                       | ✅          | `request`         | Create custom requests                                                 |
-| ✅                       | ❌          | `connection`         | Connection is required only for Openstack Swift Object storage to get a unique auth token                                                 |
+| ✅ [example](./USAGE-SWIFT.md#upload-a-file)                    | ✅ [example](./USAGE-S3.md#upload-a-file)         | `uploadFile`      | Upload a file from a Buffer or file absolute path.                     |
+| ✅ [example](./USAGE-SWIFT.md#download-a-file)                      | ✅ [example](./USAGE-S3.md#download-a-file)         | `downloadFile`    | Download a file as Buffer or Stream                                    |
+| ✅ [example](./USAGE-SWIFT.md#delete-a-file)                      | ✅ [example](./USAGE-S3.md#delete-file)         | `deleteFile`      | Delete a file                                                          |
+| ❌                       | ✅ [example](./USAGE-S3.md#delete-files)         | `deleteFiles`     | Bulk delete files (1000 max/per request)                               |
+| ✅ [example](./USAGE-SWIFT.md#list-objects-from-a-container)                      | ✅ [example](./USAGE-S3.md#list-files)         | `listFiles`       | List files (1000 max/per requests) use query parameters for pagination |
+| ✅ [example](./USAGE-SWIFT.md#get-file-metadata)                      | ✅ [example](./USAGE-S3.md#get-file-metadata)         | `getFileMetadata` | Fetch custom metadatas                                                 |
+| ✅ [example](./USAGE-SWIFT.md#set-file-metadata)                      | ✅ [example](./USAGE-S3.md#set-file-metadata)         | `setFileMetadata` | Set custom file metadatas                                              |
+| ❌                       | ✅ [example](./USAGE-S3.md#head-bucket)         | `headBucket`      | Determine if a bucket exists and you have permission to access it      |
+| ✅ [example](./USAGE-SWIFT.md#custom-request)                      | ✅  [example](./USAGE-S3.md#custom-requests)        | `request`         | Create custom requests                                                 |
+| ✅ [example](./USAGE-SWIFT.md#connection)                      | ❌          | `connection`         | Connection is required only for Openstack Swift Object storage to get a unique auth token                                                 |
 
 
 ## Run tests
