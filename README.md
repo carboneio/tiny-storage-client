@@ -22,7 +22,7 @@
 
 ## Supported Methods
 
-| Openstack Swift Storage | S3 Storage | Method            | Description                                                            |
+| Swift | S3  | Method            | Description                                                            |
 |-------------------------|------------|-------------------|------------------------------------------------------------------------|
 | ✅                       | ✅          | `uploadFile`      | Upload a file from a Buffer or file absolute path.                     |
 | ✅                       | ✅          | `downloadFile`    | Download a file as Buffer or Stream                                    |
@@ -33,6 +33,7 @@
 | ✅                       | ✅          | `setFileMetadata` | Set custom file metadatas                                              |
 | ❌                       | ✅          | `headBucket`      | Determine if a bucket exists and you have permission to access it      |
 | ✅                       | ✅          | `request`         | Create custom requests                                                 |
+| ✅                       | ❌          | `connection`         | Connection is required only for Openstack Swift Object storage to get a unique auth token                                                 |
 
 
 ## Run tests
