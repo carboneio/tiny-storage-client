@@ -15,9 +15,9 @@
 * 👉 **JSON responses** - XML responses are automatically converted as Javascript Objects (Concerns only S3 Storage: `ListObjects` and `Errors`).
 * 🚩 **Mixing S3 and Swift credentials is not supported** - When initialising the Tiny SDK client, provide only a list of S3 or a list of Swift credentials, switching from one storage system to another is not supported.
 
-## Documentation
+## Getting Start / Documentation
 
-Connect and request:
+Connect and request in few minutes:
 - [AWS S3 API](./USAGE-S3.md)
 - [Open Stack Swift Storage API](./USAGE-SWIFT.md)
 
