@@ -120,41 +120,35 @@ function headBucket(bucket, callback) {
 /**
  * @doc https://docs.aws.amazon.com/AmazonS3/latest/API/API_CopyObject.html
  *
- * Copy an existing file to edit metadatas.
+ * Set metadatas by copying the file, metadata are replaced with metadata provided in the request. Set the header "x-amz-metadata-directive":"COPY" to copy metadata from the source object.
  * Custom metadata must start with "x-amz-meta-", followed by a name to create a custom key.
  * Metadata can be as large as 2 KB total. To calculate the total size of user-defined metadata,
  * sum the number of bytes in the UTF-8 encoding for each key and value. Both keys and their values must conform to US-ASCII standards.
  */
 function setFileMetadata(bucket, filename, options, callback) {
+
   if (!callback) {
     callback = options;
     options = {};
   }
-  getFileMetadata(bucket, filename, (err, resp) => {
+
+  options["headers"] = {
+    'x-amz-copy-source': `/${bucket}/${encodeURIComponent(filename)}`,
+    'x-amz-metadata-directive': 'REPLACE',
+    ...options.headers
+  }
+
+  request('PUT', `/${bucket}/${encodeURIComponent(filename)}`, options, function(err, resp) {
     if (err) {
       return callback(err);
     }
-    /**
-     * TODO: verify Metadata size lower or equal to 2KB maximum
-     */
-    options["headers"] = {
-      ...resp.headers,
-      'x-amz-copy-source': `/${bucket}/${encodeURIComponent(filename)}`,
-      'x-amz-metadata-directive': 'REPLACE',
-      ...options.headers
+    const _body = resp?.body?.toString();
+    if (_body && resp.statusCode === 200) {
+      let _regRes = _body?.match(/<CopyObjectResult[^<>]*?>([^]*?)<\/CopyObjectResult>/);
+      resp.body = xmlToJson(_regRes?.[1] ?? '');
     }
-    request('PUT', `/${bucket}/${encodeURIComponent(filename)}`, options, function(err, resp) {
-      if (err) {
-        return callback(err);
-      }
-      const _body = resp?.body?.toString();
-      if (_body && resp.statusCode === 200) {
-        let _regRes = _body?.match(/<CopyObjectResult[^<>]*?>([^]*?)<\/CopyObjectResult>/);
-        resp.body = xmlToJson(_regRes?.[1] ?? '');
-      }
-      return callback(null, resp);
-    });
-  })
+    return callback(null, resp);
+  });
 }
 
 /**

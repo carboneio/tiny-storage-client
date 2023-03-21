@@ -1471,23 +1471,6 @@ describe.only('S3 SDK', function () {
 
       it('should set file metadata', function(done){
 
-        const _headers1 = {
-          'content-type': 'application/x-www-form-urlencoded; charset=utf-8',
-          'content-length': '11822',
-          'x-amz-storage-class': 'STANDARD',
-          'x-amz-meta-name': 'Carbone test 12345',
-          'x-amz-meta-version': '1.2.3',
-          etag: '"fde6d729123cee4db6bfa3606306bc8c"',
-          'x-amz-version-id': '1679317926.773804',
-          'last-modified': 'Mon, 20 Mar 2023 13:12:07 GMT',
-          'x-amz-id-2': 'tx1db035bd3ede4520a0fee-0064185be1',
-          'x-amz-request-id': 'tx1db035bd3ede4520a0fee-0064185be1',
-          'x-trans-id': 'tx1db035bd3ede4520a0fee-0064185be1',
-          'x-openstack-request-id': 'tx1db035bd3ede4520a0fee-0064185be1',
-          date: 'Mon, 20 Mar 2023 13:13:05 GMT',
-          connection: 'close'
-        }
-
         const _headers2 = {
           'content-type': 'application/xml',
           'content-length': '224',
@@ -1503,12 +1486,12 @@ describe.only('S3 SDK', function () {
           connection: 'close'
         }
 
-        const nockRequestS1 = nock(url1S3)
-          .defaultReplyHeaders(_headers1)
-          .intercept("/bucket/file.pdf", "HEAD")
-          .reply(200, "");
-
-        const nockRequestS2 = nock(url1S3)
+        const nockRequestS2 = nock(url1S3, {
+            reqheaders: {
+              'x-amz-copy-source': () => true,
+              'x-amz-metadata-directive': () => true
+            }
+          })
           .defaultReplyHeaders(_headers2)
           .put('/bucket/file.pdf')
           .reply(200, "<?xml version=\"1.0\" encoding=\"UTF-8\"?><CopyObjectResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><LastModified>2023-03-20T13:13:06.000Z</LastModified><ETag>\"fde6d729123cee4db6bfa3606306bc8c\"</ETag></CopyObjectResult>");
@@ -1521,7 +1504,6 @@ describe.only('S3 SDK', function () {
             etag: 'fde6d729123cee4db6bfa3606306bc8c'
           }));
           assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers2));
-          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
           done();
         })
@@ -1539,12 +1521,12 @@ describe.only('S3 SDK', function () {
           connection: 'close'
         }
 
-        const nockRequestS1 = nock(url1S3)
-          .defaultReplyHeaders(_headers)
-          .intercept("/bucket/fiiile.pdf", "HEAD")
-          .reply(404, "");
-
-        const nockRequestS2 = nock(url1S3)
+        const nockRequestS2 = nock(url1S3, {
+            reqheaders: {
+              'x-amz-copy-source': () => true,
+              'x-amz-metadata-directive': () => true
+            }
+          })
           .defaultReplyHeaders(_headers)
           .put('/bucket/fiiile.pdf')
           .reply(404, "<?xml version='1.0' encoding='UTF-8'?><Error><Code>NoSuchKey</Code><Message>The specified key does not exist.</Message><RequestId>txb4919778632448bbac785-0064185d71</RequestId><Key>fiiile.pdf</Key></Error>");
@@ -1561,7 +1543,6 @@ describe.only('S3 SDK', function () {
             }
           }));
           assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
-          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
           done();
         })
@@ -1579,12 +1560,12 @@ describe.only('S3 SDK', function () {
           connection: 'close'
         }
 
-        const nockRequestS1 = nock(url1S3)
-          .defaultReplyHeaders(_headers)
-          .intercept("/buckeeet/file.pdf", "HEAD")
-          .reply(404, "");
-
-        const nockRequestS2 = nock(url1S3)
+        const nockRequestS2 = nock(url1S3, {
+            reqheaders: {
+              'x-amz-copy-source': () => true,
+              'x-amz-metadata-directive': () => true
+            }
+          })
           .defaultReplyHeaders(_headers)
           .put('/buckeeet/file.pdf')
           .reply(404, "<?xml version='1.0' encoding='UTF-8'?><Error><Code>NoSuchBucket</Code><Message>The specified bucket does not exist.</Message><RequestId>txb63fe612d3364257bec19-0064185fcf</RequestId><BucketName>buckeeet</BucketName></Error>");
@@ -1601,7 +1582,6 @@ describe.only('S3 SDK', function () {
             }
           }));
           assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
-          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
           done();
         })
@@ -1619,12 +1599,12 @@ describe.only('S3 SDK', function () {
           connection: 'close'
         }
 
-        const nockRequestS1 = nock(url1S3)
-          .defaultReplyHeaders(_headers)
-          .intercept("/bucket/file.pdf", "HEAD")
-          .reply(200, "");
-
-        const nockRequestS2 = nock(url1S3)
+        const nockRequestS2 = nock(url1S3, {
+            reqheaders: {
+              'x-amz-copy-source': () => true,
+              'x-amz-metadata-directive': () => true
+            }
+          })
           .defaultReplyHeaders(_headers)
           .put('/bucket/file.pdf')
           .reply(400, "<Error><Code>MetadataTooLarge</Code><Message>Your metadata headers exceed the maximum allowed metadata size</Message><Size>3072</Size><MaxSizeAllowed>2048</MaxSizeAllowed><RequestId>4SJA4PV72M8WXZ46</RequestId><HostId>GHxUyWQsQrv4DNU+X6K2YYqBN65twd+IZH0g3yRz7HQ7EXcVlfE8e81eJ559/3SyY0FscUdsyWY=</HostId></Error>");
@@ -1643,7 +1623,6 @@ describe.only('S3 SDK', function () {
             }
           }));
           assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
-          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
           done();
         })
@@ -1686,24 +1665,30 @@ describe.only('S3 SDK', function () {
           connection: 'close'
         }
 
-        const nockRequestS1 = nock(url1S3)
-          .intercept("/bucket/file.pdf", "HEAD")
+
+        const nockRequestS1 = nock(url1S3, {
+            reqheaders: {
+              'x-amz-copy-source': () => true,
+              'x-amz-metadata-directive': () => true
+            }
+          })
+          .put('/bucket/file.pdf')
           .reply(500, "");
 
-        const nockRequestS2 = nock(url2S3)
-          .defaultReplyHeaders(_headers1)
-          .intercept("/bucket/file.pdf", "HEAD")
-          .reply(200, "");
-
-        const nockRequestS3 = nock(url2S3)
+        const nockRequestS2 = nock(url2S3, {
+            reqheaders: {
+              'x-amz-copy-source': () => true,
+              'x-amz-metadata-directive': () => true
+            }
+          })
           .defaultReplyHeaders(_headers2)
           .put('/bucket/file.pdf')
           .reply(200, "<?xml version=\"1.0\" encoding=\"UTF-8\"?><CopyObjectResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><LastModified>2023-03-20T13:13:06.000Z</LastModified><ETag>\"fde6d729123cee4db6bfa3606306bc8c\"</ETag></CopyObjectResult>");
 
-        const nockRequestS4 = nock(url1S3)
-          .defaultReplyHeaders(_headers1)
+        const nockRequestS3 = nock(url1S3)
           .get('/')
           .reply(500, "");
+
 
         storage.setFileMetadata('bucket', 'file.pdf', { headers: { "x-amz-meta-name": "Invoice 2023", "x-amz-meta-version": "1.2.3"  } }, (err, resp) => {
           assert.strictEqual(err, null);
@@ -1716,28 +1701,11 @@ describe.only('S3 SDK', function () {
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
-          assert.strictEqual(nockRequestS4.pendingMocks().length, 0);
           done();
         })
       })
 
       it("should not be able to write file metadata of a child storage if the write permission is disallowed", function(done) {
-        const _headers1 = {
-          'content-type': 'application/x-www-form-urlencoded; charset=utf-8',
-          'content-length': '11822',
-          'x-amz-storage-class': 'STANDARD',
-          'x-amz-meta-name': 'Carbone test 12345',
-          'x-amz-meta-version': '1.2.3',
-          etag: '"fde6d729123cee4db6bfa3606306bc8c"',
-          'x-amz-version-id': '1679317926.773804',
-          'last-modified': 'Mon, 20 Mar 2023 13:12:07 GMT',
-          'x-amz-id-2': 'tx1db035bd3ede4520a0fee-0064185be1',
-          'x-amz-request-id': 'tx1db035bd3ede4520a0fee-0064185be1',
-          'x-trans-id': 'tx1db035bd3ede4520a0fee-0064185be1',
-          'x-openstack-request-id': 'tx1db035bd3ede4520a0fee-0064185be1',
-          date: 'Mon, 20 Mar 2023 13:13:05 GMT',
-          connection: 'close'
-        }
 
         const _headers2 = {
           'content-type': 'application/xml',
@@ -1751,21 +1719,21 @@ describe.only('S3 SDK', function () {
         }
 
         const nockRequestS1 = nock(url1S3)
-          .intercept("/bucket/file.pdf", "HEAD")
+          .put('/bucket/file.pdf')
           .reply(500, "");
 
-        const nockRequestS2 = nock(url2S3)
-          .defaultReplyHeaders(_headers1)
-          .intercept("/bucket/file.pdf", "HEAD")
-          .reply(200, "");
 
-        const nockRequestS3 = nock(url2S3)
+        const nockRequestS2 = nock(url2S3, {
+            reqheaders: {
+              'x-amz-copy-source': () => true,
+              'x-amz-metadata-directive': () => true
+            }
+          })
           .defaultReplyHeaders(_headers2)
           .put('/bucket/file.pdf')
           .reply(403, "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Error><Code>AccessDenied</Code><Message>Access Denied.</Message><RequestId>tx439620795cdd41b08c58c-0064186222</RequestId></Error>");
 
-        const nockRequestS4 = nock(url1S3)
-          .defaultReplyHeaders(_headers1)
+        const nockRequestS3 = nock(url1S3)
           .get('/')
           .reply(500, "");
 
@@ -1783,7 +1751,6 @@ describe.only('S3 SDK', function () {
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
-          assert.strictEqual(nockRequestS4.pendingMocks().length, 0);
           done();
         })
       })
