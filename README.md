@@ -18,8 +18,8 @@
 ## Getting Start
 
 Install and setup in less than 2 minutes:
-- [AWS S3 API and EXAMPLES](./USAGE-S3.md)
-- [Open Stack Swift Storage API and EXAMPLES](./USAGE-SWIFT.md)
+- [AWS S3 API](./USAGE-S3.md)
+- [Open Stack Swift Storage API](./USAGE-SWIFT.md)
 
 ## Supported Methods
 
