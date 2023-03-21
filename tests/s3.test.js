@@ -17,7 +17,7 @@ const fileXml = fs.readFileSync(fileXmlPath).toString();
 const _listObjectsResponseXML = fs.readFileSync(path.join(__dirname, "./assets", 'listObjects.response.xml'));
 const _listObjectsResponseJSON = require('./assets/listObjects.response.json');
 
-describe.only('S3 SDK', function () {
+describe('S3 SDK', function () {
 
   beforeEach(function() {
     storage = s3([{
@@ -247,7 +247,7 @@ describe.only('S3 SDK', function () {
           done();
         })
       })
-    });
+    })
 
     describe("SWITCH TO CHILD STORAGE", function () {
       it('should fetch a list of objects', function (done) {
@@ -794,6 +794,14 @@ describe.only('S3 SDK', function () {
           assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_header));
           assert.strictEqual(resp.body.toString(), '');
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+        })
+      })
+
+      it("should return an error if the file provided as local path does not exist", function() {
+
+        storage.uploadFile('bucket', 'file.pdf', '/var/random/path/file.pdf', function(err, resp) {
+          assert.strictEqual(err.toString(), "Error: ENOENT: no such file or directory, open '/var/random/path/file.pdf'");
+          assert.strictEqual(resp, undefined);
         })
       })
 

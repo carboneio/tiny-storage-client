@@ -2,7 +2,7 @@ const get = require('simple-get');
 const aws4 = require('aws4');
 const crypto = require('crypto');
 const fs = require('fs');
-const xmlToJson = require('./xmltoJson.js')
+const xmlToJson = require('./xmlToJson.js')
 
 let _config = {
   /** List of S3 credentials */
