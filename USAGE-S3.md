@@ -159,8 +159,12 @@ s3storage.deleteFiles('bucketName', files, (err, resp) => {
   if (err) {
     return console.log("Error on deleting files: ", err.toString());
   }
-  console.log(resp);
-  console.log(resp.body);
+  /**
+   * Request reponse:
+   * - resp.body => body as JSON listing deleted files and errors
+   * - resp.headers
+   * - resp.statusCode
+   */
 });
 ```
 
@@ -231,13 +235,12 @@ s3storage.setFileMetadata('steeve-test-bucket', 'template.odt', { headers: _head
   if (err) {
     return console.log("Error on updating metadata: ", err.toString());
   }
-  console.log(resp);
-  s3storage.getFileMetadata('steeve-test-bucket', 'template.odt', (err, resp) => {
-    if (err) {
-      return console.log("Error on getting metadata: ", err.toString());
-    }
-    console.log(resp);
-  })
+  /**
+   * Request reponse:
+   * - resp.body
+   * - resp.headers
+   * - resp.statusCode
+   */
 })
 ```
 ### Head Bucket
