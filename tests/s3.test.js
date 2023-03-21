@@ -1527,11 +1527,6 @@ describe.only('S3 SDK', function () {
         })
       })
 
-
-      it.skip('should return an error if the file metadata is greater than 2KB', function(done){
-
-      })
-
       it('should return an error if the object does not exist', function(done){
         const _headers = {
           'content-type': 'application/xml',
@@ -1603,6 +1598,48 @@ describe.only('S3 SDK', function () {
               message: 'The specified bucket does not exist.',
               requestid: 'txb63fe612d3364257bec19-0064185fcf',
               bucketname: 'buckeeet'
+            }
+          }));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+      it('should return an error if metadata headers aceed the maximum allowed metadata size (2048 Bytes)', function(done){
+        const _headers = {
+          'content-type': 'application/xml',
+          'x-amz-id-2': 'txb63fe612d3364257bec19-0064185fcf',
+          'x-amz-request-id': 'txb63fe612d3364257bec19-0064185fcf',
+          'x-trans-id': 'txb63fe612d3364257bec19-0064185fcf',
+          'x-openstack-request-id': 'txb63fe612d3364257bec19-0064185fcf',
+          date: 'Mon, 20 Mar 2023 13:29:51 GMT',
+          'transfer-encoding': 'chunked',
+          connection: 'close'
+        }
+
+        const nockRequestS1 = nock(url1S3)
+          .defaultReplyHeaders(_headers)
+          .intercept("/bucket/file.pdf", "HEAD")
+          .reply(200, "");
+
+        const nockRequestS2 = nock(url1S3)
+          .defaultReplyHeaders(_headers)
+          .put('/bucket/file.pdf')
+          .reply(400, "<Error><Code>MetadataTooLarge</Code><Message>Your metadata headers exceed the maximum allowed metadata size</Message><Size>3072</Size><MaxSizeAllowed>2048</MaxSizeAllowed><RequestId>4SJA4PV72M8WXZ46</RequestId><HostId>GHxUyWQsQrv4DNU+X6K2YYqBN65twd+IZH0g3yRz7HQ7EXcVlfE8e81eJ559/3SyY0FscUdsyWY=</HostId></Error>");
+
+        storage.setFileMetadata('bucket', 'file.pdf', { headers: { "x-amz-meta-name": "Invoice 2023", "x-amz-meta-version": "1.2.3"  } }, (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 400);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify({
+            error: {
+              code: 'MetadataTooLarge',
+              message: 'Your metadata headers exceed the maximum allowed metadata size',
+              size: 3072,
+              maxsizeallowed: 2048,
+              requestid: '4SJA4PV72M8WXZ46',
+              hostid: 'GHxUyWQsQrv4DNU+X6K2YYqBN65twd+IZH0g3yRz7HQ7EXcVlfE8e81eJ559/3SyY0FscUdsyWY='
             }
           }));
           assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
@@ -1753,6 +1790,56 @@ describe.only('S3 SDK', function () {
 
     });
 
+  });
+
+  describe('getMetadataTotalBytes', function() {
+
+    it('should count headers metadata size', function(done) {
+      /** value + "name-1" */
+      assert.strictEqual(storage.getMetadataTotalBytes({
+        "x-amz-meta-name-1": "ehseedwosyevblphjjeqfwhfiuojgznptwtpogzyiqiakqpyfsehfoafciyzjuugmjmtvrwjfgfdhbiocoowyggqpzwmfcogmqvaebcfchaxwkllqspdxdisbaxqnbgexpzkllonbkjjmmtccbosocwjgatjeokarbklcagejpzyypjbrinqzqdbxjgeswyhcmgiuifnwrgqhkpthtfuehseedwosyevblphjjeqfwhfiuojgznptwtpogzyiqiakqpyfsehfoafciyzjuugmjmtvrwjfgfdhbiocoowyggqpzwmfcogmqvaebcfchaxwkllqspdxdisbaxqnbgexpzkllonbkjjmmtccbosocwjgatjeokarbklcagejpzyypjbrinqzqdbxjgeswyhcmgiuifnwrgqhkpthtfuehseedwosyevblphjjeqfwhfiuojgznptwtpogzyiqiakqpyfsehfoafciyzjuugmjmtvrwjfgfdhbiocoowyggqpzwmfcogmqvaebcfchaxwkllqspdxdisbaxqnbgexpzkllonbkjjmmtccbosocwjgatjeokarbklcagejpzyypjbrinqzqdbxjgeswyhcmgiuifnwrgqhkpthtfu"
+      }), 642)
+      /** values + "name-1" + "name-2" and ignore "x-amz-metadata" */
+      assert.strictEqual(storage.getMetadataTotalBytes({
+        "x-amz-metadata": "should not count",
+        "x-amz-meta-name-1": "123456",
+        "x-amz-meta-name-2": "789",
+      }), 21)
+      /** should ignore if none start with x-amz-meta- */
+      assert.strictEqual(storage.getMetadataTotalBytes({
+        "x-amz-metadata": "should not count",
+        "name-1": "123456",
+        "name-2": "789",
+      }), 0)
+      done();
+    })
+  })
+
+  describe('setLogFunction', function () {
+    it('should overload the log function', function (done) {
+      let i = 0;
+
+      storage.setLogFunction(function (message, level) {
+        assert.strictEqual(message.length > 0, true)
+        assert.strictEqual(level.length > 0, true)
+        i++;
+      })
+
+      const nockRequestS1 = nock(url1S3)
+        .intercept("/bucket", "HEAD")
+        .reply(500, "");
+      const nockRequestS2 = nock(url2S3)
+        .intercept("/bucket", "HEAD")
+        .reply(200, "");
+
+      storage.headBucket('bucket', (err) => {
+        assert.strictEqual(err, null);
+        assert.strictEqual(i > 0, true);
+        assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+        assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+        done();
+      });
+    });
   });
 
 });

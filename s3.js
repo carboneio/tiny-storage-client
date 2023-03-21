@@ -339,7 +339,8 @@ module.exports = (config) => {
     getConfig,
     setConfig,
     xmlToJson,
-    setLogFunction
+    setLogFunction,
+    getMetadataTotalBytes
   }
 }
 
@@ -398,6 +399,18 @@ function getUrlParameters (queries, defaultQueries) {
     }
   }
   return _queries ? '?' + _queries : '';
+}
+
+function getMetadataTotalBytes(header){
+  let _str = '';
+  for (const key in header) {
+    const element = header[key];
+    if (key.includes('x-amz-meta-') === true ) {
+      _str += key.replace('x-amz-meta-', ''); /** must count the metadata name without "x-amz-meta-" */
+      _str += element;
+    }
+  }
+  return Buffer.from(_str).length
 }
 
 /**
