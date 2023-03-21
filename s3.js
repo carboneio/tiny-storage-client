@@ -272,15 +272,8 @@ function request (method, path, options, callback) {
     } else if (err) {
       return callback(err, res);
     }
-    if (res.statusCode >= 400 && res?.headers?.['content-type'] === 'application/xml') {
-      if (options?.stream === true) {
-        return streamToString(res, (err, bodyErrorString) => {
-          if (err) {
-            return callback(err);
-          }
-          callback(null, { headers : res.headers, statusCode: res.statusCode, body : xmlToJson(bodyErrorString) });
-        });
-      }
+    /** If the response is an error as XML and not a stream, the error is parsed as JSON */
+    if (res.statusCode >= 400 && res?.headers?.['content-type'] === 'application/xml' && !options?.stream) {
       body = xmlToJson(body?.toString() ?? '');
     }
     return options?.stream === true ? callback(null, res) : callback(null, { headers : res.headers, statusCode: res.statusCode, body : body });
@@ -349,19 +342,6 @@ module.exports = (config) => {
 }
 
 /******************** UTILS **********************/
-
-/**
- * Convert a stream to a string
- * @param {Stream} stream
- * @param {Function} callback function(err, result):void = The `err` is null by default. `result` is a String
- */
-function streamToString (stream, callback) {
-  const chunks = [];
-
-  stream.on('error', (err) => callback(err));
-  stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
-  stream.on('end', () => callback(null, Buffer.concat(chunks).toString('utf8')));
-}
 
 /**
  * Used for the 'Content-MD5' header:

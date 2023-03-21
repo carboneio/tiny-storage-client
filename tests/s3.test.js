@@ -387,6 +387,35 @@ describe('S3 SDK', function () {
         })
       })
 
+      it('should download a file as STREAM', function(done) {
+        const _header = {
+          'content-length': '1492',
+          'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
+          date: 'Wed, 03 Nov 2021 14:28:48 GMT',
+          etag: 'a30776a059eaf26eebf27756a849097d',
+          'x-amz-request-id': '318BC8BC148832E5',
+          'x-amz-id-2': 'eftixk72aD6Ap51TnqcoF8eFidJG9Z/2mkiDFu8yU9AS1ed4OpIszj7UDNEHGran'
+        }
+        const nockRequest = nock(url1S3)
+          .defaultReplyHeaders(_header)
+          .get('/bucket/file.docx')
+          .reply(200, () => {
+            return fileTxt;
+          });
+        storage.downloadFile('bucket', 'file.docx', { stream: true }, function (err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          let data = '';
+          resp.on('data', chunk => data += chunk);
+          resp.on('end', function () {
+            assert.strictEqual(data,fileTxt)
+            assert.strictEqual(nockRequest.pendingMocks().length, 0);
+            assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_header))
+            done();
+          });
+        })
+      })
+
       it('should download a file from an alias', function(done) {
         const _header = {
           'content-length': '1492',
@@ -473,6 +502,34 @@ describe('S3 SDK', function () {
           assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_header))
           assert.strictEqual(nockRequest.pendingMocks().length, 0);
           done();
+        })
+      })
+
+
+      it('[STREAM] should return code 404 if the file does not exist and should convert the XML as JSON', function(done) {
+        const _header = {'content-type': 'application/xml'}
+        const nockRequest = nock(url1S3)
+          .defaultReplyHeaders(_header)
+          .get('/bucket/file.docx')
+          .reply(404, "<?xml version='1.0' encoding='UTF-8'?><Error><Code>NoSuchKey</Code><Message>The specified key does not exist.</Message><RequestId>txc03d49a36c324653854de-006408d963</RequestId><Key>template222.odt</Key></Error>");
+        storage.downloadFile('bucket', 'file.docx', { stream: true }, function (err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 404);
+          let data = '';
+          resp.on('data', chunk => data += chunk);
+          resp.on('end', function () {
+            assert.strictEqual(JSON.stringify(storage.xmlToJson(data)), JSON.stringify({
+              error: {
+                code: 'NoSuchKey',
+                message: 'The specified key does not exist.',
+                requestid: 'txc03d49a36c324653854de-006408d963',
+                key: 'template222.odt'
+              }
+            }))
+            assert.strictEqual(nockRequest.pendingMocks().length, 0);
+            assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_header))
+            done();
+          });
         })
       })
 
