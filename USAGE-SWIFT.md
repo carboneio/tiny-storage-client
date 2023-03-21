@@ -249,12 +249,18 @@ Example of custom request, bulk delete file from a `customerDocuments` container
 
 
 
-### Log
+### Logs
 
-The package uses debug to print logs into the terminal. To activate logs, you must pass the `DEBUG=*` environment variable.
-You can use the `setLogFunction` to override the default log function. Create a function with two arguments: `message` as a string, `level` as a string and the value can be: `info`/`warning`/`error`. Example to use:
+By default, logs are printed with to `console.log`. You can use the `setLogFunction` to override the default log function. Create a function with two arguments: `message` as a string, `level` as a string and the value can be: `info`/`warning`/`error`. Example to use:
 ```js
 storage.setLogFunction((message, level) => {
   console.log(`${level} : ${message}`);
 })
+```
+
+### Timeout
+
+The default request timeout is 5 seconds, change it by calling `setTimeout`:
+```js
+storage.setTimeout(30000); // 30 seconds
 ```
