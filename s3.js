@@ -6,10 +6,10 @@ const xmlToJson = require('./xmlToJson.js')
 
 let _config = {
   /** List of S3 credentials */
-  storages      : [],
+  storages       : [],
   /** Request params */
   timeout        : 5000,
-  activeStorage  : 0,
+  activeStorage  : 0
 }
 
 let retryReconnectMainStorage = false;
@@ -22,6 +22,7 @@ function downloadFile (bucket, filename, options, callback) {
     callback = options;
     options = {};
   }
+  options.alias = bucket;
   return request('GET', `/${bucket}/${encodeURIComponent(filename)}`, options, callback);
 }
 
@@ -33,6 +34,7 @@ function uploadFile (bucket, filename, localPathOrBuffer, options, callback) {
     callback = options;
     options = {};
   }
+  options.alias = bucket;
   const _uploadFileRequest = function (bucket, filename, objectBuffer, options, callback) {
     options.body = objectBuffer;
     options.headers = {
@@ -64,6 +66,7 @@ function deleteFile (bucket, filename, options, callback) {
     callback = options;
     options = {};
   }
+  options.alias = bucket;
   return request('DELETE', `/${bucket}/${encodeURIComponent(filename)}`, options, callback);
 }
 
@@ -82,6 +85,7 @@ function listFiles(bucket, options, callback) {
     options = {};
   }
   options.defaultQueries = 'list-type=2';
+  options.alias = bucket;
   return request('GET', `/${bucket}`, options, (err, resp) => {
     if (err) {
       return callback(err);
@@ -103,6 +107,7 @@ function getFileMetadata(bucket, filename, options, callback) {
     callback = options;
     options = {};
   }
+  options.alias = bucket;
   return request('HEAD', `/${bucket}/${encodeURIComponent(filename)}`, options, callback);
 }
 
@@ -113,8 +118,13 @@ function getFileMetadata(bucket, filename, options, callback) {
  *
  * @doc https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadBucket.html
  */
-function headBucket(bucket, callback) {
-  return request('HEAD', `/${bucket}`, {}, callback);
+function headBucket(bucket, options, callback) {
+  if (!callback) {
+    callback = options;
+    options = {};
+  }
+  options.alias = bucket;
+  return request('HEAD', `/${bucket}`, options, callback);
 }
 
 /**
@@ -132,6 +142,7 @@ function setFileMetadata(bucket, filename, options, callback) {
     options = {};
   }
 
+  options.alias = bucket;
   options["headers"] = {
     'x-amz-copy-source': `/${bucket}/${encodeURIComponent(filename)}`,
     'x-amz-metadata-directive': 'REPLACE',
@@ -160,6 +171,7 @@ function deleteFiles (bucket, files, options, callback) {
     callback = options;
     options = {};
   }
+  options.alias = bucket;
 
   let _body = '<Delete>';
   for (let i = 0; i < files.length; i++) {
@@ -219,10 +231,20 @@ function request (method, path, options, callback) {
   const _activeStorage = _config.storages[options?.checkMainStorageStatus === true ? 0 : _config.activeStorage];
   options.originalStorage = _config.activeStorage;
 
+  /**
+   * Return a bucket name based on an alias and current active storage.
+   * If the alias does not exist, the alias is returned as bucket name
+   */
+  const _activeBucket = _config.storages[_config.activeStorage]?.buckets?.[options?.alias] ?? options?.alias;
+  let _path = path;
+  if (options?.alias !== _activeBucket) {
+    _path = _path.replace(options?.alias, _activeBucket);
+  }
+
   const _urlParams = getUrlParameters(options?.queries ?? '', options?.defaultQueries ?? '');
   const _requestParams = aws4.sign({
     method: method,
-    url: `https://${_activeStorage.url}${path}${_urlParams ?? ''}`,
+    url: `https://${_activeStorage.url}${_path}${_urlParams ?? ''}`,
     ...(options?.body ? { body: options?.body } : {}),
     headers: {
       ...(options?.headers ? options?.headers : {})

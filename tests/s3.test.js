@@ -24,13 +24,19 @@ describe('S3 SDK', function () {
       accessKeyId    : '2371bebbe7ac4b2db39c09eadf011661',
       secretAccessKey: '9978f6abf7f445566a2d316424aeef2',
       url            : url1S3.replace('https://', ''),
-      region         : 'gra'
+      region         : 'gra',
+      buckets        : {
+        invoices : "invoices-gra-1234"
+      }
     },
     {
       accessKeyId    : '2371bebbe7ac4b2db39c09eadf011661',
       secretAccessKey: '9978f6abf7f445566a2d316424aeef2',
       url            : url2S3.replace('https://', ''),
-      region         : 'de'
+      region         : 'de',
+      buckets        : {
+        invoices : "invoices-de-8888"
+      }
     }]);
   })
 
@@ -110,37 +116,78 @@ describe('S3 SDK', function () {
   });
 
   describe('headBucket', function() {
-    it('should return code 200, and request signed with AWS4', function (done) {
-      const nockRequest = nock(url1S3,
-        {
-          reqheaders: {
-            'x-amz-content-sha256': () => true,
-            'x-amz-date': () => true,
-            'authorization': () => true,
-            'host': () => true
-          }
-        }).intercept("/customBucket", "HEAD").reply(200, '');
+    describe("REQUEST MAIN STORAGE", function () {
 
-      storage.headBucket('customBucket', function(err, resp) {
-        assert.strictEqual(err, null);
-        assert.strictEqual(resp.statusCode, 200);
-        assert.strictEqual(resp.body.toString(), '');
-        assert.strictEqual(nockRequest.pendingMocks().length, 0);
-        done();
+      it('should return code 200, and request signed with AWS4', function (done) {
+        const nockRequest = nock(url1S3,
+          {
+            reqheaders: {
+              'x-amz-content-sha256': () => true,
+              'x-amz-date': () => true,
+              'authorization': () => true,
+              'host': () => true
+            }
+          }).intercept("/customBucket", "HEAD").reply(200, '');
+
+        storage.headBucket('customBucket', function(err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return code 200 and request a bucket as ALIAS', function (done) {
+        const nockRequest = nock(url1S3,
+          {
+            reqheaders: {
+              'x-amz-content-sha256': () => true,
+              'x-amz-date': () => true,
+              'authorization': () => true,
+              'host': () => true
+            }
+          }).intercept("/invoices-gra-1234", "HEAD").reply(200, '');
+
+        storage.headBucket('invoices', function(err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return code 403 Forbidden', function (done) {
+        const nockRequest = nock(url1S3).intercept("/customBucket", "HEAD").reply(403, '');
+
+        storage.headBucket('customBucket', function(err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 403);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        });
       });
     });
 
-    it('should return code 403 Forbidden', function (done) {
-      const nockRequest = nock(url1S3).intercept("/customBucket", "HEAD").reply(403, '');
+    describe("SWITCH TO CHILD STORAGE", function () {
+      it('should switch to the child storage and return code 200 with bucket as ALIAS', function (done) {
+        const nockRequestS1 = nock(url1S3).intercept("/invoices-gra-1234", "HEAD").reply(500, '');
+        const nockRequestS2 = nock(url2S3).intercept("/invoices-de-8888", "HEAD").reply(200, '');
+        const nockRequestS3 = nock(url1S3).get('/').reply(500);
 
-      storage.headBucket('customBucket', function(err, resp) {
-        assert.strictEqual(err, null);
-        assert.strictEqual(resp.statusCode, 403);
-        assert.strictEqual(resp.body.toString(), '');
-        assert.strictEqual(nockRequest.pendingMocks().length, 0);
-        done();
+        storage.headBucket('invoices', function(err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+          done();
+        });
       });
-    });
+    })
   });
 
   describe('listFiles', function() {
@@ -167,6 +214,36 @@ describe('S3 SDK', function () {
           });
 
         storage.listFiles('bucket', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify(_listObjectsResponseJSON));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_header))
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+      it('should fetch a list of objects from a bucket as ALIAS', function (done) {
+        const _header = {
+          'content-type': 'application/xml',
+          'content-length': '1887',
+          'x-amz-id-2': 'txf0b438dfd25b444ba3f60-00641807d7',
+          'x-amz-request-id': 'txf0b438dfd25b444ba3f60-00641807d7',
+          'x-trans-id': 'txf0b438dfd25b444ba3f60-00641807d7',
+          'x-openstack-request-id': 'txf0b438dfd25b444ba3f60-00641807d7',
+          date: 'Mon, 20 Mar 2023 07:14:31 GMT',
+          connection: 'close'
+        }
+
+        const nockRequest = nock(url1S3)
+          .defaultReplyHeaders(_header)
+          .get('/invoices-gra-1234')
+          .query({ 'list-type' : 2 })
+          .reply(200, () => {
+            return _listObjectsResponseXML;
+          });
+
+        storage.listFiles('invoices', (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(JSON.stringify(resp.body), JSON.stringify(_listObjectsResponseJSON));
@@ -310,6 +387,31 @@ describe('S3 SDK', function () {
         })
       })
 
+      it('should download a file from an alias', function(done) {
+        const _header = {
+          'content-length': '1492',
+          'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
+          date: 'Wed, 03 Nov 2021 14:28:48 GMT',
+          etag: 'a30776a059eaf26eebf27756a849097d',
+          'x-amz-request-id': '318BC8BC148832E5',
+          'x-amz-id-2': 'eftixk72aD6Ap51TnqcoF8eFidJG9Z/2mkiDFu8yU9AS1ed4OpIszj7UDNEHGran'
+        }
+        const nockRequest = nock(url1S3)
+          .defaultReplyHeaders(_header)
+          .get('/invoices-gra-1234/file.docx')
+          .reply(200, () => {
+            return fileTxt;
+          });
+        storage.downloadFile('invoices', 'file.docx', function (err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.toString(), fileTxt);
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_header))
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        })
+      })
+
       it('should download a file with options', function(done) {
         const _header = {
           'content-length': '1492',
@@ -424,6 +526,32 @@ describe('S3 SDK', function () {
           .reply(500);
 
         storage.downloadFile('bucket', 'file.docx', function (err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.toString(), fileTxt);
+          const _config = storage.getConfig();
+          assert.strictEqual(_config.activeStorage, 1);
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+      it('should download a file from the second storage if the main storage returns a 500 error and the container is an ALIAS', function(done) {
+        const nockRequestS1 = nock(url1S3)
+          .get('/invoices-gra-1234/file.docx')
+          .reply(500);
+        const nockRequestS2 = nock(url2S3)
+          .get('/invoices-de-8888/file.docx')
+          .reply(200, () => {
+            return fileTxt
+          });
+        const nockRequestS3 = nock(url1S3)
+          .get('/')
+          .reply(500);
+
+        storage.downloadFile('invoices', 'file.docx', function (err, resp) {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(resp.body.toString(), fileTxt);
@@ -778,6 +906,25 @@ describe('S3 SDK', function () {
         })
       })
 
+      it("should upload a file provided as buffer to a bucket alias", function() {
+
+        const nockRequestS1 = nock(url1S3)
+          .defaultReplyHeaders(_header)
+          .put('/invoices-gra-1234/file.pdf')
+          .reply(200, (uri, requestBody) => {
+            assert.strictEqual(requestBody, fileXml);
+            return '';
+          });
+
+        storage.uploadFile('invoices', 'file.pdf', Buffer.from(fileXml), function(err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_header));
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+        })
+      })
+
       it("should upload a file provided as local path", function() {
 
         const nockRequestS1 = nock(url1S3)
@@ -927,6 +1074,46 @@ describe('S3 SDK', function () {
         })
       })
 
+      it("should upload a file into a child storage into a bucket as ALIAS", function(done) {
+        const _header = {
+          'content-type': 'application/xml',
+          'x-amz-id-2': 'txd14fbe8bc05341c0b548a-00640b2752',
+          'x-amz-request-id': 'txd14fbe8bc05341c0b548a-00640b2752',
+          'x-trans-id': 'txd14fbe8bc05341c0b548a-00640b2752',
+          'x-openstack-request-id': 'txd14fbe8bc05341c0b548a-00640b2752',
+          date: 'Fri, 10 Mar 2023 12:49:22 GMT',
+          'transfer-encoding': 'chunked',
+          connection: 'close'
+        }
+
+        const nockRequestS1 = nock(url1S3)
+          .defaultReplyHeaders(_header)
+          .put('/invoices-gra-1234/file.pdf')
+          .reply(500, '');
+
+        const nockRequestS2 = nock(url2S3)
+          .defaultReplyHeaders(_header)
+          .put('/invoices-de-8888/file.pdf')
+          .reply(200, (uri, requestBody) => {
+            assert.strictEqual(requestBody, fileXml);
+            return '';
+          });
+        const nockRequestS3 = nock(url1S3)
+          .get('/')
+          .reply(500);
+
+        storage.uploadFile('invoices', 'file.pdf', Buffer.from(fileXml), function(err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_header));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+          done();
+        })
+      })
+
       it("should not be able to upload a file into a child storage if the write access is denied.", function(done) {
         const _header = {
           'content-type': 'application/xml',
@@ -1009,6 +1196,33 @@ describe('S3 SDK', function () {
         })
       })
 
+      it('should delete an object into a bucket as ALIAS', function(done) {
+        const _headers = {
+          'content-type': 'text/html; charset=UTF-8',
+          'content-length': '0',
+          'x-amz-id-2': 'txf010ba580ff0471ba3a0b-0064181698',
+          'x-amz-request-id': 'txf010ba580ff0471ba3a0b-0064181698',
+          'x-trans-id': 'txf010ba580ff0471ba3a0b-0064181698',
+          'x-openstack-request-id': 'txf010ba580ff0471ba3a0b-0064181698',
+          date: 'Mon, 20 Mar 2023 08:17:29 GMT',
+          connection: 'close'
+        }
+
+        const nockRequestS1 = nock(url1S3)
+          .defaultReplyHeaders(_headers)
+          .delete('/invoices-gra-1234/file.pdf')
+          .reply(204, '');
+
+        storage.deleteFile('invoices', 'file.pdf', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 204);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          done();
+        })
+      })
+
       it("should return an error if the bucket does not exist", function (done) {
         const _headers = {
           'content-type': 'application/xml',
@@ -1073,6 +1287,43 @@ describe('S3 SDK', function () {
           .reply(500, '');
 
         storage.deleteFile('www', 'file.pdf', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 204);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+      it('should delete an object from the second bucket as ALIAS', function(done) {
+        const _headers = {
+          'content-type': 'text/html; charset=UTF-8',
+          'content-length': '0',
+          'x-amz-id-2': 'txf010ba580ff0471ba3a0b-0064181698',
+          'x-amz-request-id': 'txf010ba580ff0471ba3a0b-0064181698',
+          'x-trans-id': 'txf010ba580ff0471ba3a0b-0064181698',
+          'x-openstack-request-id': 'txf010ba580ff0471ba3a0b-0064181698',
+          date: 'Mon, 20 Mar 2023 08:17:29 GMT',
+          connection: 'close'
+        }
+
+        const nockRequestS1 = nock(url1S3)
+          .delete('/invoices-gra-1234/file.pdf')
+          .reply(500, '');
+
+        const nockRequestS2 = nock(url2S3)
+          .defaultReplyHeaders(_headers)
+          .delete('/invoices-de-8888/file.pdf')
+          .reply(204, '');
+
+        const nockRequestS3 = nock(url1S3)
+          .get('/')
+          .reply(500, '');
+
+        storage.deleteFile('invoices', 'file.pdf', (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 204);
           assert.strictEqual(resp.body.toString(), '');
@@ -1171,12 +1422,58 @@ describe('S3 SDK', function () {
             assert.strictEqual(actualQueryObject.delete !== undefined, true);
             return true;
           })
-          .reply(200, function(uri, body) {
-            console.log(uri, body);
+          .reply(200, function() {
             return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><DeleteResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Deleted><Key>invoice%202023.pdf</Key></Deleted><Deleted><Key>carbone(1).png</Key></Deleted><Deleted><Key>file.txt</Key></Deleted></DeleteResult>";
           })
 
         storage.deleteFiles('www', _filesToDelete, (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify(_expectedBody));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+      it('should delete a list of objects with Bucket as ALIAS', function(done) {
+        const _headers = {
+          'content-type': 'text/html; charset=UTF-8',
+          'content-length': '269',
+          'x-amz-id-2': 'txb383f29c0dad46f9919b5-00641844ba',
+          'x-amz-request-id': 'txb383f29c0dad46f9919b5-00641844ba',
+          'x-trans-id': 'txb383f29c0dad46f9919b5-00641844ba',
+          'x-openstack-request-id': 'txb383f29c0dad46f9919b5-00641844ba',
+          date: 'Mon, 20 Mar 2023 11:34:18 GMT',
+          connection: 'close'
+        }
+
+        const _filesToDelete = [
+          { key: 'invoice 2023.pdf' },
+          { key: 'carbone(1).png' },
+          { key: 'file.txt' }
+        ]
+
+        const _expectedBody = {
+          deleted: _filesToDelete.map((value) => {
+            return {
+              key: encodeURIComponent(value.key)
+            }
+          })
+        }
+
+        const nockRequestS1 = nock(url1S3)
+          .defaultReplyHeaders(_headers)
+          .post('/invoices-gra-1234/')
+          .query((actualQueryObject) => {
+            assert.strictEqual(actualQueryObject.delete !== undefined, true);
+            return true;
+          })
+          .reply(200, function() {
+            return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><DeleteResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Deleted><Key>invoice%202023.pdf</Key></Deleted><Deleted><Key>carbone(1).png</Key></Deleted><Deleted><Key>file.txt</Key></Deleted></DeleteResult>";
+          })
+
+        storage.deleteFiles('invoices', _filesToDelete, (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(JSON.stringify(resp.body), JSON.stringify(_expectedBody));
@@ -1223,8 +1520,7 @@ describe('S3 SDK', function () {
             assert.strictEqual(actualQueryObject.delete !== undefined, true);
             return true;
           })
-          .reply(200, function(uri, body) {
-            console.log(uri, body);
+          .reply(200, function() {
             return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><DeleteResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Deleted><Key>sample1.txt</Key></Deleted><Error><Key>sample2.txt</Key><Code>AccessDenied</Code><Message>Access Denied</Message></Error></DeleteResult>";
           })
 
@@ -1272,8 +1568,7 @@ describe('S3 SDK', function () {
             assert.strictEqual(actualQueryObject.delete !== undefined, true);
             return true;
           })
-          .reply(404, function(uri, body) {
-            console.log(uri, body);
+          .reply(404, function() {
             return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Error><Code>NoSuchBucket</Code><Message>The specified bucket does not exist.</Message><RequestId>tx84736ac6d5544b44ba91a-0064185021</RequestId><BucketName>buckeeeet</BucketName></Error>";
           })
 
@@ -1335,8 +1630,7 @@ describe('S3 SDK', function () {
             assert.strictEqual(actualQueryObject.delete !== undefined, true);
             return true;
           })
-          .reply(200, function(uri, body) {
-            console.log(uri, body);
+          .reply(200, function() {
             return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><DeleteResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Error><Key>invoice%202023.pdf</Key><Code>AccessDenied</Code><Message>Access Denied</Message></Error><Error><Key>carbone(1).png</Key><Code>AccessDenied</Code><Message>Access Denied</Message></Error><Error><Key>file.txt</Key><Code>AccessDenied</Code><Message>Access Denied</Message></Error></DeleteResult>";
           })
         const nockRequestS3 = nock(url1S3)
@@ -1387,6 +1681,39 @@ describe('S3 SDK', function () {
           .reply(200, "");
 
         storage.getFileMetadata('bucket', 'file.pdf', function(err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          done();
+        });
+      })
+
+      it('should get file metadata from a bucket as ALIAS', function(done){
+        const _headers = {
+          'content-type': 'application/x-www-form-urlencoded; charset=utf-8',
+          'content-length': '11822',
+          'x-amz-storage-class': 'STANDARD',
+          'x-amz-meta-name': 'Carbone.io',
+          'x-amz-meta-version': '858585',
+          etag: '"fde6d729123cee4db6bfa3606306bc8c"',
+          'x-amz-version-id': '1679316796.606606',
+          'last-modified': 'Mon, 20 Mar 2023 12:53:16 GMT',
+          'x-amz-id-2': 'txd2aa2b0a02554657b5efe-0064185752',
+          'x-amz-request-id': 'txd2aa2b0a02554657b5efe-0064185752',
+          'x-trans-id': 'txd2aa2b0a02554657b5efe-0064185752',
+          'x-openstack-request-id': 'txd2aa2b0a02554657b5efe-0064185752',
+          date: 'Mon, 20 Mar 2023 12:53:38 GMT',
+          connection: 'close'
+        }
+
+        const nockRequestS1 = nock(url1S3)
+          .defaultReplyHeaders(_headers)
+          .intercept("/invoices-gra-1234/file.pdf", "HEAD")
+          .reply(200, "");
+
+        storage.getFileMetadata('invoices', 'file.pdf', function(err, resp) {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(resp.body.toString(), '');
@@ -1468,6 +1795,50 @@ describe('S3 SDK', function () {
         });
       })
 
+      it('should get file metadata in the second storage with a bucket as ALIAS', function(done){
+        const _headers = {
+          'content-type': 'application/x-www-form-urlencoded; charset=utf-8',
+          'content-length': '11822',
+          'x-amz-storage-class': 'STANDARD',
+          'x-amz-meta-name': 'Carbone.io',
+          'x-amz-meta-version': '858585',
+          etag: '"fde6d729123cee4db6bfa3606306bc8c"',
+          'x-amz-version-id': '1679316796.606606',
+          'last-modified': 'Mon, 20 Mar 2023 12:53:16 GMT',
+          'x-amz-id-2': 'txd2aa2b0a02554657b5efe-0064185752',
+          'x-amz-request-id': 'txd2aa2b0a02554657b5efe-0064185752',
+          'x-trans-id': 'txd2aa2b0a02554657b5efe-0064185752',
+          'x-openstack-request-id': 'txd2aa2b0a02554657b5efe-0064185752',
+          date: 'Mon, 20 Mar 2023 12:53:38 GMT',
+          connection: 'close'
+        }
+
+        const nockRequestS1 = nock(url1S3)
+          .intercept("/invoices-gra-1234/file.pdf", "HEAD")
+          .reply(500, "");
+
+        const nockRequestS2 = nock(url2S3)
+          .defaultReplyHeaders(_headers)
+          .intercept("/invoices-de-8888/file.pdf", "HEAD")
+          .reply(200, "");
+
+        const nockRequestS3 = nock(url1S3)
+          .get('/')
+          .reply(500, '');
+
+        storage.getFileMetadata('invoices', 'file.pdf', function(err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+          done();
+        });
+      })
+
+
     });
 
   });
@@ -1505,6 +1876,46 @@ describe('S3 SDK', function () {
           .reply(200, "<?xml version=\"1.0\" encoding=\"UTF-8\"?><CopyObjectResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><LastModified>2023-03-20T13:13:06.000Z</LastModified><ETag>\"fde6d729123cee4db6bfa3606306bc8c\"</ETag></CopyObjectResult>");
 
         storage.setFileMetadata('bucket', 'file.pdf', { headers: { "x-amz-meta-name": "Invoice 2023", "x-amz-meta-version": "1.2.3"  } }, (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify({
+            lastmodified: '2023-03-20T13:13:06.000Z',
+            etag: 'fde6d729123cee4db6bfa3606306bc8c'
+          }));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers2));
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+      it('should set file metadata with a bucket as ALIAS', function(done){
+
+        const _headers2 = {
+          'content-type': 'application/xml',
+          'content-length': '224',
+          'x-amz-version-id': '1679317926.773804',
+          'last-modified': 'Mon, 20 Mar 2023 13:13:06 GMT',
+          'x-amz-copy-source-version-id': '1679317926.773804',
+          'x-amz-storage-class': 'STANDARD',
+          'x-amz-id-2': 'tx1cbdc88e9f104c038aa3d-0064185be2',
+          'x-amz-request-id': 'tx1cbdc88e9f104c038aa3d-0064185be2',
+          'x-trans-id': 'tx1cbdc88e9f104c038aa3d-0064185be2',
+          'x-openstack-request-id': 'tx1cbdc88e9f104c038aa3d-0064185be2',
+          date: 'Mon, 20 Mar 2023 13:13:06 GMT',
+          connection: 'close'
+        }
+
+        const nockRequestS2 = nock(url1S3, {
+            reqheaders: {
+              'x-amz-copy-source': () => true,
+              'x-amz-metadata-directive': () => true
+            }
+          })
+          .defaultReplyHeaders(_headers2)
+          .put('/invoices-gra-1234/file.pdf')
+          .reply(200, "<?xml version=\"1.0\" encoding=\"UTF-8\"?><CopyObjectResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><LastModified>2023-03-20T13:13:06.000Z</LastModified><ETag>\"fde6d729123cee4db6bfa3606306bc8c\"</ETag></CopyObjectResult>");
+
+        storage.setFileMetadata('invoices', 'file.pdf', { headers: { "x-amz-meta-name": "Invoice 2023", "x-amz-meta-version": "1.2.3"  } }, (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(JSON.stringify(resp.body), JSON.stringify({
@@ -1641,22 +2052,6 @@ describe('S3 SDK', function () {
     describe("SWITCH TO CHILD STORAGE", function () {
 
       it('should set file metadata in the child storage', function(done){
-        const _headers1 = {
-          'content-type': 'application/x-www-form-urlencoded; charset=utf-8',
-          'content-length': '11822',
-          'x-amz-storage-class': 'STANDARD',
-          'x-amz-meta-name': 'Carbone test 12345',
-          'x-amz-meta-version': '1.2.3',
-          etag: '"fde6d729123cee4db6bfa3606306bc8c"',
-          'x-amz-version-id': '1679317926.773804',
-          'last-modified': 'Mon, 20 Mar 2023 13:12:07 GMT',
-          'x-amz-id-2': 'tx1db035bd3ede4520a0fee-0064185be1',
-          'x-amz-request-id': 'tx1db035bd3ede4520a0fee-0064185be1',
-          'x-trans-id': 'tx1db035bd3ede4520a0fee-0064185be1',
-          'x-openstack-request-id': 'tx1db035bd3ede4520a0fee-0064185be1',
-          date: 'Mon, 20 Mar 2023 13:13:05 GMT',
-          connection: 'close'
-        }
 
         const _headers2 = {
           'content-type': 'application/xml',
@@ -1699,6 +2094,63 @@ describe('S3 SDK', function () {
 
 
         storage.setFileMetadata('bucket', 'file.pdf', { headers: { "x-amz-meta-name": "Invoice 2023", "x-amz-meta-version": "1.2.3"  } }, (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify({
+            lastmodified: '2023-03-20T13:13:06.000Z',
+            etag: 'fde6d729123cee4db6bfa3606306bc8c'
+          }));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers2));
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+      it('should set file metadata in the child storage with a bucket as ALIAS', function(done){
+
+        const _headers2 = {
+          'content-type': 'application/xml',
+          'content-length': '224',
+          'x-amz-version-id': '1679317926.773804',
+          'last-modified': 'Mon, 20 Mar 2023 13:13:06 GMT',
+          'x-amz-copy-source-version-id': '1679317926.773804',
+          'x-amz-storage-class': 'STANDARD',
+          'x-amz-id-2': 'tx1cbdc88e9f104c038aa3d-0064185be2',
+          'x-amz-request-id': 'tx1cbdc88e9f104c038aa3d-0064185be2',
+          'x-trans-id': 'tx1cbdc88e9f104c038aa3d-0064185be2',
+          'x-openstack-request-id': 'tx1cbdc88e9f104c038aa3d-0064185be2',
+          date: 'Mon, 20 Mar 2023 13:13:06 GMT',
+          connection: 'close'
+        }
+
+
+        const nockRequestS1 = nock(url1S3, {
+            reqheaders: {
+              'x-amz-copy-source': () => true,
+              'x-amz-metadata-directive': () => true
+            }
+          })
+          .put('/invoices-gra-1234/file.pdf')
+          .reply(500, "");
+
+        const nockRequestS2 = nock(url2S3, {
+            reqheaders: {
+              'x-amz-copy-source': () => true,
+              'x-amz-metadata-directive': () => true
+            }
+          })
+          .defaultReplyHeaders(_headers2)
+          .put('/invoices-de-8888/file.pdf')
+          .reply(200, "<?xml version=\"1.0\" encoding=\"UTF-8\"?><CopyObjectResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><LastModified>2023-03-20T13:13:06.000Z</LastModified><ETag>\"fde6d729123cee4db6bfa3606306bc8c\"</ETag></CopyObjectResult>");
+
+        const nockRequestS3 = nock(url1S3)
+          .get('/')
+          .reply(500, "");
+
+
+        storage.setFileMetadata('invoices', 'file.pdf', { headers: { "x-amz-meta-name": "Invoice 2023", "x-amz-meta-version": "1.2.3"  } }, (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(JSON.stringify(resp.body), JSON.stringify({
