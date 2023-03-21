@@ -19,6 +19,10 @@
 - Aws S3: **[Coming soon]**
 - [Open Stack Swift](./USAGE-SWIFT.md)
 
+## API Usage
+
+**[Coming soon]**
+
 ## Run tests
 
 Install
