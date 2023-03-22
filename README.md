@@ -46,20 +46,20 @@ If something goes wrong when downloading the file, the SDK will switch storage a
 As soon as the first storage is available, the SDK returns to the main storage
 
 ```js
-const storageSDK = require('tiny-storage-client');
+const storageClient = require('tiny-storage-client');
 
-const s3storage = storageSDK({
-  accessKeyId    : 'accessKeyId',
-  secretAccessKey: 'secretAccessKey',
-  url            : 's3.gra.io.cloud.ovh.net',
-  region         : 'gra'
-},
-{
-  accessKeyId    : 'accessKeyId',
-  secretAccessKey: 'secretAccessKey',
-  url            : 's3.eu-west-3.amazonaws.com',
-  region         : 'eu-west-3'
-})
+const s3storage = storageClient([{
+    accessKeyId    : 'accessKeyId',
+    secretAccessKey: 'secretAccessKey',
+    url            : 's3.gra.io.cloud.ovh.net',
+    region         : 'gra'
+  },
+  {
+    accessKeyId    : 'accessKeyId',
+    secretAccessKey: 'secretAccessKey',
+    url            : 's3.eu-west-3.amazonaws.com',
+    region         : 'eu-west-3'
+  }])
 
 s3storage.downloadFile('bucketName', 'filename.pdf', (err, resp) => {
   if (err) {

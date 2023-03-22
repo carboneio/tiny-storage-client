@@ -30,7 +30,7 @@ On the following example, the SDK is initialised with credentials of 2 cloud pro
 ```js
 const storageSDK = require('tiny-storage-client');
 
-const s3storage = storageSDK({
+const s3storage = storageSDK([{
   accessKeyId    : 'accessKeyId',
   secretAccessKey: 'secretAccessKey',
   url            : 's3.gra.io.cloud.ovh.net',
@@ -41,7 +41,7 @@ const s3storage = storageSDK({
   secretAccessKey: 'secretAccessKey',
   url            : 's3.eu-west-3.amazonaws.com',
   region         : 'eu-west-3'
-})
+}])
 ```
 
 ### Upload a file
