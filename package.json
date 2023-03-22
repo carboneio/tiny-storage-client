@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "mocha ./tests",
-    "lint": "eslint \"index.js\" \"tests/**/*.js\" --fix"
+    "lint": "eslint --fix \"index.js\" \"s3.js\" \"swift.js\" \"xmlToJson.js\" \"tests/**/*.js\""
   },
   "keywords": [
     "Object",
@@ -32,8 +32,8 @@
     "simple-get": "=4.0.1"
   },
   "devDependencies": {
-    "eslint": "=8.26.0",
-    "mocha": "=10.1.0",
-    "nock": "=13.2.9"
+    "eslint": "=8.36.0",
+    "mocha": "=10.2.0",
+    "nock": "=13.3.0"
   }
 }
