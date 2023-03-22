@@ -1,3 +1,7 @@
+### v1.0.0
+- Renamed the project "high-availability-object-storage" to "tiny-storage-client"
+- Added support for AWS s3, [learn more to connect and request](./USAGE-S3.md)
+
 ### v0.4.0
 - the `request` function accept an option `stream:true` to get the HTTP response as a stream, instead of a content as Buffer, such as: `request(method, path, { headers, queries, body, stream: true }, (err, resp) => {})`.
 - Removed `debug` package
