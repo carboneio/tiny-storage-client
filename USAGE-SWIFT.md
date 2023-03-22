@@ -63,9 +63,9 @@ Learn more [on the OpenStack documentation](https://docs.openstack.org/swift/lat
 ### 2. Install the package with your package manager:
 
 ```bash
-$ npm install --save high-availability-object-storage
+$ npm install --save tiny-storage-client
 // or
-$ yarn add high-availability-object-storage
+$ yarn add tiny-storage-client
 ```
 ## API Usage
 
@@ -74,7 +74,7 @@ $ yarn add high-availability-object-storage
 Initialise the SDK with one or multiple storage, if something goes wrong, the next region will take over automatically. If any storage is available, an error message is returned `Error: Object Storages are not available`.
 
 ```js
-const storageSDK = require('high-availability-object-storage');
+const storageSDK = require('tiny-storage-client');
 
 let storage = storageSDK([{
   authUrl    : 'https://auth.cloud.ovh.net/v3',

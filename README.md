@@ -1,6 +1,6 @@
 # Tiny client for distributed S3/Swift storages
 
-![GitHub release (latest by date)](https://img.shields.io/github/v/release/carboneio/high-availability-object-storage?style=for-the-badge)
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/carboneio/tiny-storage-client?style=for-the-badge)
 [![Documentation](https://img.shields.io/badge/documentation-yes-brightgreen.svg?style=for-the-badge)](#api-usage)
 
 > High availability, Performances, and Simplicity are the main focus of this tiny Node client to request AWS S3 API or the OpenStack Swift Object Storage API. It was initially made to request OVHCloud, but it can be used for any Server/Cloud provider.
@@ -46,7 +46,7 @@ If something goes wrong when downloading the file, the SDK will switch storage a
 As soon as the first storage is available, the SDK returns to the main storage
 
 ```js
-const storageSDK = require('high-availability-object-storage');
+const storageSDK = require('tiny-storage-client');
 
 const s3storage = storageSDK({
   accessKeyId    : 'accessKeyId',
@@ -92,7 +92,7 @@ $ npm run test
 
 Contributions, issues and feature requests are welcome!
 
-Feel free to check [issues page](https://github.com/carboneio/high-availability-object-storage/issues).
+Feel free to check [issues page](https://github.com/carboneio/tiny-storage-client/issues).
 
 ## Show your support
 
