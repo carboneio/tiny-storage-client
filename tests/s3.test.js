@@ -17,7 +17,7 @@ const fileXml = fs.readFileSync(fileXmlPath).toString();
 const _listObjectsResponseXML = fs.readFileSync(path.join(__dirname, "./assets", 'listObjects.response.xml'));
 const _listObjectsResponseJSON = require('./assets/listObjects.response.json');
 
-describe('S3 SDK', function () {
+describe.only('S3 SDK', function () {
 
   beforeEach(function() {
     storage = s3([{
@@ -188,6 +188,116 @@ describe('S3 SDK', function () {
         });
       });
     })
+  });
+
+  describe('listBuckets', function() {
+
+    describe("REQUEST MAIN STORAGE", function () {
+      it('should fetch a list of buckets', function (done) {
+        const _header = {
+          'content-type': 'application/xml',
+          'content-length': '366',
+          'x-amz-id-2': 'tx606add09487142fa88e67-00641aacf4',
+          'x-amz-request-id': 'tx606add09487142fa88e67-00641aacf4',
+          'x-trans-id': 'tx606add09487142fa88e67-00641aacf4',
+          'x-openstack-request-id': 'tx606add09487142fa88e67-00641aacf4',
+          date: 'Wed, 22 Mar 2023 07:23:32 GMT',
+          connection: 'close'
+        }
+
+        const nockRequest = nock(url1S3)
+          .defaultReplyHeaders(_header)
+          .get('/')
+          .reply(200, () => {
+            return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><ListAllMyBucketsResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Owner><ID>89123456:user-feiowjfOEIJW</ID><DisplayName>12345678:user-feiowjfOEIJW</DisplayName></Owner><Buckets><Bucket><Name>invoices</Name><CreationDate>2023-02-27T11:46:24.000Z</CreationDate></Bucket><Bucket><Name>www</Name><CreationDate>2023-02-27T11:46:24.000Z</CreationDate></Bucket></Buckets></ListAllMyBucketsResult>";
+          });
+
+        storage.listBuckets((err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify({
+            "bucket": [
+              { "name": "invoices", "creationdate": "2023-02-27T11:46:24.000Z" },
+              { "name": "www",      "creationdate": "2023-02-27T11:46:24.000Z" }
+            ]
+          }));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_header))
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+      it('should return an error if credentials are not correct', function (done) {
+        const _header = {
+          'x-amz-request-id': 'BEFVPYB9PM889VMS',
+          'x-amz-id-2': 'Pnby9XcoK7X/GBpwr+vVV/X3XyadxsUkTzGdSJS5zRMhs2RvZDGroWleytOYGmYRSszFbsaZWUo=',
+          'content-type': 'application/xml',
+          'transfer-encoding': 'chunked',
+          date: 'Wed, 22 Mar 2023 07:37:22 GMT',
+          server: 'AmazonS3',
+          connection: 'close'
+        }
+
+        const nockRequest = nock(url1S3)
+          .defaultReplyHeaders(_header)
+          .get('/')
+          .reply(403, () => {
+            return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Error><Code>InvalidAccessKeyId</Code><Message>The AWS Access Key Id you provided does not exist in our records.</Message><AWSAccessKeyId>AKIAUO7WHYLVFADDFL57e</AWSAccessKeyId><RequestId>BSTT951V1FREKS2X</RequestId><HostId>zWFC8ZOiZvyxTUgcYjHDD9rmPDG81TCJHkZhAv4zgguuR5I9aeqSFA9Ns4r5PdKy9+9o+xDLpOk=</HostId></Error>";
+          });
+
+        storage.listBuckets((err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 403);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify({
+            error: {
+              code: 'InvalidAccessKeyId',
+              message: 'The AWS Access Key Id you provided does not exist in our records.',
+              awsaccesskeyid: 'AKIAUO7WHYLVFADDFL57e',
+              requestid: 'BSTT951V1FREKS2X',
+              hostid: 'zWFC8ZOiZvyxTUgcYjHDD9rmPDG81TCJHkZhAv4zgguuR5I9aeqSFA9Ns4r5PdKy9+9o+xDLpOk='
+            }
+          }));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_header))
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        })
+      })
+    });
+
+    describe("SWITCH TO CHILD STORAGE", function () {
+      it('should fetch a list of buckets', function (done) {
+        const nockRequestS1 = nock(url1S3)
+          .get('/')
+          .reply(500, '');
+
+        const nockRequestS2 = nock(url2S3)
+          .get('/')
+          .reply(200, () => {
+            return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><ListAllMyBucketsResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Owner><ID>89123456:user-feiowjfOEIJW</ID><DisplayName>12345678:user-feiowjfOEIJW</DisplayName></Owner><Buckets><Bucket><Name>invoices</Name><CreationDate>2023-02-27T11:46:24.000Z</CreationDate></Bucket><Bucket><Name>www</Name><CreationDate>2023-02-27T11:46:24.000Z</CreationDate></Bucket></Buckets></ListAllMyBucketsResult>";
+          });
+
+        const nockRequestS3 = nock(url1S3)
+          .get('/')
+          .reply(500);
+
+        storage.listBuckets((err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify({
+            "bucket": [
+              { "name": "invoices", "creationdate": "2023-02-27T11:46:24.000Z" },
+              { "name": "www",      "creationdate": "2023-02-27T11:46:24.000Z" }
+            ]
+          }));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify({}))
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+          done();
+        })
+      })
+    });
+
   });
 
   describe('listFiles', function() {

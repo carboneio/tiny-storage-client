@@ -263,6 +263,24 @@ s3storage.headBucket('bucketName', (err, resp) => {
 });
 ```
 
+### List Buckets
+
+Returns a list of all buckets owned by the authenticated sender of the request. To use this operation, you must have the s3:ListAllMyBuckets permission.
+
+```js
+storage.listBuckets((err, resp) => {
+  if (err) {
+    return console.log("Error list Buckets: ", err.toString());
+  }
+  /**
+   * Request reponse:
+   * - resp.body => empty string
+   * - resp.headers
+   * - resp.statusCode
+   */
+})
+```
+
 ### Bucket Alias
 
 To simplify requests to custom named bucket into different S3 providers, it is possible to create aliases by providing a `buckets` object on credentials. When calling a function, define the bucket alias as first argument, it will request the current active storage automatically.

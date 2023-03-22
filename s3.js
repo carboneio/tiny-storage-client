@@ -128,6 +128,28 @@ function headBucket(bucket, options, callback) {
 }
 
 /**
+ * Returns a list of all buckets owned by the authenticated sender of the request. To use this operation, you must have the s3:ListAllMyBuckets permission.
+ * @doc https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListBuckets.html
+ */
+function listBuckets(options, callback) {
+  if (!callback) {
+    callback = options;
+    options = {};
+  }
+  return request('GET', `/`, options, (err, resp) => {
+    if (err) {
+      return callback(err);
+    }
+    const _body = resp?.body?.toString();
+    if (_body && resp.statusCode === 200) {
+      let _regRes = _body?.match(/<Buckets[^<>]*?>([^]*?)<\/Buckets>/);
+      resp.body = xmlToJson(_regRes?.[1], { forceArray: ['bucket'] });
+    }
+    return callback(null, resp);
+  });
+}
+
+/**
  * @doc https://docs.aws.amazon.com/AmazonS3/latest/API/API_CopyObject.html
  *
  * Set metadatas by copying the file, metadata are replaced with metadata provided in the request. Set the header "x-amz-metadata-directive":"COPY" to copy metadata from the source object.
@@ -330,6 +352,7 @@ module.exports = (config) => {
     deleteFiles,
     listFiles,
     headBucket,
+    listBuckets,
     getFileMetadata,
     setFileMetadata,
     setTimeout,
