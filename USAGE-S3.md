@@ -1,15 +1,15 @@
-# Tiny node client for distributed Openstack Swift Object Storage
+# Tiny node client for distributed S3
 
 
-## S3 Highlight
+## Highlight
 
-* 🚀 **Performances** - Vanilla JS + Only 2 dependencies [simple-get](https://github.com/feross/simple-get) for HTTP requests and [aws4](https://github.com/mhart/aws4) for signing S3 requests.
+* 🚀 Vanilla JS + Only 2 dependencies [simple-get](https://github.com/feross/simple-get) for HTTP requests and [aws4](https://github.com/mhart/aws4) for signing S3 requests.
 * 🌎 Provide one or a list of S3 storages credentials: the SDK will switch storage if something goes wrong (Server/DNS not responding, timeout, error 500, too many redirection, authentication error, and more...). As soon as the main storage is available, the SDK returns to the main storage.
 * ✨ File names and request parameters are automatically encoded.
 * ⚡️ Use [Bucket alias](#bucket-alias) if you have synchronised buckets into multiple regions/datacenters
 * 👉 XML responses from S3 are automatically converted as Javascript Objects (for `ListObjects`, `deleteFiles` and any `Errors`).
 * 🚩 When initialising the Tiny SDK client, provide only a list of S3 or a list of Swift credentials, switching from one storage system to another is not supported.
-* ✅ **100% tested** - Production battle-tested against hundreds of GBs of file uploads & downloads
+* ✅ Production battle-tested against hundreds of GBs of file uploads & downloads
 
 ## Install
 
