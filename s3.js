@@ -337,10 +337,6 @@ function setConfig(newConfig) {
   }
 
   _config.storages        = [...newConfig];
-  _config.accessKeyId     = _config.storages[0].accessKeyId;
-  _config.secretAccessKey = _config.storages[0].secretAccessKey;
-  _config.region          = _config.storages[0].region;
-  _config.url             = _config.storages[0].url;
   _config.activeStorage   = 0;
 }
 
