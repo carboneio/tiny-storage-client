@@ -38,6 +38,41 @@ Install and setup in less than 2 minutes:
 | ❌                      |  ✅  [example](./USAGE-S3.md#bucket-alias)          | Bucket Alias  | Simplify requests by using bucket alias |
 
 
+## S3 Example
+
+The following exemple is an initialisation of the SDK client with a list of S3 credentials and a request to download a file.
+If something goes wrong when downloading the file, the SDK will switch storage and retry to download with the second credentials.
+As soon as the first storage is available, the SDK returns to the main storage
+
+```js
+const storageSDK = require('high-availability-object-storage');
+
+const s3storage = storageSDK({
+  accessKeyId    : 'accessKeyId',
+  secretAccessKey: 'secretAccessKey',
+  url            : 's3.gra.io.cloud.ovh.net',
+  region         : 'gra'
+},
+{
+  accessKeyId    : 'accessKeyId',
+  secretAccessKey: 'secretAccessKey',
+  url            : 's3.eu-west-3.amazonaws.com',
+  region         : 'eu-west-3'
+})
+
+s3storage.downloadFile('bucketName', 'filename.pdf', (err, resp) => {
+  if (err) {
+    return console.log("Error on download: ", err);
+  }
+  /**
+   * Request reponse:
+   * - resp.body => downloaded file as Buffer
+   * - resp.headers
+   * - resp.statusCode
+   */
+})
+```
+
 ## Run tests
 
 Install
