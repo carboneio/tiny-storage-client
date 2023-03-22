@@ -233,14 +233,14 @@ function request (method, path, options, callback) {
     _config.activeStorage = 0;
     log(`S3 Storage | All storages are not available - switch to the main storage`, 'error');
     return callback(new Error('All S3 storages are not available'));
-  } else if (_config.activeStorage !== 0 && !options?.checkMainStorageStatus && retryReconnectMainStorage === false) {
+  } else if (_config.activeStorage !== 0 && options?.requestStorageIndex === undefined && retryReconnectMainStorage === false) {
     /**
      * Retry to reconnect to the main storage if a child storage is active by requesting GET "/": Request "ListBuckets". Notes:
-     * - "checkMainStorageStatus" option is used to not create an infinite loop of requests.
+     * - "requestStorageIndex" option is used to request a specific storage, disable the retry and not create an infinite loop of requests into child storages
      * - "retryReconnectMainStorage" global variable is used to request one time and not create SPAM parallele requests to the main storage.
      */
     retryReconnectMainStorage = true;
-    request('GET', `/`, { checkMainStorageStatus: true }, function (err, resp) {
+    request('GET', `/`, { requestStorageIndex: 0 }, function (err, resp) {
       /** If everything is alright, the active storage is reset to the main */
       if (resp?.statusCode === 200) {
         log(`🟢 S3 Storage | Main storage available - reconnecting for next requests`);
@@ -250,14 +250,15 @@ function request (method, path, options, callback) {
     });
   }
 
-  const _activeStorage = _config.storages[options?.checkMainStorageStatus === true ? 0 : _config.activeStorage];
+  /** Get active storage based on an index */
+  const _activeStorage = _config.storages[options?.requestStorageIndex ?? _config.activeStorage];
   options.originalStorage = _config.activeStorage;
 
   /**
    * Return a bucket name based on an alias and current active storage.
    * If the alias does not exist, the alias is returned as bucket name
    */
-  const _activeBucket = _config.storages[_config.activeStorage]?.buckets?.[options?.alias] ?? options?.alias;
+  const _activeBucket = _activeStorage?.buckets?.[options?.alias] ?? options?.alias;
   let _path = path;
   if (options?.alias !== _activeBucket) {
     _path = _path.replace(options?.alias, _activeBucket);
@@ -284,8 +285,8 @@ function request (method, path, options, callback) {
   })
 
   const _requestCallback = function (err, res, body) {
-    if ((err || res?.statusCode >= 500 || res?.statusCode === 401) && !options?.checkMainStorageStatus) {
-      /** Protection when requesting storage in parallel, another request may have already swift to a child storage on Error */
+    if ((err || res?.statusCode >= 500 || res?.statusCode === 401) && options?.requestStorageIndex === undefined) {
+      /** Protection when requesting storage in parallel, another request may have already switch to a child storage on Error */
       if (options.originalStorage === _config.activeStorage) {
         log(`S3 Storage | Activate fallback storage: switch from "${_config.activeStorage}" to "${_config.activeStorage + 1}" | ${err?.toString() || "Status code: " + res?.statusCode}`, 'warning');
         _config.activeStorage += 1;

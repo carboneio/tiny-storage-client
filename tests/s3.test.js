@@ -298,6 +298,61 @@ describe.only('S3 SDK', function () {
       })
     });
 
+    describe("Options 'requestStorageIndex'", function() {
+
+      it("should request the first storage and should return an error if the first storage is not available", function(done) {
+        const nockRequestS1 = nock(url1S3)
+          .get('/')
+          .reply(500, '');
+
+        storage.listBuckets({ requestStorageIndex: 0 }, (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 500);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify({}))
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+      it("should request the second storage and should return an error if the second storage is not available", function(done) {
+        const nockRequestS1 = nock(url2S3)
+          .get('/')
+          .reply(500, '');
+
+        storage.listBuckets({ requestStorageIndex: 1 }, (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 500);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify({}))
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+      it("should request the second storage and get a list of buckets", function(done) {
+        const nockRequestS1 = nock(url2S3)
+          .get('/')
+          .reply(200, () => {
+            return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><ListAllMyBucketsResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Owner><ID>89123456:user-feiowjfOEIJW</ID><DisplayName>12345678:user-feiowjfOEIJW</DisplayName></Owner><Buckets><Bucket><Name>invoices</Name><CreationDate>2023-02-27T11:46:24.000Z</CreationDate></Bucket><Bucket><Name>www</Name><CreationDate>2023-02-27T11:46:24.000Z</CreationDate></Bucket></Buckets></ListAllMyBucketsResult>";
+          });
+
+        storage.listBuckets({ requestStorageIndex: 1 }, (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify({
+            "bucket": [
+              { "name": "invoices", "creationdate": "2023-02-27T11:46:24.000Z" },
+              { "name": "www",      "creationdate": "2023-02-27T11:46:24.000Z" }
+            ]
+          }));
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify({}))
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          done();
+        })
+      })
+    })
+
   });
 
   describe('listFiles', function() {
