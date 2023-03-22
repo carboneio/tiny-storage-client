@@ -1,11 +1,11 @@
 {
-  "name": "high-availability-object-storage",
-  "version": "0.4.0",
-  "description": "High available, performant, and tiny Node SDK Client for OpenStack Swift Object Storage",
+  "name": "tiny-storage-client",
+  "version": "1.0.0",
+  "description": "Tiny node client to request distributed AWS S3 or the OpenStack Swift Object Storage.",
   "main": "index.js",
   "scripts": {
     "test": "mocha ./tests",
-    "lint": "eslint \"index.js\" \"tests/**/*.js\" --fix"
+    "lint": "eslint --fix \"index.js\" \"s3.js\" \"swift.js\" \"xmlToJson.js\" \"tests/**/*.js\""
   },
   "keywords": [
     "Object",
@@ -17,16 +17,23 @@
     "Nodejs",
     "Performances",
     "Tiny",
-    "High Availability"
+    "High Availability",
+    "S3",
+    "Aws4",
+    "Bucket",
+    "Distributed",
+    "Vanillajs"
   ],
   "author": "Steevepay",
+  "homepage": "https://github.com/carboneio/tiny-storage-client",
   "license": "Apache-2.0",
   "dependencies": {
+    "aws4": "=1.12.0",
     "simple-get": "=4.0.1"
   },
   "devDependencies": {
-    "eslint": "=8.26.0",
-    "mocha": "=10.1.0",
-    "nock": "=13.2.9"
+    "eslint": "=8.36.0",
+    "mocha": "=10.2.0",
+    "nock": "=13.3.0"
   }
 }

@@ -1,4 +1,4 @@
-const storageSDK   = require('../index.js');
+const storageSDK   = require('../swift.js');
 const nock   = require('nock');
 const assert = require('assert');
 const fs     = require('fs');
@@ -112,7 +112,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
 
       storage.connection((err) => {
         assert.strictEqual(err, null);
-        assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+        assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
         assert.deepStrictEqual(storage.getConfig().token, tokenAuth);
         assert.deepStrictEqual(storage.getConfig().endpoints.url, connectionResultSuccessV3.token.catalog[9].endpoints[4].url);
         assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -144,7 +144,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
 
       storage.connection((err) => {
         assert.strictEqual(err, null);
-        assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+        assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
         assert.deepStrictEqual(storage.getConfig().token, tokenAuth);
         assert.deepStrictEqual(storage.getConfig().endpoints.url, connectionResultSuccessV3.token.catalog[9].endpoints[4].url);
         assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -179,7 +179,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
 
       storage.connection((err) => {
         assert.strictEqual(err, null);
-        assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+        assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
         assert.deepStrictEqual(storage.getConfig().token, tokenAuth);
         assert.deepStrictEqual(storage.getConfig().endpoints.url, connectionResultSuccessV3.token.catalog[9].endpoints[4].url);
         assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -211,7 +211,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
 
       storage.connection((err) => {
         assert.strictEqual(err, null);
-        assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+        assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
         assert.deepStrictEqual(storage.getConfig().token, tokenAuth);
         assert.deepStrictEqual(storage.getConfig().endpoints.url, connectionResultSuccessV3.token.catalog[9].endpoints[4].url);
         assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -243,7 +243,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
 
       storage.connection((err) => {
         assert.strictEqual(err, null);
-        assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+        assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
         assert.deepStrictEqual(storage.getConfig().token, tokenAuth);
         assert.deepStrictEqual(storage.getConfig().endpoints.url, connectionResultSuccessV3.token.catalog[9].endpoints[4].url);
         assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -280,7 +280,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
         assert.strictEqual(err.message, 'Object Storages are not available');
         storage.connection((err) => {
           assert.strictEqual(err, null);
-          assert.deepStrictEqual(storage.getConfig().actifStorage, 0);
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
           assert.deepStrictEqual(storage.getConfig().token, tokenAuth);
           assert.deepStrictEqual(storage.getConfig().endpoints.url, connectionResultSuccessV3.token.catalog[9].endpoints[20].url);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -489,7 +489,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
           assert.strictEqual(err.message, 'Object Storages are not available');
           assert.strictEqual(body, undefined);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
-          assert.deepStrictEqual(storage.getConfig().actifStorage, 0);
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
           done();
         });
       });
@@ -573,7 +573,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
           done();
         });
       });
@@ -608,7 +608,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
           done();
         });
       });
@@ -647,7 +647,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
           done();
         });
       });
@@ -677,7 +677,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
           done();
         });
       });
@@ -747,7 +747,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(_listFiles2[0].name.length > 0, true)
             assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
 
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -839,7 +839,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(_listFiles4[0].name.length > 0, true)
             assert.strictEqual(_listFiles4[0].content_type.length > 0, true)
 
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -899,7 +899,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(_listFiles2[0].name.length > 0, true)
             assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
 
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -957,7 +957,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(_listFiles2[0].name.length > 0, true)
             assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
 
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -1019,7 +1019,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(_listFiles2[0].name.length > 0, true)
             assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
 
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -1212,7 +1212,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
           done();
         });
 
@@ -1256,7 +1256,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
           done();
         });
       })
@@ -1298,7 +1298,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
           assert.strictEqual(headers['date'].length > 0, true);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
-          assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
           done();
         });
@@ -1340,7 +1340,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
           done();
         });
       });
@@ -1414,7 +1414,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             done();
           }).catch(err => {
             assert.strictEqual(err, null);
@@ -1475,7 +1475,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(results[1].headers['x-openstack-request-id'].length > 0, true);
             assert.strictEqual(results[1].headers['content-length'].length > 0, true);
             assert.strictEqual(results[1].headers['date'].length > 0, true);
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -1537,7 +1537,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(results[1].headers['x-openstack-request-id'].length > 0, true);
             assert.strictEqual(results[1].headers['content-length'].length > 0, true);
             assert.strictEqual(results[1].headers['date'].length > 0, true);
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -1598,7 +1598,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(results[1].headers['x-openstack-request-id'].length > 0, true);
             assert.strictEqual(results[1].headers['content-length'].length > 0, true);
             assert.strictEqual(results[1].headers['date'].length > 0, true);
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -1942,7 +1942,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(results.length, 2);
             assert.strictEqual(results[0], undefined)
             assert.strictEqual(results[1], undefined)
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -2014,7 +2014,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             let _result3 = await uploadFilePromise();
             assert.strictEqual(_result3, undefined);
 
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -2062,7 +2062,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(results[0], undefined)
             assert.strictEqual(results[1], undefined)
 
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -2109,7 +2109,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(results[0], undefined)
             assert.strictEqual(results[1], undefined)
 
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -2384,7 +2384,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(results.length, 2);
             assert.strictEqual(results[0], undefined)
             assert.strictEqual(results[1], undefined)
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -2443,7 +2443,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             let _result3 = await deleteFilePromise();
             assert.strictEqual(_result3, undefined);
 
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -2484,7 +2484,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(results[0], undefined)
             assert.strictEqual(results[1], undefined)
 
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -2523,7 +2523,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(results[0], undefined)
             assert.strictEqual(results[1], undefined)
 
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -2713,7 +2713,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
           done();
         });
 
@@ -2756,7 +2756,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
           done();
         });
       })
@@ -2797,7 +2797,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
           assert.strictEqual(headers['date'].length > 0, true);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
-          assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
           done();
         });
@@ -2838,7 +2838,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
           done();
         });
       });
@@ -2910,7 +2910,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             done();
           }).catch(err => {
             assert.strictEqual(err, null);
@@ -2969,7 +2969,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(results[1]['x-openstack-request-id'].length > 0, true);
             assert.strictEqual(results[1]['content-length'].length > 0, true);
             assert.strictEqual(results[1]['date'].length > 0, true);
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -3029,7 +3029,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(results[1]['x-openstack-request-id'].length > 0, true);
             assert.strictEqual(results[1]['content-length'].length > 0, true);
             assert.strictEqual(results[1]['date'].length > 0, true);
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -3088,7 +3088,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(results[1]['x-openstack-request-id'].length > 0, true);
             assert.strictEqual(results[1]['content-length'].length > 0, true);
             assert.strictEqual(results[1]['date'].length > 0, true);
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -3483,7 +3483,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(results[1]['x-openstack-request-id'].length > 0, true);
             assert.strictEqual(results[1]['content-length'] === '0', true);
             assert.strictEqual(results[1]['date'].length > 0, true);
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -3567,7 +3567,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(_result3['content-length'] === '0', true);
             assert.strictEqual(_result3['date'].length > 0, true);
 
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -3626,7 +3626,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(results[1]['content-length'] === '0', true);
             assert.strictEqual(results[1]['date'].length > 0, true);
 
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -3684,7 +3684,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(results[1]['content-length'] === '0', true);
             assert.strictEqual(results[1]['date'].length > 0, true);
 
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -4133,7 +4133,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(results[1]['headers']['content-length'] === '0', true);
             assert.strictEqual(results[1]['headers']['date'].length > 0, true);
             assert.strictEqual(results[1]['body'].toString(), 'OK');
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -4221,7 +4221,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(_result3['headers']['date'].length > 0, true);
             assert.strictEqual(_result3['body'].toString(), 'OK');
 
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -4282,7 +4282,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(results[1]['headers']['date'].length > 0, true);
             assert.strictEqual(results[1]['body'].toString(), 'OK');
 
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -4342,7 +4342,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(results[1]['headers']['date'].length > 0, true);
             assert.strictEqual(results[1]['body'].toString(), 'OK');
 
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -4665,7 +4665,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(results.length, 2);
             assert.strictEqual(results[0], 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
             assert.strictEqual(results[1], 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -4733,7 +4733,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             let _result3 = await copyRequestPromise();
             assert.strictEqual(_result3, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
 
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -4777,7 +4777,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(results.length, 2);
             assert.strictEqual(results[0], 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
             assert.strictEqual(results[1], 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -4821,7 +4821,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(results[0], 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
             assert.strictEqual(results[1], 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
 
-            assert.deepStrictEqual(storage.getConfig().actifStorage, 1);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
