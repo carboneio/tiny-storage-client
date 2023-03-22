@@ -150,10 +150,10 @@ Bulk delete files (Maximum 1000 keys per requests)
 ```js
 /**
  * Create a list of objects, it can be:
- * - a list of string ["object1.pdf", "object2.docx"]
- * - a list of object with `keys` as attribute name [{ "keys": "object1.pdf"}, { "keys": "object2.docx" }]
+ * - a list of string ["object1.pdf", "object2.docx", "object3.pptx"]
+ * - a list of object with `keys` as attribute name [{ "keys": "object1.pdf"}, { "keys": "object2.docx" }, { "keys": "object3.pptx" }]
 */
-const files = ["object1.pdf", "object2.docx"];
+const files = ["object1.pdf", "object2.docx", "object3.pptx"];
 
 s3storage.deleteFiles('bucketName', files, (err, resp) => {
   if (err) {
@@ -161,9 +161,22 @@ s3storage.deleteFiles('bucketName', files, (err, resp) => {
   }
   /**
    * Request reponse:
-   * - resp.body => body as JSON listing deleted files and errors
    * - resp.headers
    * - resp.statusCode
+   * - resp.body => body as JSON listing deleted files and errors:
+   *  {
+   *    deleted: [
+   *      { key: 'object1.pdf' },
+   *      { key: 'object2.docx' }
+   *    ],
+   *    error: [
+   *      {
+   *       key    : 'object3.pptx',
+   *       code   : 'AccessDenied',
+   *       message: 'Access Denied'
+   *      }
+   *    ]
+   *  }
    */
 });
 ```
@@ -178,9 +191,24 @@ s3storage.listFiles('bucketName', function(err, resp) {
   }
    /**
    * Request reponse:
-   * - resp.body => list of files as JSON format
    * - resp.headers
    * - resp.statusCode
+   * - resp.body => list of files as JSON format:
+   *    {
+   *      "name": "bucketName",
+   *      "keycount": 1,
+   *      "maxkeys": 1000,
+   *      "istruncated": false,
+   *      "contents": [
+   *        {
+   *          "key": "file-1.docx",
+   *          "lastmodified": "2023-03-07T17:03:54.000Z",
+   *          "etag": "7ad22b1297611d62ef4a4704c97afa6b",
+   *          "size": 61396,
+   *          "storageclass": "STANDARD"
+   *        }
+   *      ]
+   *    }
    */
 });
 
@@ -195,9 +223,24 @@ s3storage.listFiles('bucketName', { queries: _queries } function(err, resp) {
   }
    /**
    * Request reponse:
-   * - resp.body => list of files as JSON format
    * - resp.headers
    * - resp.statusCode
+   * - resp.body => list of files as JSON format:
+   *    {
+   *      "name": "bucketName",
+   *      "keycount": 1,
+   *      "maxkeys": 100,
+   *      "istruncated": false,
+   *      "contents": [
+   *        {
+   *          "key": "file-1.docx",
+   *          "lastmodified": "2023-03-07T17:03:54.000Z",
+   *          "etag": "7ad22b1297611d62ef4a4704c97afa6b",
+   *          "size": 61396,
+   *          "storageclass": "STANDARD"
+   *        }
+   *      ]
+   *    }
    */
 });
 ```
@@ -274,7 +317,7 @@ storage.listBuckets((err, resp) => {
   }
   /**
    * Request reponse:
-   * - resp.body => empty string
+   * - resp.body => { bucket: [ { "name": "bucket1", "creationdate": "2023-02-27T11:46:24.000Z" } ] }
    * - resp.headers
    * - resp.statusCode
    */
