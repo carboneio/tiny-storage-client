@@ -28,9 +28,9 @@ Initialise the SDK with one or multiple storage, if something goes wrong (Error 
 On the following example, the SDK is initialised with credentials of 2 cloud providers: a OVHCloud S3 storage and a AWS S3 storage.
 
 ```js
-const storageSDK = require('tiny-storage-client');
+const storageClient = require('tiny-storage-client');
 
-const s3storage = storageSDK([{
+const s3storage = storageClient([{
   accessKeyId    : 'accessKeyId',
   secretAccessKey: 'secretAccessKey',
   url            : 's3.gra.io.cloud.ovh.net',
@@ -329,9 +329,9 @@ storage.listBuckets((err, resp) => {
 To simplify requests to custom named bucket into different S3 providers, it is possible to create aliases by providing a `buckets` object on credentials. When calling a function, define the bucket alias as first argument, it will request the current active storage automatically.
 
 ```js
-const storageSDK = require('tiny-storage-client');
+const storageClient = require('tiny-storage-client');
 
-const s3storage = storageSDK({
+const s3storage = storageClient({
   accessKeyId    : 'accessKeyId',
   secretAccessKey: 'secretAccessKey',
   url            : 's3.gra.io.cloud.ovh.net',

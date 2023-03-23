@@ -74,9 +74,9 @@ $ yarn add tiny-storage-client
 Initialise the SDK with one or multiple storage, if something goes wrong, the next region will take over automatically. If any storage is available, an error message is returned `Error: Object Storages are not available`.
 
 ```js
-const storageSDK = require('tiny-storage-client');
+const storageClient = require('tiny-storage-client');
 
-let storage = storageSDK([{
+let storage = storageClient([{
   authUrl    : 'https://auth.cloud.ovh.net/v3',
   username   : 'username-1',
   password   : 'password-1',
