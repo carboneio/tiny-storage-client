@@ -1,3 +1,7 @@
+### v1.0.1
+- Remove unused code
+- Update documentation
+
 ### v1.0.0
 - Renamed the project "high-availability-object-storage" to "tiny-storage-client"
 - Added support for AWS s3, [learn more to connect and request](./USAGE-S3.md)
