@@ -17,7 +17,7 @@ const fileXml = fs.readFileSync(fileXmlPath).toString();
 const _listObjectsResponseXML = fs.readFileSync(path.join(__dirname, "./assets", 'listObjects.response.xml'));
 const _listObjectsResponseJSON = require('./assets/listObjects.response.json');
 
-describe.only('S3 SDK', function () {
+describe('S3 SDK', function () {
 
   beforeEach(function() {
     storage = s3([{
@@ -93,27 +93,6 @@ describe.only('S3 SDK', function () {
       assert.strictEqual(_storage.getConfig().timeout, 10000);
     });
   })
-
-  describe('request - CALLBACK', function() {
-
-    describe("REQUEST MAIN STORAGE", function () {
-
-    });
-
-    describe("SWITCH TO CHILD STORAGE", function () {
-    });
-
-  });
-
-  describe('request - STREAM', function() {
-
-    describe("REQUEST MAIN STORAGE", function () {
-    });
-
-    describe("SWITCH TO CHILD STORAGE", function () {
-    });
-
-  });
 
   describe('headBucket', function() {
     describe("REQUEST MAIN STORAGE", function () {
@@ -590,10 +569,18 @@ describe.only('S3 SDK', function () {
           'x-amz-request-id': '318BC8BC148832E5',
           'x-amz-id-2': 'eftixk72aD6Ap51TnqcoF8eFidJG9Z/2mkiDFu8yU9AS1ed4OpIszj7UDNEHGran'
         }
-        const nockRequest = nock(url1S3)
+        const nockRequest = nock(url1S3, {
+            reqheaders: {
+              'x-amz-content-sha256': () => true,
+              'x-amz-date': () => true,
+              'authorization': () => true,
+              'host': () => true
+            }
+          })
           .defaultReplyHeaders(_header)
           .get('/invoices-gra-1234/file.docx')
-          .reply(200, () => {
+          .reply(200, (uri, body) => {
+            console.log(uri);
             return fileTxt;
           });
         storage.downloadFile('invoices', 'file.docx', function (err, resp) {

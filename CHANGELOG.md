@@ -1,3 +1,6 @@
+### v1.0.2
+- Fixed Bucket aliases generating a false AWS4 signature
+
 ### v1.0.1
 - Remove unused code
 - Update documentation

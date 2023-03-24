@@ -276,7 +276,7 @@ function request (method, path, options, callback) {
     /** REQUIRED FOR AWS4 SIGNATURE */
     service: 's3',
     hostname: _activeStorage.url,
-    path: `${path}${_urlParams ?? ''}`,
+    path: `${_path}${_urlParams ?? ''}`,
     region: _activeStorage.region,
     protocol: 'https:'
   }, {
