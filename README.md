@@ -98,6 +98,12 @@ Feel free to check [issues page](https://github.com/carboneio/tiny-storage-clien
 
 Give a ⭐️ if this project helped you!
 
-## 👤 Author
+# Supporters
 
-- [**@steevepay**](https://github.com/steevepay)
+This packaged in maintained by Carbone:
+
+<p>
+  <a href="https://carbone.io" target="_blank" alt="Supporter Carbone.io - Automate the generation of documents with a templating and nocode service">
+    <img src="https://raw.githubusercontent.com/carboneio/rock-req/master/doc/carbone-logo.svg" alt="Carbone.io logo" height="60"/>
+  </a>
+</p>
