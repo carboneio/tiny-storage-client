@@ -3,12 +3,54 @@ const nock   = require('nock');
 const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
+var stream = require('stream');
 
 const authURL   = 'https://auth.cloud.ovh.net/v3';
 const publicUrlGRA = 'https://storage.gra.cloud.ovh.net/v1/AUTH_ce3e510224d740a685cb0ae7bdb8ebc3';
 const publicUrlSBG = 'https://storage.sbg.cloud.ovh.net/v1/AUTH_ce3e510224d740a685cb0ae7bdb8ebc3';
 
 const tokenAuth = 'gAAAAABe8JlEGYPUwwOyjqgUBl11gSjDOw5VTtUZ5n8SWxghRGwakDkP_lelLfRctzyhbIFUXjsdPaGmV2xicL-9333lJUnL3M4JYlYCYMWsX3IhnLPYboyti835VdhAHQ7K_d0OC4OYvM04bvL3w_uSbkxPmL27uO0ISUgQdB_mHxoYlol8xYI'
+
+const fileTxt = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
+
+let _dataStreams = ['', '', '', ''];
+function resetDataStreams() {
+  _dataStreams = ['', '', '', '']
+}
+function getOutputStreamFunction (index) {
+  return function (opt, res) {
+    _dataStreams[index] = ''
+    const outputStream = new stream.Writable();
+    outputStream._write = function (chunk, encoding, done) {
+      _dataStreams[index] += chunk;
+      done();
+    };
+
+    outputStream.on('error', (err) => {
+      console.log('Error Stream:', err.toString());
+      _dataStreams[index] = '';
+    });
+    return outputStream
+  }
+}
+
+let dataStream = ''
+const outputStreamFunction = function (opt, res) {
+
+  dataStream = ''
+  const outputStream = new stream.Writable();
+  outputStream._write = function (chunk, encoding, done) {
+    dataStream += chunk;
+    done();
+  };
+
+  outputStream.on('error', (err) => {
+    console.log('Error Stream:', err.toString());
+    dataStream = '';
+  });
+  return outputStream
+}
+
 
 describe('Ovh Object Storage High Availability Node Client', function () {
   let storage = storageSDK();
@@ -934,8 +976,8 @@ describe('Ovh Object Storage High Availability Node Client', function () {
               return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
             });
 
-          let promise1 = getListFilesPromise()
-          let promise2 = getListFilesPromise()
+          let promise1 = getListFilesPromise(0)
+          let promise2 = getListFilesPromise(0)
 
 
           Promise.all([promise1, promise2]).then(results => {
@@ -4366,15 +4408,11 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
            });
 
-        storage.request('GET', '/templates/file.txt', { stream : true }, (err, res) => {
+        storage.request('GET', '/templates/file.txt', { output : outputStreamFunction }, (err) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
-          let data = '';
-          res.on('data', chunk => data += chunk);
-          res.on('end', function () {
-            assert.strictEqual(data, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
-            done();
-          });
+          assert.strictEqual(dataStream, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          done();
         });
       });
 
@@ -4392,16 +4430,12 @@ describe('Ovh Object Storage High Availability Node Client', function () {
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        storage.request('GET', '/templates/file.txt', { stream : true }, (err, res) => {
+        storage.request('GET', '/templates/file.txt', { output : outputStreamFunction }, (err) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
-          let data = '';
-          res.on('data', chunk => data += chunk);
-          res.on('end', function () {
-            assert.strictEqual(data, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
-            done();
-          });
+          assert.strictEqual(dataStream, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          done();
         });
       });
 
@@ -4503,17 +4537,13 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
           });
 
-        storage.request('GET', '/templates/file.txt', { stream : true }, (err, res) => {
+        storage.request('GET', '/templates/file.txt', { output : outputStreamFunction }, (err, res) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          let data = '';
-          res.on('data', chunk => data += chunk);
-          res.on('end', function () {
-            assert.strictEqual(data, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
-            done();
-          });
+          assert.strictEqual(dataStream, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          done();
         });
       })
 
@@ -4533,17 +4563,13 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
           });
 
-          storage.request('GET', '/templates/file.txt', { stream : true }, (err, res) => {
+        storage.request('GET', '/templates/file.txt', { output : outputStreamFunction }, (err, res) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          let data = '';
-          res.on('data', chunk => data += chunk);
-          res.on('end', function () {
-            assert.strictEqual(data, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
-            done();
-          });
+          assert.strictEqual(dataStream, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          done();
         });
       })
 
@@ -4566,17 +4592,13 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
           });
 
-        storage.request('GET', '/templates/file.txt', { stream : true }, (err, res) => {
+        storage.request('GET', '/templates/file.txt', { output : outputStreamFunction }, (err, res) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          let data = '';
-          res.on('data', chunk => data += chunk);
-          res.on('end', function () {
-            assert.strictEqual(data, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
-            done();
-          });
+          assert.strictEqual(dataStream, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          done();
         });
       })
 
@@ -4597,38 +4619,26 @@ describe('Ovh Object Storage High Availability Node Client', function () {
           });
 
 
-        storage.request('GET', '/templates/file.txt', { stream : true }, (err, res) => {
+        storage.request('GET', '/templates/file.txt', { output : outputStreamFunction }, (err, res) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          let data = '';
-          res.on('data', chunk => data += chunk);
-          res.on('end', function () {
-            assert.strictEqual(data, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
-            done();
-          });
+          assert.strictEqual(dataStream, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          done();
         });
       });
 
       describe("PARALLEL REQUESTS", function () {
 
-        function copyRequestPromise() {
+        function copyRequestPromise(index) {
           return new Promise((resolve, reject) => {
-            try {
-              storage.request('GET', '/templates/file.txt', { stream: true }, (err, res) => {
-                if (err) {
-                  return reject(err);
-                }
-                let data = '';
-                res.on('data', chunk => data += chunk);
-                res.on('end', function () {
-                  return resolve(data);
-                });
-              });
-            } catch(err) {
-              return reject(err);
-            }
+            storage.request('GET', '/templates/file.txt', { output: getOutputStreamFunction(index) }, (err) => {
+              if (err) {
+                return reject(err);
+              }
+              return resolve(_dataStreams[index]);
+            });
           });
         }
 
@@ -4650,15 +4660,15 @@ describe('Ovh Object Storage High Availability Node Client', function () {
           let thirdNock = nock(publicUrlSBG)
             .intercept('/templates/file.txt', "GET")
             .reply(200, function() {
-              return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
+              return fileTxt;
             })
             .intercept('/templates/file.txt', "GET")
             .reply(200, function() {
-              return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
+              return fileTxt;
             });
 
-          let promise1 = copyRequestPromise()
-          let promise2 = copyRequestPromise()
+          let promise1 = copyRequestPromise(0)
+          let promise2 = copyRequestPromise(1)
 
 
           Promise.all([promise1, promise2]).then(results => {
@@ -4669,6 +4679,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            resetDataStreams();
             done();
           }).catch(err => {
             assert.strictEqual(err, null);
@@ -4718,9 +4729,9 @@ describe('Ovh Object Storage High Availability Node Client', function () {
               return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
             })
 
-          let promise1 = copyRequestPromise()
-          let promise2 = copyRequestPromise()
-          let promise3 = copyRequestPromise()
+          let promise1 = copyRequestPromise(0)
+          let promise2 = copyRequestPromise(1)
+          let promise3 = copyRequestPromise(2)
 
           Promise.all([promise1, promise2, promise3]).then(async results => {
 
@@ -4730,13 +4741,14 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(results[2], 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
 
 
-            let _result3 = await copyRequestPromise();
+            let _result3 = await copyRequestPromise(3);
             assert.strictEqual(_result3, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
 
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            resetDataStreams();
             done();
           });
         });
@@ -4769,8 +4781,8 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             })
 
 
-          let promise1 = copyRequestPromise()
-          let promise2 = copyRequestPromise()
+          let promise1 = copyRequestPromise(0)
+          let promise2 = copyRequestPromise(1)
 
 
           Promise.all([promise1, promise2]).then(results => {
@@ -4781,6 +4793,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            resetDataStreams();
             done();
           }).catch(err => {
             assert.strictEqual(err, null);
@@ -4812,8 +4825,8 @@ describe('Ovh Object Storage High Availability Node Client', function () {
               return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
             })
 
-          let promise1 = copyRequestPromise()
-          let promise2 = copyRequestPromise()
+          let promise1 = copyRequestPromise(0)
+          let promise2 = copyRequestPromise(1)
 
 
           Promise.all([promise1, promise2]).then(results => {
@@ -4825,6 +4838,7 @@ describe('Ovh Object Storage High Availability Node Client', function () {
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
+            resetDataStreams();
             done();
           }).catch(err => {
             assert.strictEqual(err, null);

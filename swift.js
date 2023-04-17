@@ -1,6 +1,7 @@
-const get = require('simple-get');
+const rock = require('rock-req');
 const fs = require('fs');
-const { Readable } = require('stream');
+
+const isFnStream = o => o instanceof Function
 
 let _config = {
   storages: [],
@@ -49,7 +50,7 @@ function connection (callback, originStorage = 0) {
     }
   };
 
-  get.concat({
+  rock.concat({
     url    : `${_storage.authUrl}/auth/tokens`,
     method : 'POST',
     json   : true,
@@ -117,7 +118,7 @@ function listFiles(container, options, callback) {
   arrayArguments.push({ originStorage : _config.activeStorage })
 
   const { headers, queries } = getHeaderAndQueryParameters(options);
-  get.concat({
+  rock.concat({
     url     : `${_config.endpoints.url}/${container}${queries}`,
     method  : 'GET',
     headers : {
@@ -164,7 +165,7 @@ function listFiles(container, options, callback) {
  * @returns {void}
  */
 function uploadFile (container, filename, localPathOrBuffer, options, callback) {
-  let readStream = Buffer.isBuffer(localPathOrBuffer) === true ? Readable.from(localPathOrBuffer) : fs.createReadStream(localPathOrBuffer);
+  let readStream = Buffer.isBuffer(localPathOrBuffer) === true ? localPathOrBuffer : () => { return fs.createReadStream(localPathOrBuffer) } ;
 
   const arrayArguments = [...arguments];
 
@@ -178,7 +179,7 @@ function uploadFile (container, filename, localPathOrBuffer, options, callback) 
   arrayArguments.push({ originStorage : _config.activeStorage })
 
   const { headers, queries } = getHeaderAndQueryParameters(options);
-  get.concat({
+  rock.concat({
     url     : `${_config.endpoints.url}/${container}/${filename}${queries}`,
     method  : 'PUT',
     body    : readStream,
@@ -225,7 +226,7 @@ function downloadFile (container, filename, callback) {
 
   const arrayArguments = [...arguments, { originStorage : _config.activeStorage }];
 
-  get.concat({
+  rock.concat({
     url     : `${_config.endpoints.url}/${container}/${filename}`,
     method  : 'GET',
     headers : {
@@ -272,7 +273,7 @@ function deleteFile (container, filename, callback) {
 
   const arrayArguments = [...arguments, { originStorage : _config.activeStorage }];
 
-  get.concat({
+  rock.concat({
     url     : `${_config.endpoints.url}/${container}/${filename}`,
     method  : 'DELETE',
     headers : {
@@ -318,7 +319,7 @@ function deleteFile (container, filename, callback) {
 function getFileMetadata(container, filename, callback) {
   const arrayArguments = [...arguments, { originStorage : _config.activeStorage }];
 
-  get.concat({
+  rock.concat({
     url     : `${_config.endpoints.url}/${container}/${filename}`,
     method  : 'HEAD',
     headers : {
@@ -380,7 +381,7 @@ function setFileMetadata (container, filename, options, callback) {
   arrayArguments.push({ originStorage : _config.activeStorage })
 
   const { headers, queries } = getHeaderAndQueryParameters(options);
-  get.concat({
+  rock.concat({
     url     : `${_config.endpoints.url}/${container}/${filename}${queries}`,
     method  : 'POST',
     headers : {
@@ -448,6 +449,7 @@ function request (method, path, options, callback) {
       ...headers
     },
     timeout: _config.timeout,
+    output: isFnStream(options?.output) ? options?.output : null, /** Handle Streams */
     ...(body ? { body } : {})
   }
 
@@ -465,10 +467,10 @@ function request (method, path, options, callback) {
       if (err) {
         return callback(err);
       }
-      return options?.stream === true ? callback(null, res) : callback(null, body, res.headers);
+      return isFnStream(options?.output) === true ? callback(null, res) : callback(null, body, res.headers);
     });
   }
-  return options?.stream === true ? get(_requestOptions, _requestCallback) : get.concat(_requestOptions, _requestCallback);
+  return isFnStream(options?.output) === true ? rock(_requestOptions, _requestCallback) : rock.concat(_requestOptions, _requestCallback);
 }
 
 /**

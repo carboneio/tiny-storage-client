@@ -111,16 +111,24 @@ s3storage.downloadFile('bucketName', '2023-invoice.pdf', (err, resp) => {
    */
 })
 
-/** Solution 2: Download the file as Stream by providing the option `stream:true` */
-s3storage.downloadFile('bucketName', '2023-invoice.pdf', { stream: true }, (err, resp) => {
+/** Solution 2: Download the file as Stream,  set the option `output` with a function returning the output Stream */
+function createOutputStream(opts, res) {
+  const writer = fs.createWriteStream('2023-invoice.pdf')
+  writer.on('error', (e) => { /* clean up your stuff */ })
+  return writer
+}
+
+s3storage.downloadFile('bucketName', '2023-invoice.pdf', { output: createOutputStream }, (err, resp) => {
   if (err) {
     return console.log("Error on download: ", err);
   }
   /**
    * Request reponse:
-   * - resp => file stream to pipe
    * - resp.headers
    * - resp.statusCode
+   *
+   * When the callback is called, the stream is closed and the file created,
+   * you don't have to pipe yourself!
    */
 })
 ```
@@ -384,14 +392,21 @@ request(method, path, { headers, queries, body }, (err, resp) => {
    */
 }).
 ```
-Prototype to get the data as Stream, set the option `stream:true`:
+Prototype to get the data as Stream, set the option `output` with a function returning the output Stream.
 ```js
-request(method, path, { headers, queries, body, stream: true }, (err, resp) => {
+function createOutputStream(opts, res) {
+  const writer = fs.createWriteStream('2023-invoice.pdf')
+  writer.on('error', (e) => { /* clean up your stuff */ })
+  return writer
+}
+
+request(method, path, { headers, queries, body, output: createOutputStream }, (err, resp) => {
   /**
    * Request reponse:
-   * - resp.body => body as Stream
    * - resp.headers
    * - resp.statusCode
+   *
+   * When the callback is called, the file created and the stream is closed, meaning you don't have to pipe yourself!.
    */
 })`.
 ```

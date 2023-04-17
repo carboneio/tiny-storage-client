@@ -1,8 +1,13 @@
-const get = require('simple-get');
+const rock = require('rock-req');
 const aws4 = require('aws4');
 const crypto = require('crypto');
 const fs = require('fs');
 const xmlToJson = require('./xmlToJson.js')
+
+const isFnStream = o => o instanceof Function
+const rockReqOptions = {
+  maxRetry: 0
+}
 
 let _config = {
   /** List of S3 credentials */
@@ -273,6 +278,9 @@ function request (method, path, options, callback) {
       ...(options?.headers ? options?.headers : {})
     },
     timeout: _config.timeout,
+    /** Rock-req Options */
+    output: isFnStream(options?.output) ? options?.output : null,
+    ...rockReqOptions,
     /** REQUIRED FOR AWS4 SIGNATURE */
     service: 's3',
     hostname: _activeStorage.url,
@@ -296,12 +304,12 @@ function request (method, path, options, callback) {
       return callback(err, res);
     }
     /** If the response is an error as XML and not a stream, the error is parsed as JSON */
-    if (res.statusCode >= 400 && res?.headers?.['content-type'] === 'application/xml' && !options?.stream) {
+    if (res.statusCode >= 400 && res?.headers?.['content-type'] === 'application/xml' && isFnStream(options?.output) === false) {
       body = xmlToJson(body?.toString() ?? '');
     }
-    return options?.stream === true ? callback(null, res) : callback(null, { headers : res.headers, statusCode: res.statusCode, body : body });
+    return isFnStream(options?.output) === true ? callback(null, res) : callback(null, { headers : res.headers, statusCode: res.statusCode, body : body });
   }
-  return options?.stream === true ? get(_requestParams, _requestCallback) : get.concat(_requestParams, _requestCallback);
+  return isFnStream(options?.output) === true ? rock(_requestParams, _requestCallback) : rock.concat(_requestParams, _requestCallback);
 }
 
 /**

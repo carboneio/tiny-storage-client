@@ -3,10 +3,27 @@ const assert = require('assert');
 const nock   = require('nock');
 const fs     = require('fs');
 const path   = require('path');
+var stream = require('stream');
 
 let storage = {};
 const url1S3 = 'https://s3.gra.first.cloud.test';
 const url2S3 = 'https://s3.de.first.cloud.test';
+
+let dataStream = ''
+const outputStreamFunction = function () {
+  dataStream = '';
+  let outputStream = new stream.Writable();
+  outputStream._write = function (chunk, encoding, done) {
+    dataStream += chunk;
+    done();
+  };
+
+  outputStream.on('error', (err) => {
+    console.log('Error Stream:', err.toString());
+    dataStream = '';
+  });
+  return outputStream
+}
 
 /** ASSETS for download/upload */
 const fileTxtPath = path.join(__dirname, 'assets', 'file.txt');
@@ -546,17 +563,15 @@ describe('S3 SDK', function () {
           .reply(200, () => {
             return fileTxt;
           });
-        storage.downloadFile('bucket', 'file.docx', { stream: true }, function (err, resp) {
+
+        storage.downloadFile('bucket', 'file.docx', { output: outputStreamFunction }, function (err, resp) {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
-          let data = '';
-          resp.on('data', chunk => data += chunk);
-          resp.on('end', function () {
-            assert.strictEqual(data,fileTxt)
-            assert.strictEqual(nockRequest.pendingMocks().length, 0);
-            assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_header))
-            done();
-          });
+
+          assert.strictEqual(dataStream, fileTxt)
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_header))
+          done();
         })
       })
 
@@ -579,8 +594,7 @@ describe('S3 SDK', function () {
           })
           .defaultReplyHeaders(_header)
           .get('/invoices-gra-1234/file.docx')
-          .reply(200, (uri, body) => {
-            console.log(uri);
+          .reply(200, () => {
             return fileTxt;
           });
         storage.downloadFile('invoices', 'file.docx', function (err, resp) {
@@ -664,24 +678,21 @@ describe('S3 SDK', function () {
           .defaultReplyHeaders(_header)
           .get('/bucket/file.docx')
           .reply(404, "<?xml version='1.0' encoding='UTF-8'?><Error><Code>NoSuchKey</Code><Message>The specified key does not exist.</Message><RequestId>txc03d49a36c324653854de-006408d963</RequestId><Key>template222.odt</Key></Error>");
-        storage.downloadFile('bucket', 'file.docx', { stream: true }, function (err, resp) {
+
+        storage.downloadFile('bucket', 'file.docx', { output: outputStreamFunction }, function (err, resp) {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 404);
-          let data = '';
-          resp.on('data', chunk => data += chunk);
-          resp.on('end', function () {
-            assert.strictEqual(JSON.stringify(storage.xmlToJson(data)), JSON.stringify({
-              error: {
-                code: 'NoSuchKey',
-                message: 'The specified key does not exist.',
-                requestid: 'txc03d49a36c324653854de-006408d963',
-                key: 'template222.odt'
-              }
-            }))
-            assert.strictEqual(nockRequest.pendingMocks().length, 0);
-            assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_header))
-            done();
-          });
+          assert.strictEqual(JSON.stringify(storage.xmlToJson(dataStream)), JSON.stringify({
+            error: {
+              code: 'NoSuchKey',
+              message: 'The specified key does not exist.',
+              requestid: 'txc03d49a36c324653854de-006408d963',
+              key: 'template222.odt'
+            }
+          }))
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_header))
+          done();
         })
       })
 
@@ -817,6 +828,33 @@ describe('S3 SDK', function () {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(resp.body.toString(), fileTxt);
+          const _config = storage.getConfig();
+          assert.strictEqual(_config.activeStorage, 1);
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+      it('should download a file as Stream from the second storage if the authentication on the main storage is not allowed', function(done) {
+        let nockRequestS1 = nock(url1S3)
+          .get('/bucket/file.docx')
+          .reply(401, 'Unauthorized')
+
+        const nockRequestS2 = nock(url2S3)
+          .get('/bucket/file.docx')
+          .reply(200, () => {
+            return fileTxt
+          });
+        const nockRequestS3 = nock(url1S3)
+          .get('/')
+          .reply(401, 'Unauthorized')
+
+        storage.downloadFile('bucket', 'file.docx', { output: outputStreamFunction }, function (err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(dataStream, fileTxt);
           const _config = storage.getConfig();
           assert.strictEqual(_config.activeStorage, 1);
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
