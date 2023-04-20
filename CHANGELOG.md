@@ -1,7 +1,7 @@
 ### v2.1.0
 - Added the possibility to set [defaults rock-req](https://github.com/carboneio/rock-req#global-options--extend) values:
   - Added function `setRockReqDefaults` and `getRockReqDefaults`
-  - Or create the global variable `global.rockReqConf`, it should be initialised before calling `require('tiny-storage-client')`
+  - Or create the global variable `global.rockReqConf`, it must be initialised before calling `require('tiny-storage-client')`
 - Added for all S3 methods: the options argument can takes the option `requestOptions` object, it will be merged into the HTTP request options. Example to upload a file: `storage.uploadFile('bucket', 'file.pdf', Buffer.from(fileXml), { requestOptions: { tenantId: 200, headers: { "custom-option" : true } } }, (err, resp) => {})`
 
 ### v2.0.0
