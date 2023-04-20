@@ -5,8 +5,9 @@ const fs = require('fs');
 const xmlToJson = require('./xmlToJson.js')
 
 const isFnStream = o => o instanceof Function
-const rockReqOptions = {
-  maxRetry: 0
+
+if (global.rockReqConf) {
+  rock.defaults = global.rockReqConf;
 }
 
 let _config = {
@@ -280,7 +281,7 @@ function request (method, path, options, callback) {
     timeout: _config.timeout,
     /** Rock-req Options */
     output: isFnStream(options?.output) ? options?.output : null,
-    ...rockReqOptions,
+    ...(options?.requestOptions ? options?.requestOptions : {}),
     /** REQUIRED FOR AWS4 SIGNATURE */
     service: 's3',
     hostname: _activeStorage.url,
@@ -348,6 +349,16 @@ function setConfig(newConfig) {
   _config.activeStorage   = 0;
 }
 
+function setRockReqDefaults (newDefaults) {
+  if (newDefaults) {
+    rock.defaults = newDefaults;
+  }
+}
+
+function getRockReqDefaults() {
+  return rock.defaults;
+}
+
 module.exports = (config) => {
   setConfig(config);
   return {
@@ -365,7 +376,9 @@ module.exports = (config) => {
     setConfig,
     xmlToJson,
     setLogFunction,
-    getMetadataTotalBytes
+    getMetadataTotalBytes,
+    setRockReqDefaults,
+    getRockReqDefaults
   }
 }
 

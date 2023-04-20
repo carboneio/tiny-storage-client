@@ -1,3 +1,9 @@
+### v2.1.0
+- Added the possibility to set [defaults rock-req](https://github.com/carboneio/rock-req#global-options--extend) values:
+  - Added function `setRockReqDefaults` and `getRockReqDefaults`
+  - Or create the global variable `global.rockReqConf`, it should be initialised before calling `require('tiny-storage-client')`
+- Added for all S3 methods: the options argument can takes the option `requestOptions` object, it will be merged into the HTTP request options. Example to upload a file: `storage.uploadFile('bucket', 'file.pdf', Buffer.from(fileXml), { requestOptions: { tenantId: 200, headers: { "custom-option" : true } } }, (err, resp) => {})`
+
 ### v2.0.0
 - Replaced `simple-get` by `rock-req` package (0 deps, bench: 21797 req/s and streams fully tested)
 - To download a file as stream, you have to provide an `output` function as option. The `output` function must return the output stream, and it is invoked by `rock-req` for every request and retries. If something goes wrong, the Writable stream is destroyed automatically, and the error can be captured with 'error' event or `stream.finished`. When the callback is called, the streamed is finised.

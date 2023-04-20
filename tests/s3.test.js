@@ -1,9 +1,16 @@
+/** Init retry delay for "Rock-req" tests */
+const rock   = require('rock-req');
+const _rockDefaults = { ...rock.defaults };
+_rockDefaults.retryDelay = 200
+global.rockReqConf = _rockDefaults;
+
 const s3 = require('../s3.js');
 const assert = require('assert');
 const nock   = require('nock');
 const fs     = require('fs');
 const path   = require('path');
 var stream = require('stream');
+
 
 let storage = {};
 const url1S3 = 'https://s3.gra.first.cloud.test';
@@ -1191,8 +1198,33 @@ describe('S3 SDK', function () {
         })
       })
 
-      it("should return an error if the file provided as local path does not exist", function() {
+      it("should upload a file provided as buffer and pass requests options", function() {
+        const expectedValue = "code-1235";
+        const nockRequestS1 = nock(url1S3, {
+            reqheaders: {
+              'custom-option': (value) => {
+                assert.strictEqual(value, expectedValue);
+                return true;
+              },
+            }
+          })
+          .defaultReplyHeaders(_header)
+          .put('/bucket/file.pdf')
+          .reply(200, (uri, requestBody) => {
+            assert.strictEqual(requestBody, fileXml);
+            return '';
+          });
 
+        storage.uploadFile('bucket', 'file.pdf', Buffer.from(fileXml), { requestOptions: { headers: { "custom-option" : expectedValue } } }, function(err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_header));
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+        })
+      })
+
+      it("should return an error if the file provided as local path does not exist", function() {
         storage.uploadFile('bucket', 'file.pdf', '/var/random/path/file.pdf', function(err, resp) {
           assert.strictEqual(err.toString(), "Error: ENOENT: no such file or directory, open '/var/random/path/file.pdf'");
           assert.strictEqual(resp, undefined);
@@ -2514,6 +2546,37 @@ describe('S3 SDK', function () {
         done();
       });
     });
+  });
+
+  describe('set rock-req defaults', function() {
+    describe('setRockReqDefaults function', function() {
+      it("should set rock-req default values", function(done) {
+        const _newOptions = {
+          ...storage.getRockReqDefaults(),
+          newOption: 1234,
+          maxRetry: 10
+        }
+        storage.setRockReqDefaults(_newOptions);
+        assert.strictEqual(storage.getRockReqDefaults().maxRetry, 10);
+        assert.strictEqual(storage.getRockReqDefaults().newOption, 1234);
+        done();
+      })
+
+      it("should not set rock-req default values if the value is undefined", function(done) {
+        storage.setRockReqDefaults(null);
+        storage.setRockReqDefaults(undefined);
+        assert.strictEqual(typeof storage.getRockReqDefaults(), 'object');
+        done();
+      })
+    });
+
+    describe('global.rockReqConf', function() {
+      it("should set rock-req default values", function(done) {
+        assert.strictEqual(storage.getRockReqDefaults().retryDelay, 200);
+        done();
+      })
+    })
+
   });
 
 });
