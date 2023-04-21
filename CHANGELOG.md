@@ -1,3 +1,6 @@
+### v2.1.1
+- Updated package `rock-req` to `5.1.1`
+
 ### v2.1.0
 - Added the possibility to set [defaults rock-req](https://github.com/carboneio/rock-req#global-options--extend) values:
   - Added function `setRockReqDefaults` and `getRockReqDefaults`
