@@ -2565,6 +2565,7 @@ describe('S3 SDK', function () {
       it("should not set rock-req default values if the value is undefined", function(done) {
         storage.setRockReqDefaults(null);
         storage.setRockReqDefaults(undefined);
+        storage.setRockReqDefaults("string");
         assert.strictEqual(typeof storage.getRockReqDefaults(), 'object');
         done();
       })

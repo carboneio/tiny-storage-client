@@ -1,3 +1,6 @@
+### v2.1.2
+- Updated setting defaults of rock-req by propagating the object instead of assigning.
+
 ### v2.1.1
 - Updated package `rock-req` to `5.1.1`
 
