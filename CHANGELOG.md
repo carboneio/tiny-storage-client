@@ -1,3 +1,6 @@
+### v2.1.3
+- Patched loading module `xmlToJson.js`
+
 ### v2.1.2
 - Updated setting defaults of rock-req by propagating the object instead of assigning.
 
