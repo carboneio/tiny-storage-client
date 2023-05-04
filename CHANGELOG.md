@@ -1,3 +1,6 @@
+### v2.1.4
+- Updated package `rock-req` to `5.1.2`
+
 ### v2.1.3
 - Patched loading module `xmlToJson.js`
 
