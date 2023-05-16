@@ -110,6 +110,21 @@ describe('S3 SDK', function () {
       assert.strictEqual(JSON.stringify(_config.storages), JSON.stringify(_authS3))
     })
 
+    it("should create a new instance", function () {
+      const _storage = s3({ accessKeyId: '1234', secretAccessKey: '4567', region: 'gra', url: 'url.gra.s3.ovh.io' });
+      const _storage2 = s3({ accessKeyId: 'abcd', secretAccessKey: 'efgh', region: 'sbg', url: 'url.sbg.s3.ovh.io' });
+      assert.strictEqual(_storage.getConfig().storages.length, 1);
+      assert.strictEqual(_storage2.getConfig().storages.length, 1);
+      assert.strictEqual(_storage.getConfig().storages[0].accessKeyId, '1234')
+      assert.strictEqual(_storage.getConfig().storages[0].secretAccessKey, '4567')
+      assert.strictEqual(_storage.getConfig().storages[0].region, 'gra')
+      assert.strictEqual(_storage.getConfig().storages[0].url, 'url.gra.s3.ovh.io')
+      assert.strictEqual(_storage2.getConfig().storages[0].accessKeyId, 'abcd')
+      assert.strictEqual(_storage2.getConfig().storages[0].secretAccessKey, 'efgh')
+      assert.strictEqual(_storage2.getConfig().storages[0].region, 'sbg')
+      assert.strictEqual(_storage2.getConfig().storages[0].url, 'url.sbg.s3.ovh.io')
+    })
+
     it("should set a new timeout value", function() {
       const _storage = s3({ accessKeyId: '-', secretAccessKey: '-', region: '-', url: '-' });
       assert.strictEqual(_storage.getConfig().timeout, 5000);

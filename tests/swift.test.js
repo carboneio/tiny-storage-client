@@ -75,6 +75,38 @@ describe('Ovh Object Storage High Availability Node Client', function () {
     })
   })
 
+  describe('New instance', function() {
+    it('should create 2 new instances', function () {
+      const _swift1 = storageSDK({
+        username                     : 'storage-1-user',
+        password                     : 'storage-1-password',
+        authUrl                      : 'swift.gra.ovh.io',
+        tenantName                   : 'storage-1-tenant',
+        region                       : 'GRA'
+      })
+      const _swift2 = storageSDK({
+        username                     : 'storage-2-user',
+        password                     : 'storage-2-password',
+        authUrl                      : 'swift.sbg.ovh.io',
+        tenantName                   : 'storage-2-tenant',
+        region                       : 'SBG'
+      })
+      console.log(_swift1.getConfig().storages)
+      assert.strictEqual(_swift1.getConfig().storages.length, 1);
+      assert.strictEqual(_swift1.getConfig().storages[0].username, 'storage-1-user');
+      assert.strictEqual(_swift1.getConfig().storages[0].password, 'storage-1-password');
+      assert.strictEqual(_swift1.getConfig().storages[0].tenantName, 'storage-1-tenant');
+      assert.strictEqual(_swift1.getConfig().storages[0].authUrl, 'swift.gra.ovh.io');
+      assert.strictEqual(_swift1.getConfig().storages[0].region, 'GRA');
+      assert.strictEqual(_swift2.getConfig().storages.length, 1);
+      assert.strictEqual(_swift2.getConfig().storages[0].username, 'storage-2-user');
+      assert.strictEqual(_swift2.getConfig().storages[0].password, 'storage-2-password');
+      assert.strictEqual(_swift2.getConfig().storages[0].tenantName, 'storage-2-tenant');
+      assert.strictEqual(_swift2.getConfig().storages[0].authUrl, 'swift.sbg.ovh.io');
+      assert.strictEqual(_swift2.getConfig().storages[0].region, 'SBG');
+    });
+  });
+
   describe('Connection', function () {
 
     it('should connect to object file storage', function (done) {
