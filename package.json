@@ -1,6 +1,6 @@
 {
   "name": "tiny-storage-client",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Tiny node client to request distributed AWS S3 or the OpenStack Swift Object Storage.",
   "main": "index.js",
   "scripts": {
@@ -29,7 +29,7 @@
   "license": "Apache-2.0",
   "dependencies": {
     "aws4": "=1.12.0",
-    "rock-req": "=5.1.2"
+    "rock-req": "=5.1.3"
   },
   "devDependencies": {
     "eslint": "=8.36.0",

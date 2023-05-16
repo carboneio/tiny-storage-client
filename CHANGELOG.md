@@ -1,6 +1,8 @@
+### v2.2.1
+- Updated package `rock-req` to `5.1.3`
+
 ### v2.2.0
 - Updated to a singleton pattern: the `require('tiny-storage-client')({ config-S3-or-SWIFT })` return a new storage instance. Meaning, existing instances are not overwritten anymore when creating a new one.
-- Updated package `rock-req` to `5.1.3`
 
 ### v2.1.4
 - Updated package `rock-req` to `5.1.2`
