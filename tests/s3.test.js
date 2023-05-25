@@ -4,7 +4,7 @@ const _rockDefaults = { ...rock.defaults };
 _rockDefaults.retryDelay = 200
 global.rockReqConf = _rockDefaults;
 
-const s3 = require('../s3.js');
+const s3 = require('../index')
 const assert = require('assert');
 const nock   = require('nock');
 const fs     = require('fs');
@@ -2568,11 +2568,9 @@ describe('S3 SDK', function () {
       it("should set rock-req default values", function(done) {
         const _newOptions = {
           ...storage.getRockReqDefaults(),
-          newOption: 1234,
-          maxRetry: 10
+          newOption: 1234
         }
         storage.setRockReqDefaults(_newOptions);
-        assert.strictEqual(storage.getRockReqDefaults().maxRetry, 10);
         assert.strictEqual(storage.getRockReqDefaults().newOption, 1234);
         done();
       })

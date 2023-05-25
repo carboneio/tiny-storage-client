@@ -6,13 +6,6 @@ const xmlToJson = require('./xmlToJson.js')
 
 const isFnStream = o => o instanceof Function
 
-if (global.rockReqConf && typeof global.rockReqConf === 'object') {
-  rock.defaults = {
-    ...rock.defaults,
-    ...global.rockReqConf
-  }
-}
-
 module.exports = (config) => {
 
   let _config = {
@@ -267,10 +260,7 @@ module.exports = (config) => {
 
   function setRockReqDefaults (newDefaults) {
     if (newDefaults && typeof newDefaults === 'object') {
-      rock.defaults = {
-        ...rock.defaults,
-        ...newDefaults
-      };
+      Object.assign(rock.defaults, newDefaults);
     }
   }
 

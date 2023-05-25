@@ -1,4 +1,4 @@
-const storageSDK   = require('../swift.js');
+const storageSDK   = require('../index.js');
 const nock   = require('nock');
 const assert = require('assert');
 const fs     = require('fs');
@@ -52,8 +52,14 @@ const outputStreamFunction = function (opt, res) {
 }
 
 
-describe('Ovh Object Storage High Availability Node Client', function () {
-  let storage = storageSDK();
+describe('Ovh Object Storage Swift', function () {
+  let storage = storageSDK([{
+    username                     : 'storage-1-user',
+    password                     : 'storage-1-password',
+    authUrl                      : authURL,
+    tenantName                   : 'storage-1-tenant',
+    region                       : 'GRA'
+  }]);
 
   beforeEach(function (done) {
     const firstNock = nock(authURL)
@@ -4881,6 +4887,12 @@ describe('Ovh Object Storage High Availability Node Client', function () {
       });
     });
   });
+  describe('global.rockReqConf', function() {
+    it("should set rock-req default values", function(done) {
+      assert.strictEqual(storage.getRockReqDefaults().retryDelay, 200);
+      done();
+    })
+  })
 });
 
 let connectionResultSuccessV3 = {

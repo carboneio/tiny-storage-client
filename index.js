@@ -1,5 +1,10 @@
+const rock = require('rock-req');
 const s3 = require('./s3.js');
 const swift = require('./swift.js');
+
+if (global.rockReqConf && typeof global.rockReqConf === 'object') {
+  Object.assign(rock.defaults, global.rockReqConf);
+}
 
 module.exports = (config) => {
   /** Check the first credential and return storage type: S3 or Swift client */

@@ -1,3 +1,6 @@
+### v2.2.2
+- Patched rock-req options initialisation
+
 ### v2.2.1
 - Updated package `rock-req` to `5.1.3`
 

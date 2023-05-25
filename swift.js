@@ -24,8 +24,6 @@ module.exports = (config) => {
     timeout: 5000
   }
 
-  setStorages(config)
-
   /**
    * @description Authenticate and initialise the auth token and retreive the endpoint based on the region
    *
@@ -696,6 +694,12 @@ module.exports = (config) => {
     return { headers, queries, body }
   }
 
+  function getRockReqDefaults() {
+    return rock.defaults;
+  }
+
+  setStorages(config)
+
   return {
     connection,
     uploadFile,
@@ -709,6 +713,7 @@ module.exports = (config) => {
     getStorages,
     getConfig,
     setLogFunction,
-    request
+    request,
+    getRockReqDefaults
   }
 }
