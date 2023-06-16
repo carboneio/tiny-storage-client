@@ -2201,8 +2201,14 @@ describe('S3 SDK', function () {
 
         const nockRequestS2 = nock(url1S3, {
             reqheaders: {
-              'x-amz-copy-source': () => true,
-              'x-amz-metadata-directive': () => true
+              'x-amz-copy-source': (value) => {
+                assert.strictEqual(value, '/invoices-gra-1234/file.pdf');
+                return true
+              },
+              'x-amz-metadata-directive': (value) => {
+                assert.strictEqual(value, "REPLACE");
+                return true
+              }
             }
           })
           .defaultReplyHeaders(_headers2)

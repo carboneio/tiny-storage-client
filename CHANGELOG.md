@@ -1,3 +1,6 @@
+### v2.2.3
+- Patched `setFileMetadata`: Bucket aliases are now supported and are not generating a 403 error anymore.
+
 ### v2.2.2
 - Patched rock-req options initialisation
 

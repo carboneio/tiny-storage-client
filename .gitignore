@@ -122,3 +122,4 @@ dist
 
 test.js
 *.odt
+cqueue.js

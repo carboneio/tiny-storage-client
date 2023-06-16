@@ -312,6 +312,10 @@ module.exports = (config) => {
     let _path = path;
     if (options?.alias !== _activeBucket) {
       _path = _path.replace(options?.alias, _activeBucket);
+      /** For copy-ing object with metadatas, the alias must be applied on the URL */
+      if (options?.headers?.['x-amz-copy-source']) {
+        options.headers['x-amz-copy-source'] = options?.headers?.['x-amz-copy-source'].replace(options?.alias, _activeBucket);
+      }
     }
 
     const _urlParams = getUrlParameters(options?.queries ?? '', options?.defaultQueries ?? '');
