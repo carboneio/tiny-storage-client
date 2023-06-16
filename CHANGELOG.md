@@ -1,5 +1,8 @@
+### v2.2.4
+- Patched `s3.deleteFiles`: the XML body includes object names without encoding. Previously, objects with special character was encoded (encodeURIComponent), and S3 did not delete them.
+
 ### v2.2.3
-- Patched `setFileMetadata`: Bucket aliases are now supported and are not generating a 403 error anymore.
+- Patched `s3.setFileMetadata`: Bucket aliases are now supported and are not generating a 403 error anymore.
 
 ### v2.2.2
 - Patched rock-req options initialisation

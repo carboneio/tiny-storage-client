@@ -237,7 +237,7 @@ module.exports = (config) => {
 
     let _body = '<Delete>';
     for (let i = 0; i < files.length; i++) {
-      _body += `<Object><Key>${encodeURIComponent(files?.[i]?.name ?? files?.[i]?.key ?? files?.[i])}</Key></Object>`;
+      _body += `<Object><Key>${files?.[i]?.name ?? files?.[i]?.key ?? files?.[i]}</Key></Object>`;
     }
     _body += '<Quiet>false</Quiet></Delete>';
     options.body = _body;

@@ -1704,7 +1704,7 @@ describe('S3 SDK', function () {
         const _expectedBody = {
           deleted: _filesToDelete.map((value) => {
             return {
-              key: encodeURIComponent(value.key)
+              key: value.key
             }
           })
         }
@@ -1716,8 +1716,9 @@ describe('S3 SDK', function () {
             assert.strictEqual(actualQueryObject.delete !== undefined, true);
             return true;
           })
-          .reply(200, function() {
-            return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><DeleteResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Deleted><Key>invoice%202023.pdf</Key></Deleted><Deleted><Key>carbone(1).png</Key></Deleted><Deleted><Key>file.txt</Key></Deleted></DeleteResult>";
+          .reply(200, function(uri, body) {
+            assert.strictEqual(body, '<Delete><Object><Key>invoice 2023.pdf</Key></Object><Object><Key>carbone(1).png</Key></Object><Object><Key>file.txt</Key></Object><Quiet>false</Quiet></Delete>');
+            return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><DeleteResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Deleted><Key>invoice 2023.pdf</Key></Deleted><Deleted><Key>carbone(1).png</Key></Deleted><Deleted><Key>file.txt</Key></Deleted></DeleteResult>";
           })
 
         storage.deleteFiles('www', _filesToDelete, (err, resp) => {
@@ -1751,7 +1752,7 @@ describe('S3 SDK', function () {
         const _expectedBody = {
           deleted: _filesToDelete.map((value) => {
             return {
-              key: encodeURIComponent(value.key)
+              key: value.key
             }
           })
         }
@@ -1763,8 +1764,9 @@ describe('S3 SDK', function () {
             assert.strictEqual(actualQueryObject.delete !== undefined, true);
             return true;
           })
-          .reply(200, function() {
-            return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><DeleteResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Deleted><Key>invoice%202023.pdf</Key></Deleted><Deleted><Key>carbone(1).png</Key></Deleted><Deleted><Key>file.txt</Key></Deleted></DeleteResult>";
+          .reply(200, function(res, body) {
+            assert.strictEqual(body, '<Delete><Object><Key>invoice 2023.pdf</Key></Object><Object><Key>carbone(1).png</Key></Object><Object><Key>file.txt</Key></Object><Quiet>false</Quiet></Delete>');
+            return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><DeleteResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Deleted><Key>invoice 2023.pdf</Key></Deleted><Deleted><Key>carbone(1).png</Key></Deleted><Deleted><Key>file.txt</Key></Deleted></DeleteResult>";
           })
 
         storage.deleteFiles('invoices', _filesToDelete, (err, resp) => {
@@ -1814,7 +1816,8 @@ describe('S3 SDK', function () {
             assert.strictEqual(actualQueryObject.delete !== undefined, true);
             return true;
           })
-          .reply(200, function() {
+          .reply(200, function(uri, body) {
+            assert.strictEqual(body, '<Delete><Object><Key>sample1.txt</Key></Object><Object><Key>sample2.txt</Key></Object><Quiet>false</Quiet></Delete>');
             return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><DeleteResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Deleted><Key>sample1.txt</Key></Deleted><Error><Key>sample2.txt</Key><Code>AccessDenied</Code><Message>Access Denied</Message></Error></DeleteResult>";
           })
 
@@ -1862,7 +1865,8 @@ describe('S3 SDK', function () {
             assert.strictEqual(actualQueryObject.delete !== undefined, true);
             return true;
           })
-          .reply(404, function() {
+          .reply(404, function(url, body) {
+            assert.strictEqual(body, '<Delete><Object><Key>invoice 2023.pdf</Key></Object><Object><Key>carbone(1).png</Key></Object><Object><Key>file.txt</Key></Object><Quiet>false</Quiet></Delete>');
             return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Error><Code>NoSuchBucket</Code><Message>The specified bucket does not exist.</Message><RequestId>tx84736ac6d5544b44ba91a-0064185021</RequestId><BucketName>buckeeeet</BucketName></Error>";
           })
 
