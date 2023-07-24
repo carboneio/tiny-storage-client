@@ -52,14 +52,14 @@ module.exports = (config) => {
             }
           }
         },
-        scope : {
+        ...(_storage.tenantName ? {scope : {
           project : {
             domain : {
               id : 'default'
             },
             name : _storage.tenantName
           }
-        }
+        }} : {})
       }
     };
 
