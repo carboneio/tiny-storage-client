@@ -172,13 +172,13 @@ module.exports = (config) => {
    *
    * @param {string} container Container name
    * @param {string} filename file to store
-   * @param {string|Buffer} localPathOrBuffer absolute path to the file
+   * @param {string|Buffer|function} localPathOrBuffer absolute path to the file
    * @param {Object} options [OPTIONAL]: { headers: {}, queries: {} } List of query parameters and headers: https://docs.openstack.org/api-ref/object-store/?expanded=create-or-replace-object-detail#create-or-replace-object
    * @param {function} callback function(err):void = The `err` is null by default, return an object if an error occurs.
    * @returns {void}
    */
   function uploadFile (container, filename, localPathOrBuffer, options, callback) {
-    let readStream = Buffer.isBuffer(localPathOrBuffer) === true ? localPathOrBuffer : () => { return fs.createReadStream(localPathOrBuffer) } ;
+    let readStream = Buffer.isBuffer(localPathOrBuffer) === true || typeof localPathOrBuffer === 'function' ? localPathOrBuffer : () => { return fs.createReadStream(localPathOrBuffer) } ;
 
     const arrayArguments = [...arguments];
 
