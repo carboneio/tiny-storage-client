@@ -1,3 +1,11 @@
+### v2.2.5
+- SWIFT updated:
+  - The authentication object does not require the `tenantName` attribute anymore, it is now optional.
+  - `swift.uploadFile`: The 3rd argument accepts a function returning a ReadStream, in addition to the Buffer and the absolute path of the file
+- Updated dev npm packages: 
+  - `eslint` to `8.45.0` 
+  - `nock` to `=13.3.2`
+
 ### v2.2.4
 - Patched `s3.deleteFiles`: the XML body includes object names without encoding. Previously, objects with special character was encoded (encodeURIComponent), and S3 did not delete them.
 

@@ -111,14 +111,59 @@ describe('Ovh Object Storage Swift', function () {
       assert.strictEqual(_swift2.getConfig().storages[0].authUrl, 'swift.sbg.ovh.io');
       assert.strictEqual(_swift2.getConfig().storages[0].region, 'SBG');
     });
+
+    it('should not throw an error without tenantName', function (done) {
+      const _swift1 = storageSDK({
+        username                     : 'storage-1-user',
+        password                     : 'storage-1-password',
+        authUrl                      : 'swift.gra.ovh.io',
+        region                       : 'GRA'
+      })
+      assert.strictEqual(_swift1.getConfig().storages.length, 1);
+      assert.strictEqual(_swift1.getConfig().storages[0].username, 'storage-1-user');
+      assert.strictEqual(_swift1.getConfig().storages[0].password, 'storage-1-password');
+      assert.strictEqual(_swift1.getConfig().storages[0].authUrl, 'swift.gra.ovh.io');
+      assert.strictEqual(_swift1.getConfig().storages[0].region, 'GRA');
+      assert.strictEqual(_swift1.getConfig().storages[0]?.tenantName, undefined);
+      done();
+    })
   });
 
   describe('Connection', function () {
 
-    it('should connect to object file storage', function (done) {
+    it('should connect to object storage swift (without tenantName)', function(done) {
+      let storageTest = storageSDK([{
+        username                     : 'storage-X-user',
+        password                     : 'storage-X-password',
+        authUrl                      : authURL,
+        region                       : 'GRA'
+      }]);
+
       const firstNock = nock(authURL)
         .post('/auth/tokens')
-        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+        .reply(200, function (uri, body) {
+          assert.strictEqual(!!body?.auth?.scope, false);
+          assert.strictEqual(JSON.stringify(body), '{"auth":{"identity":{"methods":["password"],"password":{"user":{"name":"storage-X-user","domain":{"id":"default"},"password":"storage-X-password"}}}}}')
+          return connectionResultSuccessV3;
+        }, { "X-Subject-Token": tokenAuth });
+      
+      storageTest.connection((err) => {
+        assert.strictEqual(err, null);
+        assert.deepStrictEqual(storage.getConfig().token, tokenAuth);
+        assert.deepStrictEqual(storage.getConfig().endpoints.url, connectionResultSuccessV3.token.catalog[9].endpoints[20].url);
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
+        done();
+      });
+    });
+
+    it('should connect to object storage swift (with a tenantName)', function (done) {
+      const firstNock = nock(authURL)
+        .post('/auth/tokens')
+        .reply(200, function (uri, body) {
+          assert.strictEqual(!!body?.auth?.scope, true);
+          assert.strictEqual(JSON.stringify(body), '{"auth":{"identity":{"methods":["password"],"password":{"user":{"name":"storage-1-user","domain":{"id":"default"},"password":"storage-1-password"}}},"scope":{"project":{"domain":{"id":"default"},"name":"storage-1-tenant"}}}}')
+          return connectionResultSuccessV3;
+        }, { "X-Subject-Token": tokenAuth });
 
       storage.connection((err) => {
         assert.strictEqual(err, null);
@@ -1706,6 +1751,23 @@ describe('Ovh Object Storage Swift', function () {
           });
 
         storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should write file on server from a read Stream function', function (done) {
+        const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
+
+        const firstNock = nock(publicUrlGRA)
+          .put('/templates/test.odt')
+          .reply(201, (uri, requestBody) => {
+            assert.strictEqual(requestBody, _expectedFileContent.toString());
+            return '';
+          });
+
+        storage.uploadFile('templates', 'test.odt', () => fs.createReadStream(path.join(__dirname, './assets/file.txt')), (err) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();

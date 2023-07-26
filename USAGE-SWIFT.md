@@ -77,18 +77,18 @@ Initialise the SDK with one or multiple storage, if something goes wrong, the ne
 const storageClient = require('tiny-storage-client');
 
 let storage = storageClient([{
-  authUrl    : 'https://auth.cloud.ovh.net/v3',
-  username   : 'username-1',
-  password   : 'password-1',
-  tenantName : 'tenantName-1',
-  region     : 'region-1'
+  authUrl    : 'https://auth.cloud.ovh.net/v3', // REQUIRED
+  username   : 'username-1',                    // REQUIRED
+  password   : 'password-1',                    // REQUIRED
+  region     : 'region-1',                      // REQUIRED
+  tenantName : 'tenantName-1'                   // OPTIONAL
 },
 {
   authUrl    : 'https://auth.cloud.ovh.net/v3',
   username   : 'username-2',
   password   : 'password-2',
-  tenantName : 'tenantName-2',
-  region     : 'region-2'
+  region     : 'region-2',
+  tenantName : 'tenantName-2'
 }]);
 
 storage.connection((err) => {
@@ -111,7 +111,7 @@ storage.uploadFile('container', 'filename.jpg', path.join(__dirname, './assets/f
   // success
 });
 
-/** SOLUTION 2: A buffer can be passed for the file content **/
+/** SOLUTION 2: A Buffer can be passed for the file content **/
 storage.uploadFile('container', 'filename.jpg', Buffer.from("File content"), (err) => {
   if (err) {
     // handle error
@@ -119,7 +119,15 @@ storage.uploadFile('container', 'filename.jpg', Buffer.from("File content"), (er
   // success
 });
 
-/** SOLUTION 3: the function accepts a optionnal fourth argument `option` including query parameters and headers. List of query parameters and headers: https://docs.openstack.org/api-ref/object-store/?expanded=create-or-replace-object-detail#create-or-replace-object **/
+/** SOLUTION 3: Pass a function returning a ReadStream **/
+storage.uploadFile('container', 'filename.jpg', () => fs.createReadStream(path.join(__dirname, './assets/file.txt')), (err) => {
+  if (err) {
+    // handle error
+  }
+  // success
+});
+
+/** SOLUTION 4: the function accepts a optionnal fourth argument `option` including query parameters and headers. List of query parameters and headers: https://docs.openstack.org/api-ref/object-store/?expanded=create-or-replace-object-detail#create-or-replace-object **/
 storage.uploadFile('container', 'filename.jpg', Buffer.from("File content"), { queries: { temp_url_expires: '1440619048' }, headers: { 'X-Object-Meta-LocationOrigin': 'Paris/France' }}, (err) => {
   if (err) {
     // handle error
