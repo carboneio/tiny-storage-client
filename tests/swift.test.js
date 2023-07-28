@@ -52,7 +52,7 @@ const outputStreamFunction = function (opt, res) {
 }
 
 
-describe.only('Ovh Object Storage Swift', function () {
+describe('Ovh Object Storage Swift', function () {
   let storage = storageSDK([{
     username                     : 'storage-1-user',
     password                     : 'storage-1-password',
@@ -97,7 +97,6 @@ describe.only('Ovh Object Storage Swift', function () {
         tenantName                   : 'storage-2-tenant',
         region                       : 'SBG'
       })
-      console.log(_swift1.getConfig().storages)
       assert.strictEqual(_swift1.getConfig().storages.length, 1);
       assert.strictEqual(_swift1.getConfig().storages[0].username, 'storage-1-user');
       assert.strictEqual(_swift1.getConfig().storages[0].password, 'storage-1-password');
@@ -419,9 +418,8 @@ describe.only('Ovh Object Storage Swift', function () {
     it('should overload the log function', function (done) {
       let i = 0;
 
-      storage.setLogFunction(function (message, level) {
+      storage.setLogFunction(function (message) {
         assert.strictEqual(message.length > 0, true)
-        assert.strictEqual(level.length > 0, true)
         i++;
       })
 
@@ -1087,7 +1085,7 @@ describe.only('Ovh Object Storage Swift', function () {
           Promise.all([promise1, promise2]).then(results => {
             assert.strictEqual(results.length, 2)
 
-            const _listFiles1 = JSON.parse(results[0].toString());
+            const _listFiles1 = JSON.parse(results[0]);
             assert.strictEqual(_listFiles1.length > 0, true)
             assert.strictEqual(_listFiles1[0].bytes > 0, true)
             assert.strictEqual(_listFiles1[0].last_modified.length > 0, true)
@@ -1095,7 +1093,7 @@ describe.only('Ovh Object Storage Swift', function () {
             assert.strictEqual(_listFiles1[0].name.length > 0, true)
             assert.strictEqual(_listFiles1[0].content_type.length > 0, true)
 
-            const _listFiles2 = JSON.parse(results[1].toString());
+            const _listFiles2 = JSON.parse(results[1]);
             assert.strictEqual(_listFiles2.length > 0, true)
             assert.strictEqual(_listFiles2[0].bytes > 0, true)
             assert.strictEqual(_listFiles2[0].last_modified.length > 0, true)
@@ -1771,7 +1769,7 @@ describe.only('Ovh Object Storage Swift', function () {
     });
   });
 
-  describe.only('uploadFile', function () {
+  describe('uploadFile', function () {
 
     describe("SINGLE STORAGE", function () {
       it('should write file on server from a local path', function (done) {
@@ -2085,11 +2083,10 @@ describe.only('Ovh Object Storage Swift', function () {
       });
 
       describe("PARALLEL REQUESTS", function () {
-
         function uploadFilePromise() {
           return new Promise((resolve, reject) => {
             try {
-              storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err, resp) => {
+              storage.uploadFile('templates', 'test.odt', fileTxt, (err, resp) => {
                 if (err) {
                   return reject(err);
                 }
@@ -2152,7 +2149,7 @@ describe.only('Ovh Object Storage Swift', function () {
           });
         });
 
-        it.only('should request the object storage in parallel and fallback to SBG if the authentication of the main storage return an error', function (done) {
+        it('should request the object storage in parallel and fallback to SBG if the authentication of the main storage return an error', function (done) {
           const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
 
           let firstNock = nock(publicUrlGRA)
@@ -2205,7 +2202,6 @@ describe.only('Ovh Object Storage Swift', function () {
 
           Promise.all([promise1, promise2, promise3]).then(async results => {
 
-            console.log(results);
             assert.strictEqual(results.length, 3);
 
             assert.strictEqual(results[0].statusCode, 201)
@@ -2221,7 +2217,9 @@ describe.only('Ovh Object Storage Swift', function () {
             assert.strictEqual(JSON.stringify(results[2].headers), '{}')
 
             let _result3 = await uploadFilePromise();
-            assert.strictEqual(_result3, undefined);
+            assert.strictEqual(_result3.statusCode, 201)
+            assert.strictEqual(_result3.body.toString(), '')
+            assert.strictEqual(JSON.stringify(_result3.headers), '{}')
 
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -2233,15 +2231,15 @@ describe.only('Ovh Object Storage Swift', function () {
 
         it('should request the object storage in parallel and fallback to SBG if the main storage timeout', function (done) {
           const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
-          storage.setTimeout(200);
+          storage.setTimeout(10);
 
           let firstNock = nock(publicUrlGRA)
             .put('/templates/test.odt')
-            .delayConnection(500)
-            .reply(200, {})
+            .delayConnection(100)
+            .reply(200)
             .put('/templates/test.odt')
-            .delayConnection(500)
-            .reply(200, {});
+            .delayConnection(100)
+            .reply(200);
 
           let secondNock = nock(authURL)
             .post('/auth/tokens')
@@ -2268,8 +2266,14 @@ describe.only('Ovh Object Storage Swift', function () {
 
           Promise.all([promise1, promise2]).then(results => {
             assert.strictEqual(results.length, 2);
-            assert.strictEqual(results[0], undefined)
-            assert.strictEqual(results[1], undefined)
+
+            assert.strictEqual(results[0].statusCode, 201)
+            assert.strictEqual(results[0].body.toString(), '')
+            assert.strictEqual(JSON.stringify(results[0].headers), '{}')
+            
+            assert.strictEqual(results[1].statusCode, 201)
+            assert.strictEqual(results[1].body.toString(), '')
+            assert.strictEqual(JSON.stringify(results[1].headers), '{}')
 
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -2312,11 +2316,16 @@ describe.only('Ovh Object Storage Swift', function () {
           let promise1 = uploadFilePromise()
           let promise2 = uploadFilePromise()
 
-
           Promise.all([promise1, promise2]).then(results => {
             assert.strictEqual(results.length, 2);
-            assert.strictEqual(results[0], undefined)
-            assert.strictEqual(results[1], undefined)
+            
+            assert.strictEqual(results[0].statusCode, 201)
+            assert.strictEqual(results[0].body.toString(), '')
+            assert.strictEqual(JSON.stringify(results[0].headers), '{}')
+            
+            assert.strictEqual(results[1].statusCode, 201)
+            assert.strictEqual(results[1].body.toString(), '')
+            assert.strictEqual(JSON.stringify(results[1].headers), '{}')
 
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -2343,8 +2352,11 @@ describe.only('Ovh Object Storage Swift', function () {
           .delete('/templates/test.odt')
           .reply(201, '');
 
-        storage.deleteFile('templates', 'test.odt', (err) => {
+        storage.deleteFile('templates', 'test.odt', (err, resp) => {
           assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 201);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(JSON.stringify(resp.headers), '{}');
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
         });
@@ -2361,8 +2373,11 @@ describe.only('Ovh Object Storage Swift', function () {
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        storage.deleteFile('templates', 'test.odt', (err) => {
+        storage.deleteFile('templates', 'test.odt', (err, resp) => {
           assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 201);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(JSON.stringify(resp.headers), '{}');
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           done();
@@ -2376,8 +2391,9 @@ describe.only('Ovh Object Storage Swift', function () {
           .delayConnection(500)
           .reply(200, {})
 
-        storage.deleteFile('templates', 'test.odt', (err) => {
+        storage.deleteFile('templates', 'test.odt', (err, resp) => {
           assert.strictEqual(err.message, 'Object Storages are not available');
+          assert.strictEqual(resp, undefined);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
         });
@@ -2388,9 +2404,9 @@ describe.only('Ovh Object Storage Swift', function () {
           .delete('/templates/test.odt')
           .replyWithError('Error Message 1234');
 
-        storage.deleteFile('templates', 'test.odt', (err, body) => {
+        storage.deleteFile('templates', 'test.odt', (err, resp) => {
           assert.strictEqual(err.message, 'Object Storages are not available');
-          assert.strictEqual(body, undefined);
+          assert.strictEqual(resp, undefined);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
         });
@@ -2401,8 +2417,11 @@ describe.only('Ovh Object Storage Swift', function () {
           .delete('/templates/test.odt')
           .reply(404);
 
-        storage.deleteFile('templates', 'test.odt', (err) => {
-          assert.strictEqual(err.message, 'File does not exist');
+        storage.deleteFile('templates', 'test.odt', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 404);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(JSON.stringify(resp.headers), '{}');
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
         });
@@ -2549,11 +2568,11 @@ describe.only('Ovh Object Storage Swift', function () {
         function deleteFilePromise() {
           return new Promise((resolve, reject) => {
             try {
-              storage.deleteFile('templates', 'test.odt', (err) => {
+              storage.deleteFile('templates', 'test.odt', (err, resp) => {
                 if (err) {
                   return reject(err);
                 }
-                return resolve();
+                return resolve(resp);
               });
             } catch(err) {
               return reject(err);
@@ -2578,9 +2597,9 @@ describe.only('Ovh Object Storage Swift', function () {
 
           let thirdNock = nock(publicUrlSBG)
             .delete('/templates/test.odt')
-            .reply(200, {})
+            .reply(200)
             .delete('/templates/test.odt')
-            .reply(200, {});
+            .reply(200);
 
           let promise1 = deleteFilePromise()
           let promise2 = deleteFilePromise()
@@ -2588,8 +2607,15 @@ describe.only('Ovh Object Storage Swift', function () {
 
           Promise.all([promise1, promise2]).then(results => {
             assert.strictEqual(results.length, 2);
-            assert.strictEqual(results[0], undefined)
-            assert.strictEqual(results[1], undefined)
+            
+            assert.strictEqual(results[0].statusCode, 200);
+            assert.strictEqual(results[0].body.toString(), '');
+            assert.strictEqual(JSON.stringify(results[0].headers), '{}');
+
+            assert.strictEqual(results[1].statusCode, 200);
+            assert.strictEqual(results[1].body.toString(), '');
+            assert.strictEqual(JSON.stringify(results[1].headers), '{}');
+            
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
@@ -2627,13 +2653,13 @@ describe.only('Ovh Object Storage Swift', function () {
 
           let thirdNock = nock(publicUrlSBG)
             .delete('/templates/test.odt')
-            .reply(200, {})
+            .reply(200)
             .delete('/templates/test.odt')
-            .reply(200, {})
+            .reply(200)
             .delete('/templates/test.odt')
-            .reply(200, {})
+            .reply(200)
             .delete('/templates/test.odt')
-            .reply(200, {});
+            .reply(200);
 
           let promise1 = deleteFilePromise()
           let promise2 = deleteFilePromise()
@@ -2642,12 +2668,23 @@ describe.only('Ovh Object Storage Swift', function () {
           Promise.all([promise1, promise2, promise3]).then(async results => {
 
             assert.strictEqual(results.length, 3);
-            assert.strictEqual(results[0], undefined)
-            assert.strictEqual(results[1], undefined)
-            assert.strictEqual(results[2], undefined)
+            assert.strictEqual(results[0].statusCode, 200);
+            assert.strictEqual(results[0].body.toString(), '');
+            assert.strictEqual(JSON.stringify(results[0].headers), '{}');
+
+            assert.strictEqual(results[1].statusCode, 200);
+            assert.strictEqual(results[1].body.toString(), '');
+            assert.strictEqual(JSON.stringify(results[1].headers), '{}');
+
+            assert.strictEqual(results[2].statusCode, 200);
+            assert.strictEqual(results[2].body.toString(), '');
+            assert.strictEqual(JSON.stringify(results[2].headers), '{}');
 
             let _result3 = await deleteFilePromise();
-            assert.strictEqual(_result3, undefined);
+
+            assert.strictEqual(_result3.statusCode, 200);
+            assert.strictEqual(_result3.body.toString(), '');
+            assert.strictEqual(JSON.stringify(_result3.headers), '{}');
 
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -2676,9 +2713,9 @@ describe.only('Ovh Object Storage Swift', function () {
 
           let thirdNock = nock(publicUrlSBG)
             .delete('/templates/test.odt')
-            .reply(200, {})
+            .reply(200)
             .delete('/templates/test.odt')
-            .reply(200, {});
+            .reply(200);
 
 
           let promise1 = deleteFilePromise()
@@ -2687,8 +2724,14 @@ describe.only('Ovh Object Storage Swift', function () {
 
           Promise.all([promise1, promise2]).then(results => {
             assert.strictEqual(results.length, 2);
-            assert.strictEqual(results[0], undefined)
-            assert.strictEqual(results[1], undefined)
+
+            assert.strictEqual(results[0].statusCode, 200);
+            assert.strictEqual(results[0].body.toString(), '');
+            assert.strictEqual(JSON.stringify(results[0].headers), '{}');
+            
+            assert.strictEqual(results[1].statusCode, 200);
+            assert.strictEqual(results[1].body.toString(), '');
+            assert.strictEqual(JSON.stringify(results[1].headers), '{}');
 
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -2717,17 +2760,24 @@ describe.only('Ovh Object Storage Swift', function () {
 
           let thirdNock = nock(publicUrlSBG)
             .delete('/templates/test.odt')
-            .reply(200, {})
+            .reply(200)
             .delete('/templates/test.odt')
-            .reply(200, {});
+            .reply(200);
 
           let promise1 = deleteFilePromise()
           let promise2 = deleteFilePromise()
 
           Promise.all([promise1, promise2]).then(results => {
             assert.strictEqual(results.length, 2);
-            assert.strictEqual(results[0], undefined)
-            assert.strictEqual(results[1], undefined)
+            
+            assert.strictEqual(results[0].statusCode, 200);
+            assert.strictEqual(results[0].body.toString(), '');
+            assert.strictEqual(JSON.stringify(results[0].headers), '{}');
+
+            
+            assert.strictEqual(results[1].statusCode, 200);
+            assert.strictEqual(results[1].body.toString(), '');
+            assert.strictEqual(JSON.stringify(results[1].headers), '{}');
 
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -2762,13 +2812,15 @@ describe.only('Ovh Object Storage Swift', function () {
           .intercept("/templates/test.odt", "HEAD")
           .reply(200,"OK");
 
-        storage.getFileMetadata('templates', 'test.odt', (err, headers) => {
+        storage.getFileMetadata('templates', 'test.odt', (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
-          assert.strictEqual(headers['etag'].length > 0, true);
-          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
-          assert.strictEqual(headers['content-length'].length > 0, true);
-          assert.strictEqual(headers['date'].length > 0, true);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.toString(), 'OK');
+          assert.strictEqual(resp.headers['etag'].length > 0, true);
+          assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(resp.headers['content-length'].length > 0, true);
+          assert.strictEqual(resp.headers['date'].length > 0, true);
           done();
         });
       });
@@ -2794,29 +2846,31 @@ describe.only('Ovh Object Storage Swift', function () {
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        storage.getFileMetadata('templates', 'test.odt', (err, headers) => {
+        storage.getFileMetadata('templates', 'test.odt', (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
-          assert.strictEqual(headers['etag'].length > 0, true);
-          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
-          assert.strictEqual(headers['content-length'].length > 0, true);
-          assert.strictEqual(headers['date'].length > 0, true);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.toString(), 'OK');
+          assert.strictEqual(resp.headers['etag'].length > 0, true);
+          assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(resp.headers['content-length'].length > 0, true);
+          assert.strictEqual(resp.headers['date'].length > 0, true);
           done();
         });
       });
 
-      it('should return an error if the single storage timout', function (done) {
+      it('should return an error if the single storage timeout', function (done) {
         storage.setTimeout(200);
         const firstNock = nock(publicUrlGRA)
           .intercept("/templates/test.odt", "HEAD")
           .delayConnection(500)
-          .reply(200, {})
+          .reply(200)
 
-        storage.getFileMetadata('templates', 'test.odt', (err, headers) => {
+        storage.getFileMetadata('templates', 'test.odt', (err, resp) => {
           assert.notStrictEqual(err, null);
           assert.strictEqual(err.message, 'Object Storages are not available');
-          assert.strictEqual(headers, undefined);
+          assert.strictEqual(resp, undefined);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
         });
@@ -2827,10 +2881,10 @@ describe.only('Ovh Object Storage Swift', function () {
           .intercept("/templates/test.odt", "HEAD")
           .replyWithError('Error Message 1234');
 
-        storage.getFileMetadata('templates', 'test.odt', (err, headers) => {
+        storage.getFileMetadata('templates', 'test.odt', (err, resp) => {
           assert.notStrictEqual(err, null);
           assert.strictEqual(err.message, 'Object Storages are not available');
-          assert.strictEqual(headers, undefined);
+          assert.strictEqual(resp, undefined);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
         });
@@ -2841,10 +2895,11 @@ describe.only('Ovh Object Storage Swift', function () {
           .intercept("/templates/test.odt", "HEAD")
           .reply(404);
 
-        storage.getFileMetadata('templates', 'test.odt', (err, headers) => {
-          assert.notStrictEqual(err, null);
-          assert.strictEqual(err.message, 'File does not exist');
-          assert.strictEqual(headers, undefined);
+        storage.getFileMetadata('templates', 'test.odt', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 404);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(JSON.stringify(resp.headers), '{}');
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
         });
@@ -2906,16 +2961,16 @@ describe.only('Ovh Object Storage Swift', function () {
             'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
           })
           .intercept("/templates/test.odt", "HEAD")
-          .reply(200, () => {
-            return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
-          });
+          .reply(200);
 
-        storage.getFileMetadata('templates', 'test.odt', (err, headers) => {
+        storage.getFileMetadata('templates', 'test.odt', (err, resp) => {
           assert.strictEqual(err, null);
-          assert.strictEqual(headers['etag'].length > 0, true);
-          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
-          assert.strictEqual(headers['content-length'].length > 0, true);
-          assert.strictEqual(headers['date'].length > 0, true);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(resp.headers['etag'].length > 0, true);
+          assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(resp.headers['content-length'].length > 0, true);
+          assert.strictEqual(resp.headers['date'].length > 0, true);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -2949,16 +3004,16 @@ describe.only('Ovh Object Storage Swift', function () {
             'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
           })
           .intercept("/templates/test2.odt", "HEAD")
-          .reply(200, () => {
-            return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
-          });
+          .reply(200);
 
-        storage.getFileMetadata('templates', 'test2.odt', (err, headers) => {
+        storage.getFileMetadata('templates', 'test2.odt', (err, resp) => {
           assert.strictEqual(err, null);
-          assert.strictEqual(headers['etag'].length > 0, true);
-          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
-          assert.strictEqual(headers['content-length'].length > 0, true);
-          assert.strictEqual(headers['date'].length > 0, true);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(resp.headers['etag'].length > 0, true);
+          assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(resp.headers['content-length'].length > 0, true);
+          assert.strictEqual(resp.headers['date'].length > 0, true);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -2972,7 +3027,7 @@ describe.only('Ovh Object Storage Swift', function () {
         let firstNock = nock(publicUrlGRA)
           .intercept("/templates/test.odt", "HEAD")
           .delayConnection(500)
-          .reply(200, {});
+          .reply(200);
 
         let secondNock = nock(authURL)
           .post('/auth/tokens')
@@ -2990,17 +3045,17 @@ describe.only('Ovh Object Storage Swift', function () {
             'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
           })
           .intercept("/templates/test.odt", "HEAD")
-          .reply(200, () => {
-            return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
-          });
+          .reply(200);
 
 
-        storage.getFileMetadata('templates', 'test.odt', (err, headers) => {
+        storage.getFileMetadata('templates', 'test.odt', (err, resp) => {
           assert.strictEqual(err, null);
-          assert.strictEqual(headers['etag'].length > 0, true);
-          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
-          assert.strictEqual(headers['content-length'].length > 0, true);
-          assert.strictEqual(headers['date'].length > 0, true);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(resp.headers['etag'].length > 0, true);
+          assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(resp.headers['content-length'].length > 0, true);
+          assert.strictEqual(resp.headers['date'].length > 0, true);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
@@ -3030,17 +3085,17 @@ describe.only('Ovh Object Storage Swift', function () {
             'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
           })
           .intercept("/templates/test.odt", "HEAD")
-          .reply(200, () => {
-            return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
-          });
+          .reply(200);
 
 
-        storage.getFileMetadata('templates', 'test.odt', (err, headers) => {
+        storage.getFileMetadata('templates', 'test.odt', (err, resp) => {
           assert.strictEqual(err, null);
-          assert.strictEqual(headers['etag'].length > 0, true);
-          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
-          assert.strictEqual(headers['content-length'].length > 0, true);
-          assert.strictEqual(headers['date'].length > 0, true);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(resp.headers['etag'].length > 0, true);
+          assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(resp.headers['content-length'].length > 0, true);
+          assert.strictEqual(resp.headers['date'].length > 0, true);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -3054,11 +3109,11 @@ describe.only('Ovh Object Storage Swift', function () {
         function getFileMetadataPromise() {
           return new Promise((resolve, reject) => {
             try {
-              storage.getFileMetadata('templates', 'test.odt', (err, headers) => {
+              storage.getFileMetadata('templates', 'test.odt', (err, resp) => {
                 if (err) {
                   return reject(err);
                 }
-                return resolve(headers);
+                return resolve(resp);
               });
             } catch(err) {
               return reject(err);
@@ -3092,27 +3147,30 @@ describe.only('Ovh Object Storage Swift', function () {
               'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
             })
             .intercept("/templates/test.odt", "HEAD")
-            .reply(200, () => {
-              return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
-            })
+            .reply(200)
             .intercept("/templates/test.odt", "HEAD")
-            .reply(200, () => {
-              return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
-            });
+            .reply(200);
 
           let promise1 = getFileMetadataPromise()
           let promise2 = getFileMetadataPromise()
 
           Promise.all([promise1, promise2]).then(results => {
             assert.strictEqual(results.length, 2)
-            assert.strictEqual(results[0]['etag'].length > 0, true);
-            assert.strictEqual(results[0]['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(results[0]['content-length'].length > 0, true);
-            assert.strictEqual(results[0]['date'].length > 0, true);
-            assert.strictEqual(results[1]['etag'].length > 0, true);
-            assert.strictEqual(results[1]['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(results[1]['content-length'].length > 0, true);
-            assert.strictEqual(results[1]['date'].length > 0, true);
+            
+            assert.strictEqual(results[0].statusCode, 200);
+            assert.strictEqual(results[0].body.toString(), '');
+            assert.strictEqual(results[0].headers['etag'].length > 0, true);
+            assert.strictEqual(results[0].headers['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[0].headers['content-length'].length > 0, true);
+            assert.strictEqual(results[0].headers['date'].length > 0, true);
+
+            assert.strictEqual(results[1].statusCode, 200);
+            assert.strictEqual(results[1].body.toString(), '');
+            assert.strictEqual(results[1].headers['etag'].length > 0, true);
+            assert.strictEqual(results[1].headers['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[1].headers['content-length'].length > 0, true);
+            assert.strictEqual(results[1].headers['date'].length > 0, true);
+
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -3154,27 +3212,30 @@ describe.only('Ovh Object Storage Swift', function () {
               'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
             })
             .intercept("/templates/test.odt", "HEAD")
-            .reply(200, () => {
-              return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
-            })
+            .reply(200)
             .intercept("/templates/test.odt", "HEAD")
-            .reply(200, () => {
-              return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
-            });
+            .reply(200);
 
           let promise1 = getFileMetadataPromise()
           let promise2 = getFileMetadataPromise()
 
           Promise.all([promise1, promise2]).then(async results => {
             assert.strictEqual(results.length, 2);
-            assert.strictEqual(results[0]['etag'].length > 0, true);
-            assert.strictEqual(results[0]['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(results[0]['content-length'].length > 0, true);
-            assert.strictEqual(results[0]['date'].length > 0, true);
-            assert.strictEqual(results[1]['etag'].length > 0, true);
-            assert.strictEqual(results[1]['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(results[1]['content-length'].length > 0, true);
-            assert.strictEqual(results[1]['date'].length > 0, true);
+            
+            assert.strictEqual(results[0].statusCode, 200);
+            assert.strictEqual(results[0].body.toString(), '');
+            assert.strictEqual(results[0].headers['etag'].length > 0, true);
+            assert.strictEqual(results[0].headers['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[0].headers['content-length'].length > 0, true);
+            assert.strictEqual(results[0].headers['date'].length > 0, true);
+
+            assert.strictEqual(results[1].statusCode, 200);
+            assert.strictEqual(results[1].body.toString(), '');
+            assert.strictEqual(results[1].headers['etag'].length > 0, true);
+            assert.strictEqual(results[1].headers['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[1].headers['content-length'].length > 0, true);
+            assert.strictEqual(results[1].headers['date'].length > 0, true);
+            
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
@@ -3213,13 +3274,9 @@ describe.only('Ovh Object Storage Swift', function () {
               'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
             })
             .intercept("/templates/test.odt", "HEAD")
-            .reply(200, () => {
-              return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
-            })
+            .reply(200)
             .intercept("/templates/test.odt", "HEAD")
-            .reply(200, () => {
-              return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
-            });
+            .reply(200);
 
           let promise1 = getFileMetadataPromise()
           let promise2 = getFileMetadataPromise()
@@ -3227,14 +3284,21 @@ describe.only('Ovh Object Storage Swift', function () {
 
           Promise.all([promise1, promise2]).then(results => {
             assert.strictEqual(results.length, 2);
-            assert.strictEqual(results[0]['etag'].length > 0, true);
-            assert.strictEqual(results[0]['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(results[0]['content-length'].length > 0, true);
-            assert.strictEqual(results[0]['date'].length > 0, true);
-            assert.strictEqual(results[1]['etag'].length > 0, true);
-            assert.strictEqual(results[1]['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(results[1]['content-length'].length > 0, true);
-            assert.strictEqual(results[1]['date'].length > 0, true);
+
+            assert.strictEqual(results[0].statusCode, 200);
+            assert.strictEqual(results[0].body.toString(), '');
+            assert.strictEqual(results[0].headers['etag'].length > 0, true);
+            assert.strictEqual(results[0].headers['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[0].headers['content-length'].length > 0, true);
+            assert.strictEqual(results[0].headers['date'].length > 0, true);
+
+            assert.strictEqual(results[1].statusCode, 200);
+            assert.strictEqual(results[1].body.toString(), '');
+            assert.strictEqual(results[1].headers['etag'].length > 0, true);
+            assert.strictEqual(results[1].headers['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[1].headers['content-length'].length > 0, true);
+            assert.strictEqual(results[1].headers['date'].length > 0, true);
+
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
@@ -3272,13 +3336,9 @@ describe.only('Ovh Object Storage Swift', function () {
               'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
             })
             .intercept("/templates/test.odt", "HEAD")
-            .reply(200, () => {
-              return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
-            })
+            .reply(200)
             .intercept("/templates/test.odt", "HEAD")
-            .reply(200, () => {
-              return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
-            });
+            .reply(200);
 
           let promise1 = getFileMetadataPromise()
           let promise2 = getFileMetadataPromise()
@@ -3286,14 +3346,21 @@ describe.only('Ovh Object Storage Swift', function () {
 
           Promise.all([promise1, promise2]).then(results => {
             assert.strictEqual(results.length, 2);
-            assert.strictEqual(results[0]['etag'].length > 0, true);
-            assert.strictEqual(results[0]['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(results[0]['content-length'].length > 0, true);
-            assert.strictEqual(results[0]['date'].length > 0, true);
-            assert.strictEqual(results[1]['etag'].length > 0, true);
-            assert.strictEqual(results[1]['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(results[1]['content-length'].length > 0, true);
-            assert.strictEqual(results[1]['date'].length > 0, true);
+            
+            assert.strictEqual(results[0].statusCode, 200);
+            assert.strictEqual(results[0].body.toString(), '');
+            assert.strictEqual(results[0].headers['etag'].length > 0, true);
+            assert.strictEqual(results[0].headers['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[0].headers['content-length'].length > 0, true);
+            assert.strictEqual(results[0].headers['date'].length > 0, true);
+
+            assert.strictEqual(results[1].statusCode, 200);
+            assert.strictEqual(results[1].body.toString(), '');
+            assert.strictEqual(results[1].headers['etag'].length > 0, true);
+            assert.strictEqual(results[1].headers['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[1].headers['content-length'].length > 0, true);
+            assert.strictEqual(results[1].headers['date'].length > 0, true);
+
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
@@ -3331,13 +3398,15 @@ describe.only('Ovh Object Storage Swift', function () {
           .post('/templates/test.odt')
           .reply(200)
 
-        storage.setFileMetadata('templates', 'test.odt', { headers: _headers }, (err, headers) => {
+        storage.setFileMetadata('templates', 'test.odt', { headers: _headers }, (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
-          assert.strictEqual(headers['x-trans-id'].length > 0, true);
-          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
-          assert.strictEqual(headers['content-length'] === '0', true);
-          assert.strictEqual(headers['date'].length > 0, true);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(resp.headers['x-trans-id'].length > 0, true);
+          assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(resp.headers['content-length'] === '0', true);
+          assert.strictEqual(resp.headers['date'].length > 0, true);
           done();
         });
       });
@@ -3362,19 +3431,22 @@ describe.only('Ovh Object Storage Swift', function () {
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        storage.setFileMetadata('templates', 'test.odt', { headers: _headers }, (err, headers) => {
+        storage.setFileMetadata('templates', 'test.odt', { headers: _headers }, (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
-          assert.strictEqual(headers['x-trans-id'].length > 0, true);
-          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
-          assert.strictEqual(headers['content-length'] === '0', true);
-          assert.strictEqual(headers['date'].length > 0, true);
+          
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(resp.headers['x-trans-id'].length > 0, true);
+          assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(resp.headers['content-length'] === '0', true);
+          assert.strictEqual(resp.headers['date'].length > 0, true);
           done();
         });
       });
 
-      it('should return an error if the single storage timout', function (done) {
+      it('should return an error if the single storage timeout', function (done) {
         storage.setTimeout(200);
         const firstNock = nock(publicUrlGRA)
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
@@ -3382,29 +3454,31 @@ describe.only('Ovh Object Storage Swift', function () {
           .matchHeader('X-Delete-At', 1440619048)
           .post('/templates/test.odt')
           .delayConnection(500)
-          .reply(200, {})
+          .reply(200)
 
-        storage.setFileMetadata('templates', 'test.odt', { headers: _headers }, (err, headers) => {
+        storage.setFileMetadata('templates', 'test.odt', { headers: _headers }, (err, resp) => {
           assert.notStrictEqual(err, null);
-          assert.strictEqual(err.message, 'Object Storages are not available');
-          assert.strictEqual(headers, undefined);
+          assert.strictEqual(err.toString(), 'Error: Object Storages are not available');
+          assert.strictEqual(resp, undefined);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
         });
       });
 
       it('should return an error if containers or the file does not exists', function (done) {
+        const _expectedContent = '<html><h1>Not Found</h1><p>The resource could not be found.</p></html>';
         const firstNock = nock(publicUrlGRA)
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
           .matchHeader('Content-Type', 'image/jpeg')
           .matchHeader('X-Delete-At', 1440619048)
           .post('/templates/test.odt')
-          .reply(404, '<html><h1>Not Found</h1><p>The resource could not be found.</p></html>');
+          .reply(404, _expectedContent);
 
-        storage.setFileMetadata('templates', 'test.odt', { headers: _headers }, (err, headers) => {
-          assert.notStrictEqual(err, null);
-          assert.strictEqual(err.message, 'File does not exist');
-          assert.strictEqual(headers, undefined);
+        storage.setFileMetadata('templates', 'test.odt', { headers: _headers }, (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 404);
+          assert.strictEqual(resp.body.toString(), _expectedContent);
+          assert.strictEqual(JSON.stringify(resp.headers), '{}');
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
         });
@@ -3418,10 +3492,10 @@ describe.only('Ovh Object Storage Swift', function () {
           .post('/templates/test.odt')
           .replyWithError('Error Message 1234');
 
-        storage.setFileMetadata('templates', 'test.odt', { headers: _headers }, (err, headers) => {
+        storage.setFileMetadata('templates', 'test.odt', { headers: _headers }, (err, resp) => {
           assert.notStrictEqual(err, null);
           assert.strictEqual(err.message, 'Object Storages are not available');
-          assert.strictEqual(headers, undefined);
+          assert.strictEqual(resp, undefined);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
         });
@@ -3488,17 +3562,19 @@ describe.only('Ovh Object Storage Swift', function () {
           })
           /** 4 */
           .post('/templates/test.odt')
-          .reply(201, '');
+          .reply(201);
 
-        storage.setFileMetadata('templates', 'test.odt', { headers: _headers }, (err, headers) => {
+        storage.setFileMetadata('templates', 'test.odt', { headers: _headers }, (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          assert.strictEqual(headers['x-trans-id'].length > 0, true);
-          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
-          assert.strictEqual(headers['content-length'] === '0', true);
-          assert.strictEqual(headers['date'].length > 0, true);
+          assert.strictEqual(resp.statusCode, 201);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(resp.headers['x-trans-id'].length > 0, true);
+          assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(resp.headers['content-length'] === '0', true);
+          assert.strictEqual(resp.headers['date'].length > 0, true);
           done();
         });
       })
@@ -3529,15 +3605,17 @@ describe.only('Ovh Object Storage Swift', function () {
           .post('/templates/test.odt')
           .reply(201, '');
 
-        storage.setFileMetadata('templates', 'test.odt', { headers: _headers }, (err, headers) => {
+        storage.setFileMetadata('templates', 'test.odt', { headers: _headers }, (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          assert.strictEqual(headers['x-trans-id'].length > 0, true);
-          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
-          assert.strictEqual(headers['content-length'] === '0', true);
-          assert.strictEqual(headers['date'].length > 0, true);
+          assert.strictEqual(resp.statusCode, 201);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(resp.headers['x-trans-id'].length > 0, true);
+          assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(resp.headers['content-length'] === '0', true);
+          assert.strictEqual(resp.headers['date'].length > 0, true);
           done();
         });
       })
@@ -3571,15 +3649,17 @@ describe.only('Ovh Object Storage Swift', function () {
           .post('/templates/test.odt')
           .reply(201, '');
 
-        storage.setFileMetadata('templates', 'test.odt', { headers: _headers }, (err, headers) => {
+        storage.setFileMetadata('templates', 'test.odt', { headers: _headers }, (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          assert.strictEqual(headers['x-trans-id'].length > 0, true);
-          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
-          assert.strictEqual(headers['content-length'] === '0', true);
-          assert.strictEqual(headers['date'].length > 0, true);
+          assert.strictEqual(resp.statusCode, 201);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(resp.headers['x-trans-id'].length > 0, true);
+          assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(resp.headers['content-length'] === '0', true);
+          assert.strictEqual(resp.headers['date'].length > 0, true);
           done();
         });
       })
@@ -3612,15 +3692,17 @@ describe.only('Ovh Object Storage Swift', function () {
           .reply(200);
 
 
-        storage.setFileMetadata('templates', 'test.odt', { headers: _headers }, (err, headers) => {
+        storage.setFileMetadata('templates', 'test.odt', { headers: _headers }, (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          assert.strictEqual(headers['x-trans-id'].length > 0, true);
-          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
-          assert.strictEqual(headers['content-length'] === '0', true);
-          assert.strictEqual(headers['date'].length > 0, true);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(resp.headers['x-trans-id'].length > 0, true);
+          assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(resp.headers['content-length'] === '0', true);
+          assert.strictEqual(resp.headers['date'].length > 0, true);
           done();
         });
       });
@@ -3630,11 +3712,11 @@ describe.only('Ovh Object Storage Swift', function () {
         function setFileMetadataPromise() {
           return new Promise((resolve, reject) => {
             try {
-              storage.setFileMetadata('templates', 'test.odt', { headers: _headers }, (err, headers) => {
+              storage.setFileMetadata('templates', 'test.odt', { headers: _headers }, (err, resp) => {
                 if (err) {
                   return reject(err);
                 }
-                return resolve(headers);
+                return resolve(resp);
               });
             } catch(err) {
               return reject(err);
@@ -3681,14 +3763,21 @@ describe.only('Ovh Object Storage Swift', function () {
 
           Promise.all([promise1, promise2]).then(results => {
             assert.strictEqual(results.length, 2);
-            assert.strictEqual(results[0]['x-trans-id'].length > 0, true);
-            assert.strictEqual(results[0]['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(results[0]['content-length'] === '0', true);
-            assert.strictEqual(results[0]['date'].length > 0, true);
-            assert.strictEqual(results[1]['x-trans-id'].length > 0, true);
-            assert.strictEqual(results[1]['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(results[1]['content-length'] === '0', true);
-            assert.strictEqual(results[1]['date'].length > 0, true);
+
+            assert.strictEqual(results[0].statusCode, 200);
+            assert.strictEqual(results[0].body.toString(), '');
+            assert.strictEqual(results[0].headers['x-trans-id'].length > 0, true);
+            assert.strictEqual(results[0].headers['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[0].headers['content-length'] === '0', true);
+            assert.strictEqual(results[0].headers['date'].length > 0, true);
+
+            assert.strictEqual(results[1].statusCode, 200);
+            assert.strictEqual(results[1].body.toString(), '');
+            assert.strictEqual(results[1].headers['x-trans-id'].length > 0, true);
+            assert.strictEqual(results[1].headers['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[1].headers['content-length'] === '0', true);
+            assert.strictEqual(results[1].headers['date'].length > 0, true);
+
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
@@ -3753,25 +3842,36 @@ describe.only('Ovh Object Storage Swift', function () {
           Promise.all([promise1, promise2, promise3]).then(async results => {
 
             assert.strictEqual(results.length, 3);
-            assert.strictEqual(results[0]['x-trans-id'].length > 0, true);
-            assert.strictEqual(results[0]['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(results[0]['content-length'] === '0', true);
-            assert.strictEqual(results[0]['date'].length > 0, true);
-            assert.strictEqual(results[1]['x-trans-id'].length > 0, true);
-            assert.strictEqual(results[1]['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(results[1]['content-length'] === '0', true);
-            assert.strictEqual(results[1]['date'].length > 0, true);
-            assert.strictEqual(results[2]['x-trans-id'].length > 0, true);
-            assert.strictEqual(results[2]['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(results[2]['content-length'] === '0', true);
-            assert.strictEqual(results[2]['date'].length > 0, true);
+            
+            assert.strictEqual(results[0].statusCode, 200);
+            assert.strictEqual(results[0].body.toString(), '');
+            assert.strictEqual(results[0].headers['x-trans-id'].length > 0, true);
+            assert.strictEqual(results[0].headers['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[0].headers['content-length'] === '0', true);
+            assert.strictEqual(results[0].headers['date'].length > 0, true);
+            
+            assert.strictEqual(results[1].statusCode, 200);
+            assert.strictEqual(results[1].body.toString(), '');
+            assert.strictEqual(results[1].headers['x-trans-id'].length > 0, true);
+            assert.strictEqual(results[1].headers['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[1].headers['content-length'] === '0', true);
+            assert.strictEqual(results[1].headers['date'].length > 0, true);
+            
+            assert.strictEqual(results[2].statusCode, 200);
+            assert.strictEqual(results[2].body.toString(), '');
+            assert.strictEqual(results[2].headers['x-trans-id'].length > 0, true);
+            assert.strictEqual(results[2].headers['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[2].headers['content-length'] === '0', true);
+            assert.strictEqual(results[2].headers['date'].length > 0, true);
 
 
             let _result3 = await setFileMetadataPromise();
-            assert.strictEqual(_result3['x-trans-id'].length > 0, true);
-            assert.strictEqual(_result3['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(_result3['content-length'] === '0', true);
-            assert.strictEqual(_result3['date'].length > 0, true);
+            assert.strictEqual(_result3.statusCode, 200);
+            assert.strictEqual(_result3.body.toString(), '');
+            assert.strictEqual(_result3.headers['x-trans-id'].length > 0, true);
+            assert.strictEqual(_result3.headers['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(_result3.headers['content-length'] === '0', true);
+            assert.strictEqual(_result3.headers['date'].length > 0, true);
 
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -3823,14 +3923,20 @@ describe.only('Ovh Object Storage Swift', function () {
 
           Promise.all([promise1, promise2]).then(results => {
             assert.strictEqual(results.length, 2);
-            assert.strictEqual(results[0]['x-trans-id'].length > 0, true);
-            assert.strictEqual(results[0]['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(results[0]['content-length'] === '0', true);
-            assert.strictEqual(results[0]['date'].length > 0, true);
-            assert.strictEqual(results[1]['x-trans-id'].length > 0, true);
-            assert.strictEqual(results[1]['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(results[1]['content-length'] === '0', true);
-            assert.strictEqual(results[1]['date'].length > 0, true);
+            
+            assert.strictEqual(results[0].statusCode, 200);
+            assert.strictEqual(results[0].body.toString(), '');
+            assert.strictEqual(results[0].headers['x-trans-id'].length > 0, true);
+            assert.strictEqual(results[0].headers['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[0].headers['content-length'] === '0', true);
+            assert.strictEqual(results[0].headers['date'].length > 0, true);
+
+            assert.strictEqual(results[1].statusCode, 200);
+            assert.strictEqual(results[1].body.toString(), '');
+            assert.strictEqual(results[1].headers['x-trans-id'].length > 0, true);
+            assert.strictEqual(results[1].headers['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[1].headers['content-length'] === '0', true);
+            assert.strictEqual(results[1].headers['date'].length > 0, true);
 
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -3881,14 +3987,19 @@ describe.only('Ovh Object Storage Swift', function () {
 
           Promise.all([promise1, promise2]).then(results => {
             assert.strictEqual(results.length, 2);
-            assert.strictEqual(results[0]['x-trans-id'].length > 0, true);
-            assert.strictEqual(results[0]['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(results[0]['content-length'] === '0', true);
-            assert.strictEqual(results[0]['date'].length > 0, true);
-            assert.strictEqual(results[1]['x-trans-id'].length > 0, true);
-            assert.strictEqual(results[1]['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(results[1]['content-length'] === '0', true);
-            assert.strictEqual(results[1]['date'].length > 0, true);
+            assert.strictEqual(results[0].statusCode, 200);
+            assert.strictEqual(results[0].body.toString(), '');
+            assert.strictEqual(results[0].headers['x-trans-id'].length > 0, true);
+            assert.strictEqual(results[0].headers['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[0].headers['content-length'] === '0', true);
+            assert.strictEqual(results[0].headers['date'].length > 0, true);
+
+            assert.strictEqual(results[1].statusCode, 200);
+            assert.strictEqual(results[1].body.toString(), '');
+            assert.strictEqual(results[1].headers['x-trans-id'].length > 0, true);
+            assert.strictEqual(results[1].headers['x-openstack-request-id'].length > 0, true);
+            assert.strictEqual(results[1].headers['content-length'] === '0', true);
+            assert.strictEqual(results[1].headers['date'].length > 0, true);
 
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -3928,14 +4039,15 @@ describe.only('Ovh Object Storage Swift', function () {
           .intercept("/templates/test.odt", "COPY")
           .reply(200,"OK");
 
-        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, body, headers) => {
+        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
-          assert.strictEqual(headers['x-trans-id'].length > 0, true);
-          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
-          assert.strictEqual(headers['content-length'] === '0', true);
-          assert.strictEqual(headers['date'].length > 0, true);
-          assert.strictEqual(body.toString(), "OK");
+          assert.strictEqual(resp.headers['x-trans-id'].length > 0, true);
+          assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(resp.headers['content-length'] === '0', true);
+          assert.strictEqual(resp.headers['date'].length > 0, true);
+          assert.strictEqual(resp.body.toString(), "OK");
+          assert.strictEqual(resp.statusCode, 200);
           done();
         });
       });
@@ -3970,14 +4082,15 @@ describe.only('Ovh Object Storage Swift', function () {
             return Buffer.from(JSON.stringify(_expectedResponse));
           });
 
-        storage.request('POST', '/templates?bulk-delete', { headers: _expectedHeader, body: _expectedBody }, (err, body, headers) => {
+        storage.request('POST', '/templates?bulk-delete', { headers: _expectedHeader, body: _expectedBody }, (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
-          assert.strictEqual(headers['x-trans-id'].length > 0, true);
-          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
-          assert.strictEqual(headers['content-length'] === '0', true);
-          assert.strictEqual(headers['date'].length > 0, true);
-          assert.strictEqual(body.toString(), JSON.stringify(_expectedResponse));
+          assert.strictEqual(resp.headers['x-trans-id'].length > 0, true);
+          assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(resp.headers['content-length'] === '0', true);
+          assert.strictEqual(resp.headers['date'].length > 0, true);
+          assert.strictEqual(resp.body.toString(), JSON.stringify(_expectedResponse));
+          assert.strictEqual(resp.statusCode, 201);
           done();
         });
       });
@@ -4003,15 +4116,16 @@ describe.only('Ovh Object Storage Swift', function () {
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, body, headers) => {
+        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
-          assert.strictEqual(headers['x-trans-id'].length > 0, true);
-          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
-          assert.strictEqual(headers['content-length'] === '0', true);
-          assert.strictEqual(headers['date'].length > 0, true);
-          assert.strictEqual(body.toString(), "OK");
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.headers['x-trans-id'].length > 0, true);
+          assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(resp.headers['content-length'] === '0', true);
+          assert.strictEqual(resp.headers['date'].length > 0, true);
+          assert.strictEqual(resp.body.toString(), "OK");
           done();
         });
       });
@@ -4024,31 +4138,31 @@ describe.only('Ovh Object Storage Swift', function () {
           .matchHeader('X-Delete-At', 1440619048)
           .intercept("/templates/test.odt", "COPY")
           .delayConnection(500)
-          .reply(200, {})
+          .reply(200)
 
-        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, body, headers) => {
+        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, resp) => {
           assert.notStrictEqual(err, null);
           assert.strictEqual(err.message, 'Object Storages are not available');
-          assert.strictEqual(headers, undefined);
-          assert.strictEqual(body, undefined);
+          assert.strictEqual(resp, undefined);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
         });
       });
 
       it('should return an error if containers or the file does not exists', function (done) {
+        const _expectedContent = '<html><h1>Not Found</h1><p>The resource could not be found.</p></html>';
         const firstNock = nock(publicUrlGRA)
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
           .matchHeader('Content-Type', 'image/jpeg')
           .matchHeader('X-Delete-At', 1440619048)
           .intercept("/templates/test.odt", "COPY")
-          .reply(404, '<html><h1>Not Found</h1><p>The resource could not be found.</p></html>');
+          .reply(404, _expectedContent);
 
-        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, body, headers) => {
-          assert.notStrictEqual(err, null);
-          assert.strictEqual(err.message.includes('404'), true);
-          assert.strictEqual(headers, undefined);
-          assert.strictEqual(body, undefined);
+        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(JSON.stringify(resp.headers), '{}');
+          assert.strictEqual(resp.body.toString(), _expectedContent);
+          assert.strictEqual(resp.statusCode, 404);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
         });
@@ -4062,10 +4176,10 @@ describe.only('Ovh Object Storage Swift', function () {
           .intercept("/templates/test.odt", "COPY")
           .replyWithError('Error Message 1234');
 
-        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, body, headers) => {
+        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, resp) => {
           assert.notStrictEqual(err, null);
           assert.strictEqual(err.message, 'Object Storages are not available');
-          assert.strictEqual(headers, undefined);
+          assert.strictEqual(resp, undefined);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
         });
@@ -4134,16 +4248,17 @@ describe.only('Ovh Object Storage Swift', function () {
           .intercept("/templates/test.odt", "COPY")
           .reply(201, 'OK');
 
-        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, body, headers) => {
+        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          assert.strictEqual(headers['x-trans-id'].length > 0, true);
-          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
-          assert.strictEqual(headers['content-length'] === '0', true);
-          assert.strictEqual(headers['date'].length > 0, true);
-          assert.strictEqual(body.toString(), "OK");
+          assert.strictEqual(resp.headers['x-trans-id'].length > 0, true);
+          assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(resp.headers['content-length'] === '0', true);
+          assert.strictEqual(resp.headers['date'].length > 0, true);
+          assert.strictEqual(resp.body.toString(), "OK");
+          assert.strictEqual(resp.statusCode, 201);
           done();
         });
       })
@@ -4174,16 +4289,17 @@ describe.only('Ovh Object Storage Swift', function () {
           .intercept("/templates/test.odt", "COPY")
           .reply(201, 'OK');
 
-        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, body, headers) => {
+        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          assert.strictEqual(headers['x-trans-id'].length > 0, true);
-          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
-          assert.strictEqual(headers['content-length'] === '0', true);
-          assert.strictEqual(headers['date'].length > 0, true);
-          assert.strictEqual(body.toString(), "OK");
+          assert.strictEqual(resp.headers['x-trans-id'].length > 0, true);
+          assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(resp.headers['content-length'] === '0', true);
+          assert.strictEqual(resp.headers['date'].length > 0, true);
+          assert.strictEqual(resp.body.toString(), "OK");
+          assert.strictEqual(resp.statusCode, 201);
           done();
         });
       })
@@ -4217,16 +4333,17 @@ describe.only('Ovh Object Storage Swift', function () {
           .intercept("/templates/test.odt", "COPY")
           .reply(201, 'OK');
 
-        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, body, headers) => {
+        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          assert.strictEqual(headers['x-trans-id'].length > 0, true);
-          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
-          assert.strictEqual(headers['content-length'] === '0', true);
-          assert.strictEqual(headers['date'].length > 0, true);
-          assert.strictEqual(body.toString(), "OK");
+          assert.strictEqual(resp.headers['x-trans-id'].length > 0, true);
+          assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(resp.headers['content-length'] === '0', true);
+          assert.strictEqual(resp.headers['date'].length > 0, true);
+          assert.strictEqual(resp.body.toString(), "OK");
+          assert.strictEqual(resp.statusCode, 201);
           done();
         });
       })
@@ -4259,16 +4376,17 @@ describe.only('Ovh Object Storage Swift', function () {
           .reply(200, 'OK');
 
 
-        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, body, headers) => {
+        storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          assert.strictEqual(headers['x-trans-id'].length > 0, true);
-          assert.strictEqual(headers['x-openstack-request-id'].length > 0, true);
-          assert.strictEqual(headers['content-length'] === '0', true);
-          assert.strictEqual(headers['date'].length > 0, true);
-          assert.strictEqual(body.toString(), "OK");
+          assert.strictEqual(resp.headers['x-trans-id'].length > 0, true);
+          assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(resp.headers['content-length'] === '0', true);
+          assert.strictEqual(resp.headers['date'].length > 0, true);
+          assert.strictEqual(resp.body.toString(), "OK");
+          assert.strictEqual(resp.statusCode, 200);
           done();
         });
       });
@@ -4278,11 +4396,11 @@ describe.only('Ovh Object Storage Swift', function () {
         function copyRequestPromise() {
           return new Promise((resolve, reject) => {
             try {
-              storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, body, headers) => {
+              storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, resp) => {
                 if (err) {
                   return reject(err);
                 }
-                return resolve({ headers: headers, body: body });
+                return resolve(resp);
               });
             } catch(err) {
               return reject(err);
@@ -4334,11 +4452,13 @@ describe.only('Ovh Object Storage Swift', function () {
             assert.strictEqual(results[0]['headers']['content-length'] === '0', true);
             assert.strictEqual(results[0]['headers']['date'].length > 0, true);
             assert.strictEqual(results[0]['body'].toString(), 'OK');
+            assert.strictEqual(results[0]['statusCode'], 200);
             assert.strictEqual(results[1]['headers']['x-trans-id'].length > 0, true);
             assert.strictEqual(results[1]['headers']['x-openstack-request-id'].length > 0, true);
             assert.strictEqual(results[1]['headers']['content-length'] === '0', true);
             assert.strictEqual(results[1]['headers']['date'].length > 0, true);
             assert.strictEqual(results[1]['body'].toString(), 'OK');
+            assert.strictEqual(results[1]['statusCode'], 200);
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
@@ -4408,16 +4528,19 @@ describe.only('Ovh Object Storage Swift', function () {
             assert.strictEqual(results[0]['headers']['content-length'] === '0', true);
             assert.strictEqual(results[0]['headers']['date'].length > 0, true);
             assert.strictEqual(results[0]['body'].toString(), 'OK');
+            assert.strictEqual(results[0]['statusCode'], 200);
             assert.strictEqual(results[1]['headers']['x-trans-id'].length > 0, true);
             assert.strictEqual(results[1]['headers']['x-openstack-request-id'].length > 0, true);
             assert.strictEqual(results[1]['headers']['content-length'] === '0', true);
             assert.strictEqual(results[1]['headers']['date'].length > 0, true);
             assert.strictEqual(results[1]['body'].toString(), 'OK');
+            assert.strictEqual(results[1]['statusCode'], 200);
             assert.strictEqual(results[2]['headers']['x-trans-id'].length > 0, true);
             assert.strictEqual(results[2]['headers']['x-openstack-request-id'].length > 0, true);
             assert.strictEqual(results[2]['headers']['content-length'] === '0', true);
             assert.strictEqual(results[2]['headers']['date'].length > 0, true);
             assert.strictEqual(results[2]['body'].toString(), 'OK');
+            assert.strictEqual(results[2]['statusCode'], 200);
 
 
             let _result3 = await copyRequestPromise();
@@ -4426,6 +4549,7 @@ describe.only('Ovh Object Storage Swift', function () {
             assert.strictEqual(_result3['headers']['content-length'] === '0', true);
             assert.strictEqual(_result3['headers']['date'].length > 0, true);
             assert.strictEqual(_result3['body'].toString(), 'OK');
+            assert.strictEqual(_result3['statusCode'], 200);
 
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -4482,11 +4606,13 @@ describe.only('Ovh Object Storage Swift', function () {
             assert.strictEqual(results[0]['headers']['content-length'] === '0', true);
             assert.strictEqual(results[0]['headers']['date'].length > 0, true);
             assert.strictEqual(results[0]['body'].toString(), 'OK');
+            assert.strictEqual(results[0]['statusCode'], 200);
             assert.strictEqual(results[1]['headers']['x-trans-id'].length > 0, true);
             assert.strictEqual(results[1]['headers']['x-openstack-request-id'].length > 0, true);
             assert.strictEqual(results[1]['headers']['content-length'] === '0', true);
             assert.strictEqual(results[1]['headers']['date'].length > 0, true);
             assert.strictEqual(results[1]['body'].toString(), 'OK');
+            assert.strictEqual(results[1]['statusCode'], 200);
 
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -4542,11 +4668,13 @@ describe.only('Ovh Object Storage Swift', function () {
             assert.strictEqual(results[0]['headers']['content-length'] === '0', true);
             assert.strictEqual(results[0]['headers']['date'].length > 0, true);
             assert.strictEqual(results[0]['body'].toString(), 'OK');
+            assert.strictEqual(results[0]['statusCode'], 200);
             assert.strictEqual(results[1]['headers']['x-trans-id'].length > 0, true);
             assert.strictEqual(results[1]['headers']['x-openstack-request-id'].length > 0, true);
             assert.strictEqual(results[1]['headers']['content-length'] === '0', true);
             assert.strictEqual(results[1]['headers']['date'].length > 0, true);
             assert.strictEqual(results[1]['body'].toString(), 'OK');
+            assert.strictEqual(results[1]['statusCode'], 200);
 
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -4568,14 +4696,16 @@ describe.only('Ovh Object Storage Swift', function () {
       it('should receive a file from a stream', function (done) {
         const firstNock = nock(publicUrlGRA)
           .get('/templates/file.txt')
-          .reply(200, function() {
-            return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
-           });
+          .reply(200, fileTxt);
 
-        storage.request('GET', '/templates/file.txt', { output : outputStreamFunction }, (err) => {
+        assert.strictEqual(dataStream, '');
+        storage.request('GET', '/templates/file.txt', { output : outputStreamFunction }, (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(dataStream, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(JSON.stringify(resp.headers), '{}');
+          dataStream = '';
           done();
         });
       });
@@ -4586,19 +4716,20 @@ describe.only('Ovh Object Storage Swift', function () {
           .intercept("/templates/file.txt", "GET")
           .reply(401, 'Unauthorized')
           .intercept("/templates/file.txt", "GET")
-          .reply(200, function() {
-            return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
-           });
+          .reply(200, fileTxt);
 
         let secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        storage.request('GET', '/templates/file.txt', { output : outputStreamFunction }, (err) => {
+        assert.strictEqual(dataStream, '');
+        storage.request('GET', '/templates/file.txt', { output : outputStreamFunction }, (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(dataStream, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(JSON.stringify(resp.headers), '{}');
           done();
         });
       });
@@ -4608,11 +4739,9 @@ describe.only('Ovh Object Storage Swift', function () {
         const firstNock = nock(publicUrlGRA)
           .get('/templates/file.txt')
           .delayConnection(500)
-          .reply(200, function() {
-            return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
-           });
+          .reply(200, fileTxt);
 
-        storage.request('GET', '/templates/file.txt', { stream : true }, (err, res) => {
+        storage.request('GET', '/templates/file.txt', { output : outputStreamFunction }, (err, res) => {
           assert.notStrictEqual(err, null);
           assert.strictEqual(err.message, 'Object Storages are not available');
           assert.strictEqual(res, undefined);
@@ -4626,10 +4755,10 @@ describe.only('Ovh Object Storage Swift', function () {
           .intercept("/templates/file.txt", "GET")
           .reply(404);
 
-        storage.request('GET', '/templates/file.txt', { stream : true }, (err, res) => {
-          assert.notStrictEqual(err, null);
-          assert.strictEqual(err.message.includes('404'), true);
-          assert.strictEqual(res, undefined);
+        storage.request('GET', '/templates/file.txt', { output : outputStreamFunction }, (err, res) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(res.statusCode, 404);
+          assert.strictEqual(JSON.stringify(res.headers), '{}');
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
         });
@@ -4640,7 +4769,7 @@ describe.only('Ovh Object Storage Swift', function () {
           .intercept("/templates/file.txt", "GET")
           .replyWithError('Error Message 1234');
 
-        storage.request('GET', '/templates/file.txt', { stream : true }, (err, res) => {
+        storage.request('GET', '/templates/file.txt', { output : outputStreamFunction }, (err, res) => {
           assert.notStrictEqual(err, null);
           assert.strictEqual(err.message, 'Object Storages are not available');
           assert.strictEqual(res, undefined);
@@ -4697,16 +4826,18 @@ describe.only('Ovh Object Storage Swift', function () {
         let thirdNock = nock(publicUrlSBG)
           /** 4 */
           .intercept('/templates/file.txt', "GET")
-          .reply(200, function() {
-            return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
-          });
+          .reply(200, fileTxt);
 
+        assert.strictEqual(dataStream, '')
         storage.request('GET', '/templates/file.txt', { output : outputStreamFunction }, (err, res) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
           assert.strictEqual(dataStream, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          assert.strictEqual(res.statusCode, 200);
+          assert.strictEqual(JSON.stringify(res.headers), '{}');
+          dataStream = '';
           done();
         });
       })
@@ -4723,16 +4854,18 @@ describe.only('Ovh Object Storage Swift', function () {
 
         let thirdNock = nock(publicUrlSBG)
           .intercept('/templates/file.txt', "GET")
-          .reply(200, function() {
-            return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
-          });
+          .reply(200, fileTxt);
 
+        assert.strictEqual(dataStream, '');
         storage.request('GET', '/templates/file.txt', { output : outputStreamFunction }, (err, res) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
           assert.strictEqual(dataStream, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          assert.strictEqual(res.statusCode, 200);
+          assert.strictEqual(JSON.stringify(res.headers), '{}');
+          dataStream = '';
           done();
         });
       })
@@ -4740,11 +4873,11 @@ describe.only('Ovh Object Storage Swift', function () {
 
 
       it('should retry the request with the second object storage if the first object storage timeout', function(done){
-        storage.setTimeout(200);
+        storage.setTimeout(10);
         let firstNock = nock(publicUrlGRA)
           .intercept('/templates/file.txt', "GET")
           .delayConnection(500)
-          .reply(200, {});
+          .reply(200);
 
         let secondNock = nock(authURL)
           .post('/auth/tokens')
@@ -4752,16 +4885,18 @@ describe.only('Ovh Object Storage Swift', function () {
 
         let thirdNock = nock(publicUrlSBG)
           .intercept('/templates/file.txt', "GET")
-          .reply(200, function() {
-            return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
-          });
+          .reply(200, fileTxt);
 
+        assert.strictEqual(dataStream, '');
         storage.request('GET', '/templates/file.txt', { output : outputStreamFunction }, (err, res) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
           assert.strictEqual(dataStream, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          assert.strictEqual(res.statusCode, 200);
+          assert.strictEqual(JSON.stringify(res.headers), '{}');
+          dataStream = '';
           done();
         });
       })
@@ -4778,17 +4913,19 @@ describe.only('Ovh Object Storage Swift', function () {
 
         let thirdNock = nock(publicUrlSBG)
           .intercept('/templates/file.txt', "GET")
-          .reply(200, function() {
-            return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
-          });
+          .reply(200, fileTxt);
 
 
+        assert.strictEqual(dataStream, '');
         storage.request('GET', '/templates/file.txt', { output : outputStreamFunction }, (err, res) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
           assert.strictEqual(dataStream, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          assert.strictEqual(res.statusCode, 200);
+          assert.strictEqual(JSON.stringify(res.headers), '{}');
+          dataStream = '';
           done();
         });
       });
@@ -4801,7 +4938,7 @@ describe.only('Ovh Object Storage Swift', function () {
               if (err) {
                 return reject(err);
               }
-              return resolve(_dataStreams[index]);
+              return resolve({ body: _dataStreams[index] });
             });
           });
         }
@@ -4837,8 +4974,8 @@ describe.only('Ovh Object Storage Swift', function () {
 
           Promise.all([promise1, promise2]).then(results => {
             assert.strictEqual(results.length, 2);
-            assert.strictEqual(results[0], 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
-            assert.strictEqual(results[1], 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[0].body, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[1].body, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
@@ -4877,21 +5014,13 @@ describe.only('Ovh Object Storage Swift', function () {
 
           let thirdNock = nock(publicUrlSBG)
             .intercept('/templates/file.txt', "GET")
-            .reply(200, function() {
-              return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
-            })
+            .reply(200, fileTxt)
             .intercept('/templates/file.txt', "GET")
-            .reply(200, function() {
-              return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
-            })
+            .reply(200, fileTxt)
             .intercept('/templates/file.txt', "GET")
-            .reply(200, function() {
-              return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
-            })
+            .reply(200, fileTxt)
             .intercept('/templates/file.txt', "GET")
-            .reply(200, function() {
-              return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
-            })
+            .reply(200, fileTxt)
 
           let promise1 = copyRequestPromise(0)
           let promise2 = copyRequestPromise(1)
@@ -4900,13 +5029,13 @@ describe.only('Ovh Object Storage Swift', function () {
           Promise.all([promise1, promise2, promise3]).then(async results => {
 
             assert.strictEqual(results.length, 3);
-            assert.strictEqual(results[0], 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
-            assert.strictEqual(results[1], 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
-            assert.strictEqual(results[2], 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[0].body, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[1].body, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[2].body, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
 
 
             let _result3 = await copyRequestPromise(3);
-            assert.strictEqual(_result3, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(_result3.body, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
 
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -4918,15 +5047,15 @@ describe.only('Ovh Object Storage Swift', function () {
         });
 
         it('should request the object storage in parallel and fallback to SBG if the main storage timeout', function (done) {
-          storage.setTimeout(200);
+          storage.setTimeout(10);
 
           let firstNock = nock(publicUrlGRA)
             .intercept('/templates/file.txt', "GET")
-            .delayConnection(500)
-            .reply(200, 'NOT OK')
+            .delayConnection(100)
+            .reply(200)
             .intercept('/templates/file.txt', "GET")
-            .delayConnection(500)
-            .reply(200, 'NOT OK');
+            .delayConnection(100)
+            .reply(200);
 
           let secondNock = nock(authURL)
             .post('/auth/tokens')
@@ -4936,13 +5065,9 @@ describe.only('Ovh Object Storage Swift', function () {
 
           let thirdNock = nock(publicUrlSBG)
             .intercept('/templates/file.txt', "GET")
-            .reply(200, function() {
-              return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
-            })
+            .reply(200, fileTxt)
             .intercept('/templates/file.txt', "GET")
-            .reply(200, function() {
-              return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
-            })
+            .reply(200, fileTxt)
 
 
           let promise1 = copyRequestPromise(0)
@@ -4951,8 +5076,8 @@ describe.only('Ovh Object Storage Swift', function () {
 
           Promise.all([promise1, promise2]).then(results => {
             assert.strictEqual(results.length, 2);
-            assert.strictEqual(results[0], 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
-            assert.strictEqual(results[1], 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[0].body, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[1].body, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
@@ -4969,9 +5094,9 @@ describe.only('Ovh Object Storage Swift', function () {
 
           let firstNock = nock(publicUrlGRA)
             .intercept('/templates/file.txt', "GET")
-            .reply(500, {})
+            .reply(500)
             .intercept('/templates/file.txt', "GET")
-            .reply(500, {});
+            .reply(500);
 
           let secondNock = nock(authURL)
             .post('/auth/tokens')
@@ -4981,13 +5106,9 @@ describe.only('Ovh Object Storage Swift', function () {
 
           let thirdNock = nock(publicUrlSBG)
             .intercept('/templates/file.txt', "GET")
-            .reply(200, function() {
-              return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
-            })
+            .reply(200, fileTxt)
             .intercept('/templates/file.txt', "GET")
-            .reply(200, function() {
-              return fs.createReadStream(path.join(__dirname, './assets/file.txt'))
-            })
+            .reply(200, fileTxt)
 
           let promise1 = copyRequestPromise(0)
           let promise2 = copyRequestPromise(1)
@@ -4995,8 +5116,8 @@ describe.only('Ovh Object Storage Swift', function () {
 
           Promise.all([promise1, promise2]).then(results => {
             assert.strictEqual(results.length, 2);
-            assert.strictEqual(results[0], 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
-            assert.strictEqual(results[1], 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[0].body, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+            assert.strictEqual(results[1].body, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
 
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);

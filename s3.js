@@ -292,7 +292,7 @@ module.exports = (config) => {
       request('GET', `/`, { requestStorageIndex: 0 }, function (err, resp) {
         /** If everything is alright, the active storage is reset to the main */
         if (resp?.statusCode === 200) {
-          log(`🟢 S3 Storage | Main storage available - reconnecting for next requests`);
+          log(`S3 Storage | Main storage available - reconnecting for next requests`);
           _config.activeStorage = 0;
         }
         retryReconnectMainStorage = false;
@@ -406,7 +406,7 @@ module.exports = (config) => {
    * @param {type} type warning, error
    */
   function log(msg, level = '') {
-    return console.log(level === 'error' ? `❗️ Error: ${msg}` : level === 'warning' ? `⚠️  ${msg}` : msg );
+    return console.log(level === 'error' ? `🔴 ${msg}` : level === 'warning' ? `🟠 ${msg}` : `🟢 ${msg}`);
   }
 
   return {

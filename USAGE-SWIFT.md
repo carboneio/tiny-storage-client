@@ -139,12 +139,34 @@ storage.uploadFile('container', 'filename.jpg', Buffer.from("File content"), { q
 ### Download a file
 
 ```js
-storage.downloadFile('templates', 'filename.jpg', (err, body, headers) => {
+/** Solution 1: Download the file as Buffer **/
+storage.downloadFile('containerName', 'filename.jpg', (err, body, headers) => {
   if (err) {
     // handle error
   }
   // success, the `body` argument is the content of the file as a Buffer
 });
+
+/** Solution 2: Download the file as Stream,  set the option `output` with a function returning the output Stream */
+function createOutputStream(opts, res) {
+  const writer = fs.createWriteStream('2023-invoice.pdf')
+  writer.on('error', (e) => { /* clean up your stuff */ })
+  return writer
+}
+
+storage.downloadFile('containerName', '2023-invoice.pdf', { output: createOutputStream }, (err, resp) => {
+  if (err) {
+    return console.log("Error on download: ", err);
+  }
+  /**
+   * Request reponse:
+   * - resp.headers
+   * - resp.statusCode
+   *
+   * When the callback is called, the stream is closed and the file created,
+   * you don't have to pipe yourself!
+   */
+})
 ```
 
 ### Delete a file

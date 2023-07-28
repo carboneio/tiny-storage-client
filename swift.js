@@ -34,11 +34,11 @@ module.exports = (config) => {
     if (_config.activeStorage === _config.storages.length) {
       /**  Reset the index of the actual storage */
       _config.activeStorage = 0;
-      log(`Object Storages are not available`, 'error');
+      log(`SWIFT Storage | Object Storages are not available`, 'error');
       return callback(new Error('Object Storages are not available'));
     }
     const _storage = _config.storages[_config.activeStorage];
-    log(`Object Storage index "${_config.activeStorage}" region "${_storage.region}" connection...`, 'info');
+    log(`SWIFT Storage | Index "${_config.activeStorage}" region "${_storage.region}" connection...`);
     const _json = {
       auth : {
         identity : {
@@ -72,14 +72,14 @@ module.exports = (config) => {
       timeout: _config.timeout
     }, (err, res, data) => {
       if (err) {
-        log(`Object Storage index "${_config.activeStorage}" region "${_storage.region}" Action "connection" ${err.toString()}`, 'error');
+        log(`SWIFT Storage | Index "${_config.activeStorage}" region "${_storage.region}" Action "connection" ${err.toString()}`, 'warning');
         activateFallbackStorage(originStorage);
         arrayArguments[1] = _config.activeStorage;
         return connection.apply(null, arrayArguments);
       }
 
       if (res.statusCode < 200 || res.statusCode >= 300) {
-        log(`Object Storage index "${_config.activeStorage}" region "${_storage.region}" connexion failled | Status ${res.statusCode.toString()} | Message: ${res.statusMessage}`, 'error');
+        log(`SWIFT Storage | Index "${_config.activeStorage}" region "${_storage.region}" connexion failled | Status ${res.statusCode.toString()} | Message: ${res.statusMessage}`, 'warning');
         activateFallbackStorage(originStorage);
         arrayArguments[1] = _config.activeStorage;
         return connection.apply(null, arrayArguments);
@@ -92,7 +92,7 @@ module.exports = (config) => {
       });
 
       if (!_serviceCatalog) {
-        log(`Object Storage index "${_config.activeStorage}" region "${_storage.region}" Storage catalog not found`, 'error');
+        log(`SWIFT Storage | Index "${_config.activeStorage}" region "${_storage.region}" Storage catalog not found`, 'warning');
         activateFallbackStorage(originStorage);
         arrayArguments[1] = _config.activeStorage;
         return connection.apply(null, arrayArguments);
@@ -103,12 +103,12 @@ module.exports = (config) => {
       });
 
       if (!_config.endpoints) {
-        log(`Object Storage index "${_config.activeStorage}" region "${_storage.region} Storage endpoint not found, invalid region`, 'error');
+        log(`SWIFT Storage | Index "${_config.activeStorage}" region "${_storage.region} Storage endpoint not found, invalid region`, 'warning');
         activateFallbackStorage(originStorage);
         arrayArguments[1] = _config.activeStorage;
         return connection.apply(null, arrayArguments);
       }
-      log(`Object Storage index "${_config.activeStorage}" region "${_storage.region}" connected!`, 'info');
+      log(`SWIFT Storage | Index "${_config.activeStorage}" region "${_storage.region}" connected!`, 'info');
       return callback(null);
     });
   }
@@ -269,10 +269,10 @@ module.exports = (config) => {
     const _requestCallback = function (err, res, body) {
       /** Catch error and retry */
       if ((err || res?.statusCode >= 500)) {
-        log(`Object Storage index "${_config.activeStorage}" region "${_config.storages[_config.activeStorage].region}" Status ${res?.statusCode}`, 'error');
+        log(`SWIFT Storage | Index "${_config.activeStorage}" region "${_config.storages[_config.activeStorage].region}" | ${res?.statusCode ?? err?.toString()}`, 'error');
         activateFallbackStorage(arrayArguments[arrayArguments.length - 1].originStorage);
       } else if (res?.statusCode === 401) {
-        log(`Object Storage index "${_config.activeStorage}" region "${_config.storages[_config.activeStorage].region}" try reconnect...`, 'info');
+        log(`SWIFT Storage | Index "${_config.activeStorage}" region "${_config.storages[_config.activeStorage].region}" try reconnect...`, 'info');
       }
 
       /** If something went wrong: connect again and request again */
@@ -351,7 +351,7 @@ module.exports = (config) => {
    * @param {type} type warning, error
    */
   function log(msg, level = 'info') {
-    return console.log(level === 'error' ? `❗️ Error: ${msg}` : level === 'warning' ? `⚠️  ${msg}` : msg );
+    return console.log(level === 'error' ? `🔴 ${msg}` : level === 'warning' ? `🟠 ${msg}` : `🟢 ${msg}`);
   }
 
   /**
@@ -369,8 +369,8 @@ module.exports = (config) => {
 
   function activateFallbackStorage(originStorage) {
     if (originStorage === _config.activeStorage && _config.activeStorage + 1 <= _config.storages.length) {
+      log(`SWIFT Storage | Activate Fallback Storage: switch from "${_config.activeStorage}" to "${_config.activeStorage + 1}"`, 'warning');
       _config.activeStorage += 1;
-      log(`Object Storage Activate Fallback Storage index "${_config.activeStorage}" 🚩`, 'warning');
     }
   }
 
