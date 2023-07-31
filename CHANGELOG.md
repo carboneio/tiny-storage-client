@@ -1,15 +1,15 @@
 ### v3.0.0
 - New major version to make S3 and Swift methods identical (function arguments and callback functions):
-  - It corrects all SWIFT methods to make interfaces the same as S3 methods (S3 Methods don't change)
-  - Important code refactoring
 - SWIFT Breaking changes:
   - All callback function are returning now `(err, resp) => {}`. The `resp` object contains `{ body, headers, statusCode }`
+  - Updated `listFiles`: On success, the JSON body is automatically converted into a Javascript Object. If the body returned is not `application/json`, the raw body is returned.
+- SWIFT New methods:
+  - `deleteFiles` to bulk delete files
+  - `headBucket` to determine if a bucket (container) exists and you have permission to access it
+  - `listBucket` to return a list of all buckets (containers) owned by the authenticated sender of the request. On success, the JSON body is automatically converted into a Javascript Object. If the body returned is not `application/json`, the raw body is returned.
+- SWIFT Code change: important refactoring
 
 TODO:
-  - [ ] new method `deleteFiles` to bulk delete files
-  - [ ] new method `headBucket` to determine if a bucket (container) exists and you have permission to access it
-  - [ ] new method `listBucket` to return a list of all buckets (containers) owned by the authenticated sender of the request.
-  - [ ] `listFiles`: On success it returns a JSON
   - [ ] container aliases are now supported  
 
 

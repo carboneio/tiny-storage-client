@@ -414,6 +414,249 @@ describe('Ovh Object Storage Swift', function () {
     });
   });
 
+  describe('deleteFiles', function() {
+    it('should deletes files', function(done){
+      const _filesToDelete = [ { name: '1685696359848.jpg' }, { name: 'invoice.docx' }, { name: 'test file |1234.odt' }]
+      const _headers = {
+        'content-type': 'application/json',
+        'x-trans-id': 'tx34d586803a5e4acbb9ac5-0064c7dfbc',
+        'x-openstack-request-id': 'tx34d586803a5e4acbb9ac5-0064c7dfbc',
+        date: 'Mon, 31 Jul 2023 16:22:21 GMT',
+        'transfer-encoding': 'chunked',
+        'x-iplb-request-id': '53C629C3:E4CA_5762BBC9:01BB_64C7DFBC_B48B74E:1342B',
+        'x-iplb-instance': '42087'
+      }
+      const _returnedBody = '{"Response Status":"200 OK","Response Body":"","Number Deleted":3,"Number Not Found":0,"Errors":[]}'
+
+      let firstNock = nock(publicUrlGRA)
+        .defaultReplyHeaders(_headers)
+        .post(/\/.*bulk-delete.*/g)
+        .reply(200, (url, body) => {
+          assert.strictEqual(body.includes('container1/test%20file%20%7C1234.odt'), true);
+          assert.strictEqual(body.includes('container1/invoice.docx'), true);
+          assert.strictEqual(body.includes('container1/1685696359848.jpg'), true);
+          return _returnedBody;
+        });
+
+      storage.deleteFiles('container1', _filesToDelete, function(err, resp) {
+        assert.strictEqual(err, null);
+        assert.strictEqual(resp.statusCode, 200);
+        assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+        assert.strictEqual(JSON.stringify(resp.body), _returnedBody);
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
+        done();
+      })
+    })
+
+    it('should return the raw result as XML (Buffer)', function(done) {
+      const _returnedBodyXML = '<delete><number_deleted>0</number_deleted><number_not_found>3</number_not_found><response_body></response_body><response_status>200 OK</response_status><errors></errors></delete>'
+      const _filesToDelete = [ { name: '1685696359848.jpg' }, { name: 'invoice.docx' }, { name: 'test file |1234.odt' }]
+      const _headers = {
+        'content-type': 'application/xml',
+        'x-trans-id': 'tx76823c2b380f47bab5908-0064c7e60d',
+        'x-openstack-request-id': 'tx76823c2b380f47bab5908-0064c7e60d',
+        date: 'Mon, 31 Jul 2023 16:49:18 GMT',
+        'transfer-encoding': 'chunked',
+        'x-iplb-request-id': '53C629C3:E61B_3626E64B:01BB_64C7E60D_151EBF17:1C316',
+        'x-iplb-instance': '33618'
+      }
+      let firstNock = nock(publicUrlGRA)
+        .defaultReplyHeaders(_headers)
+        .post(/\/.*bulk-delete.*/g)
+        .reply(200, (url, body) => {
+          assert.strictEqual(body.includes('container1/test%20file%20%7C1234.odt'), true);
+          assert.strictEqual(body.includes('container1/invoice.docx'), true);
+          assert.strictEqual(body.includes('container1/1685696359848.jpg'), true);
+          return _returnedBodyXML;
+        });
+
+      storage.deleteFiles('container1', _filesToDelete, { headers: { 'Accept': "application/xml" } }, function(err, resp) {
+        assert.strictEqual(err, null);
+        assert.strictEqual(resp.statusCode, 200);
+        assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+        assert.strictEqual(resp.body.toString(), _returnedBodyXML);
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
+        done();
+      })
+    });
+
+    
+  });
+
+  describe('headBucket', function() {
+    it('should return metadatas about a container', function(done){
+      const _statusCode = 204;
+      const _headers = {
+        'content-type': 'application/json; charset=utf-8',
+        'x-container-object-count': '4',
+        'x-container-bytes-used': '431631',
+        'x-timestamp': '1641995016.74740',
+        'x-container-sync-key': 'ZAIrQQjDzWM+APD5Fz6stQ/pBUe+Nck2UnPPswJw1cU=',
+        'x-container-sync-to': '//OVH_PUBLIC_CLOUD/GRA/AUTH_XXXX/container1',
+        'last-modified': 'Wed, 12 Jan 2022 13:58:51 GMT',
+        'accept-ranges': 'bytes',
+        'x-storage-policy': 'PCS',
+        vary: 'Accept',
+        'x-trans-id': 'tx3bd64d99f87147f18ffd9-0064c7d400',
+        'x-openstack-request-id': 'tx3bd64d99f87147f18ffd9-0064c7d400',
+        date: 'Mon, 31 Jul 2023 15:32:17 GMT',
+        'transfer-encoding': 'chunked',
+        'x-iplb-request-id': '53C629C3:E1FB_3626E64B:01BB_64C7D3FF_150CAC23:25615',
+        'x-iplb-instance': '12309'
+      };
+
+      let firstNock = nock(publicUrlGRA)
+        .defaultReplyHeaders(_headers)
+        .intercept("/container1", "HEAD")
+        .reply(_statusCode);
+
+      
+      storage.headBucket('container1', function(err, resp) {
+        assert.strictEqual(err, null);
+        assert.strictEqual(resp.statusCode, _statusCode);
+        assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+        assert.strictEqual(resp.body.toString(), '');
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
+        done();
+      });
+    }); 
+
+    it('should return an error if the container does not exist', function (done) {
+      const _statusCode = 404;
+      const _headers = {
+        'content-type': 'text/html; charset=UTF-8',
+        'content-length': '0',
+        'x-trans-id': 'txe8450fb1fc8847dbb43bd-0064c7d4db',
+        'x-openstack-request-id': 'txe8450fb1fc8847dbb43bd-0064c7d4db',
+        date: 'Mon, 31 Jul 2023 15:35:56 GMT',
+        'x-iplb-request-id': '53C629C3:E222_3626E64B:01BB_64C7D4DB_169B0C5F:9CAC',
+        'x-iplb-instance': '12308'
+      }
+
+      let firstNock = nock(publicUrlGRA)
+        .defaultReplyHeaders(_headers)
+        .intercept("/container1", "HEAD")
+        .reply(_statusCode);
+
+      storage.headBucket('container1', function(err, resp) {
+        assert.strictEqual(err, null);
+        assert.strictEqual(resp.statusCode, _statusCode);
+        assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+        assert.strictEqual(resp.body.toString(), '');
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
+        done();
+      });
+    })
+  });
+
+  describe('listBuckets', function() {
+    it('should return the list of containers (as Object)', function (done) {
+      const _headers = {
+        'content-type': 'application/json; charset=utf-8',
+        'x-account-container-count': '3',
+        'x-account-object-count': '67',
+        'x-account-bytes-used': '471229983',
+        'x-timestamp': '1641994731.69438',
+        'accept-ranges': 'bytes',
+        'content-length': '310',
+        'x-account-project-domain-id': 'default',
+        vary: 'Accept',
+        'x-trans-id': 'tx80980ebf27f64de29c8a5-0064c7d100',
+        'x-openstack-request-id': 'tx80980ebf27f64de29c8a5-0064c7d100',
+        date: 'Mon, 31 Jul 2023 15:19:28 GMT',
+        'x-iplb-request-id': '53C629C3:E186_5762BBC9:01BB_64C7D0FF_C1131CF:1263E',
+        'x-iplb-instance': '48126'
+      }
+      const _body = [
+        {
+          name: 'container1',
+          count: 55,
+          bytes: 106522,
+          last_modified: '2022-01-12T14:02:33.672010'
+        },
+        {
+          name: 'container2',
+          count: 8,
+          bytes: 470691830,
+          last_modified: '2022-10-24T10:59:13.250920'
+        },
+        {
+          name: 'container3',
+          count: 4,
+          bytes: 431631,
+          last_modified: '2022-01-12T13:58:50.868090'
+        }
+      ]
+      let firstNock = nock(publicUrlGRA)
+        .defaultReplyHeaders(_headers)
+        .intercept("/", "GET")
+        .reply(200, JSON.stringify(_body));
+
+      storage.listBuckets(function(err, resp) {
+        assert.strictEqual(err, null);
+        assert.strictEqual(resp.statusCode, 200);
+        assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+        assert.strictEqual(resp.body[0].name, _body[0].name);
+        assert.strictEqual(resp.body[0].count, _body[0].count);
+        assert.strictEqual(resp.body[0].bytes, _body[0].bytes);
+        assert.strictEqual(resp.body[0].last_modified, _body[0].last_modified);
+        assert.strictEqual(resp.body[1].name, _body[1].name);
+        assert.strictEqual(resp.body[2].name, _body[2].name);
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
+        done();
+      })
+    });
+
+    it('should return an error if the body returned is not a valid JSON format (should never happen)', function (done) {
+      const _expectedBody = "BODY NOT VALID"
+      let firstNock = nock(publicUrlGRA)
+        .defaultReplyHeaders({ 'content-type': 'application/json; charset=utf-8' })
+        .intercept("/", "GET")
+        .reply(200, _expectedBody);
+
+      storage.listBuckets(function(err, resp) {
+        assert.strictEqual(err.toString(), 'Error: Listing bucket JSON parse: SyntaxError: Unexpected token B in JSON at position 0');
+        assert.strictEqual(resp.body.toString(), _expectedBody);
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
+        done();
+      })
+    });
+
+    it('should return the body as Buffer if the content-type is `application/xml`', function(done) {
+      const _expectedBody = '<?xml version="1.0" encoding="UTF-8"?>\n<container name="templates"><object><name>Screenshot 2023-06-16 at 13.26.49.png</name><hash>184e81896337c81836419419455b9954</hash><bytes>166963</bytes><content_type>image/png</content_type><last_modified>2023-06-16T15:30:34.093290</last_modified></object></container>';
+      const _headers = {
+        'content-type': 'application/xml',
+        'x-account-container-count': '3',
+        'x-account-object-count': '67',
+        'x-account-bytes-used': '471229983',
+        'x-timestamp': '1641994731.69438',
+        'accept-ranges': 'bytes',
+        'content-length': '310',
+        'x-account-project-domain-id': 'default',
+        vary: 'Accept',
+        'x-trans-id': 'tx80980ebf27f64de29c8a5-0064c7d100',
+        'x-openstack-request-id': 'tx80980ebf27f64de29c8a5-0064c7d100',
+        date: 'Mon, 31 Jul 2023 15:19:28 GMT',
+        'x-iplb-request-id': '53C629C3:E186_5762BBC9:01BB_64C7D0FF_C1131CF:1263E',
+        'x-iplb-instance': '48126'
+      }
+
+      let firstNock = nock(publicUrlGRA)
+        .defaultReplyHeaders(_headers)
+        .intercept("/", "GET")
+        .reply(200, _expectedBody);
+
+      storage.listBuckets({ headers: { "Accept": "application/xml" } }, function(err, resp) {
+        assert.strictEqual(err, null);
+        assert.strictEqual(resp.statusCode, 200);
+        assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+        assert.strictEqual(resp.body.toString(), _expectedBody);
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
+        done();
+      })
+    });
+  });
+
   describe('log', function () {
     it('should overload the log function', function (done) {
       let i = 0;
@@ -471,6 +714,9 @@ describe('Ovh Object Storage Swift', function () {
     describe("SINGLE STORAGE", function () {
       it('should return a list of files as a JSON and as an XML', function (done) {
         let firstNock = nock(publicUrlGRA)
+          .defaultReplyHeaders({
+            'content-type': 'application/json',
+          })
           .get('/templates')
           .reply(200, () => {
             return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
@@ -479,8 +725,8 @@ describe('Ovh Object Storage Swift', function () {
         storage.listFiles('templates', (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
-          assert.strictEqual(JSON.stringify(resp.headers), '{}');
-          const _files = JSON.parse(resp.body.toString());
+          assert.strictEqual(JSON.stringify(resp.headers), '{"content-type":"application/json"}');
+          const _files = resp.body;
           assert.strictEqual(_files.length > 0, true)
           assert.strictEqual(_files[0].bytes > 0, true)
           assert.strictEqual(_files[0].last_modified.length > 0, true)
@@ -495,6 +741,9 @@ describe('Ovh Object Storage Swift', function () {
 
       it('should return a list of files as a XML and the header is overwritted', function (done) {
         let firstNock = nock(publicUrlGRA)
+          .defaultReplyHeaders({
+            'content-type': 'application/xml',
+          })
           .get('/templates')
           .reply(200, () => {
             return fs.createReadStream(path.join(__dirname, 'assets', 'files.xml'));
@@ -503,7 +752,7 @@ describe('Ovh Object Storage Swift', function () {
         storage.listFiles('templates', { headers : { Accept: 'application/xml' } }, (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
-          assert.strictEqual(JSON.stringify(resp.headers), '{}');
+          assert.strictEqual(JSON.stringify(resp.headers), '{"content-type":"application/xml"}');
           const _files = resp.body.toString();
           assert.strictEqual(_files.includes('<?xml'), true)
           assert.strictEqual(_files.includes('<container name="templates">'), true)
@@ -516,6 +765,9 @@ describe('Ovh Object Storage Swift', function () {
 
       it('should return a list of files with a prefix', function (done) {
         let firstNock = nock(publicUrlGRA)
+          .defaultReplyHeaders({
+            'content-type': 'application/json',
+          })
           .get('/templates')
           .query({ prefix : 'keys' })
           .reply(200, () => {
@@ -526,8 +778,8 @@ describe('Ovh Object Storage Swift', function () {
         storage.listFiles('templates', { queries: { prefix: 'keys' } }, (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
-          assert.strictEqual(JSON.stringify(resp.headers), '{}');
-          const _files = JSON.parse(resp.body.toString());
+          assert.strictEqual(JSON.stringify(resp.headers), '{"content-type":"application/json"}');
+          const _files = resp.body;
           _files.forEach(el => {
             assert.strictEqual(el.name.includes('keys'), true);
           });
@@ -538,6 +790,9 @@ describe('Ovh Object Storage Swift', function () {
 
       it('should reconnect automatically to the storage', function (done) {
         let firstNock = nock(publicUrlGRA)
+          .defaultReplyHeaders({
+            'content-type': 'application/json',
+          })
           .get('/templates')
           .reply(401, 'Unauthorized')
           .get('/templates')
@@ -552,8 +807,8 @@ describe('Ovh Object Storage Swift', function () {
         storage.listFiles('templates', (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
-          assert.strictEqual(JSON.stringify(resp.headers), '{}');
-          const _files = JSON.parse(resp.body.toString());
+          assert.strictEqual(JSON.stringify(resp.headers), '{"content-type":"application/json"}');
+          const _files = resp.body;
           assert.strictEqual(_files.length > 0, true)
           assert.strictEqual(_files[0].bytes > 0, true)
           assert.strictEqual(_files[0].last_modified.length > 0, true)
@@ -568,6 +823,9 @@ describe('Ovh Object Storage Swift', function () {
 
       it('should reconnect automatically to the storage with a prefix and delimiter as option/query parameters', function (done) {
         let firstNock = nock(publicUrlGRA)
+          .defaultReplyHeaders({
+            'content-type': 'application/json',
+          })
           .get('/templates')
           .query({ prefix : 'keys', delimiter : '/' })
           .reply(401, 'Unauthorized')
@@ -587,8 +845,8 @@ describe('Ovh Object Storage Swift', function () {
         storage.listFiles('templates', { queries: { prefix: 'keys', delimiter : '/' } }, (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
-          assert.strictEqual(JSON.stringify(resp.headers), '{}');
-          const _files = JSON.parse(resp.body.toString());
+          assert.strictEqual(JSON.stringify(resp.headers), '{"content-type":"application/json"}');
+          const _files = resp.body;
           assert.strictEqual(_files[0].subdir, 'keys/')
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
@@ -688,6 +946,9 @@ describe('Ovh Object Storage Swift', function () {
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
         let thirdNock = nock(publicUrlSBG)
+          .defaultReplyHeaders({
+            'content-type': 'application/json',
+          })
           /** 4 */
           .get('/templates')
           .reply(200, () => {
@@ -698,8 +959,8 @@ describe('Ovh Object Storage Swift', function () {
         storage.listFiles('templates', (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
-          assert.strictEqual(JSON.stringify(resp.headers), '{}');
-          const _files = JSON.parse(resp.body.toString());
+          assert.strictEqual(JSON.stringify(resp.headers), '{"content-type":"application/json"}');
+          const _files = resp.body;
           assert.strictEqual(_files.length > 0, true)
           assert.strictEqual(_files[0].bytes > 0, true)
           assert.strictEqual(_files[0].last_modified.length > 0, true)
@@ -725,6 +986,9 @@ describe('Ovh Object Storage Swift', function () {
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
         let thirdNock = nock(publicUrlSBG)
+          .defaultReplyHeaders({
+            'content-type': 'application/json',
+          })
           .get('/templates')
           .reply(200, () => {
             return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
@@ -734,8 +998,8 @@ describe('Ovh Object Storage Swift', function () {
         storage.listFiles('templates', (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
-          assert.strictEqual(JSON.stringify(resp.headers), '{}');
-          const _files = JSON.parse(resp.body.toString());
+          assert.strictEqual(JSON.stringify(resp.headers), '{"content-type":"application/json"}');
+          const _files = resp.body;
           assert.strictEqual(_files.length > 0, true)
           assert.strictEqual(_files[0].bytes > 0, true)
           assert.strictEqual(_files[0].last_modified.length > 0, true)
@@ -767,6 +1031,9 @@ describe('Ovh Object Storage Swift', function () {
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
         let thirdNock = nock(publicUrlSBG)
+          .defaultReplyHeaders({
+            'content-type': 'application/json',
+          })
           .get('/templates')
           .reply(200, () => {
             return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
@@ -775,8 +1042,8 @@ describe('Ovh Object Storage Swift', function () {
         storage.listFiles('templates', (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
-          assert.strictEqual(JSON.stringify(resp.headers), '{}');
-          const _files = JSON.parse(resp.body.toString());
+          assert.strictEqual(JSON.stringify(resp.headers), '{"content-type":"application/json"}');
+          const _files = resp.body;
           assert.strictEqual(_files.length > 0, true)
           assert.strictEqual(_files[0].bytes > 0, true)
           assert.strictEqual(_files[0].last_modified.length > 0, true)
@@ -804,6 +1071,9 @@ describe('Ovh Object Storage Swift', function () {
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
         let thirdNock = nock(publicUrlSBG)
+          .defaultReplyHeaders({
+            'content-type': 'application/json',
+          })
           .get('/templates')
           .reply(200, () => {
             return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
@@ -812,8 +1082,8 @@ describe('Ovh Object Storage Swift', function () {
         storage.listFiles('templates', (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
-          assert.strictEqual(JSON.stringify(resp.headers), '{}');
-          const _files = JSON.parse(resp.body.toString());
+          assert.strictEqual(JSON.stringify(resp.headers), '{"content-type":"application/json"}');
+          const _files = resp.body;
           assert.strictEqual(_files.length > 0, true)
           assert.strictEqual(_files[0].bytes > 0, true)
           assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -834,8 +1104,8 @@ describe('Ovh Object Storage Swift', function () {
                   return reject(err);
                 }
                 assert.strictEqual(resp.statusCode, 200);
-                assert.strictEqual(JSON.stringify(resp.headers), '{}');
-                return resolve(resp.body.toString());
+                assert.strictEqual(JSON.stringify(resp.headers), '{"content-type":"application/json"}');
+                return resolve(resp.body);
               });
             } catch(err) {
               return reject(err);
@@ -859,6 +1129,9 @@ describe('Ovh Object Storage Swift', function () {
 
 
           let thirdNock = nock(publicUrlSBG)
+            .defaultReplyHeaders({
+              'content-type': 'application/json',
+            })
             .get('/templates')
             .reply(200, () => {
               return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
@@ -875,7 +1148,7 @@ describe('Ovh Object Storage Swift', function () {
           Promise.all([promise1, promise2]).then(results => {
             assert.strictEqual(results.length, 2)
 
-            const _listFiles1 = JSON.parse(results[0].toString());
+            const _listFiles1 = results[0];
             assert.strictEqual(_listFiles1.length > 0, true)
             assert.strictEqual(_listFiles1[0].bytes > 0, true)
             assert.strictEqual(_listFiles1[0].last_modified.length > 0, true)
@@ -883,7 +1156,7 @@ describe('Ovh Object Storage Swift', function () {
             assert.strictEqual(_listFiles1[0].name.length > 0, true)
             assert.strictEqual(_listFiles1[0].content_type.length > 0, true)
 
-            const _listFiles2 = JSON.parse(results[1].toString());
+            const _listFiles2 = results[1];
             assert.strictEqual(_listFiles2.length > 0, true)
             assert.strictEqual(_listFiles2[0].bytes > 0, true)
             assert.strictEqual(_listFiles2[0].last_modified.length > 0, true)
@@ -927,6 +1200,9 @@ describe('Ovh Object Storage Swift', function () {
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
           let thirdNock = nock(publicUrlSBG)
+            .defaultReplyHeaders({
+              'content-type': 'application/json',
+            })
             .get('/templates')
             .reply(200, () => {
               return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
@@ -951,7 +1227,7 @@ describe('Ovh Object Storage Swift', function () {
           Promise.all([promise1, promise2, promise3]).then(async results => {
             assert.strictEqual(results.length, 3)
 
-            const _listFiles1 = JSON.parse(results[0].toString());
+            const _listFiles1 = results[0];
             assert.strictEqual(_listFiles1.length > 0, true)
             assert.strictEqual(_listFiles1[0].bytes > 0, true)
             assert.strictEqual(_listFiles1[0].last_modified.length > 0, true)
@@ -959,7 +1235,7 @@ describe('Ovh Object Storage Swift', function () {
             assert.strictEqual(_listFiles1[0].name.length > 0, true)
             assert.strictEqual(_listFiles1[0].content_type.length > 0, true)
 
-            const _listFiles2 = JSON.parse(results[1].toString());
+            const _listFiles2 = results[1];
             assert.strictEqual(_listFiles2.length > 0, true)
             assert.strictEqual(_listFiles2[0].bytes > 0, true)
             assert.strictEqual(_listFiles2[0].last_modified.length > 0, true)
@@ -967,7 +1243,7 @@ describe('Ovh Object Storage Swift', function () {
             assert.strictEqual(_listFiles2[0].name.length > 0, true)
             assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
 
-            const _listFiles3 = JSON.parse(results[2].toString());
+            const _listFiles3 = results[2];
             assert.strictEqual(_listFiles3.length > 0, true)
             assert.strictEqual(_listFiles3[0].bytes > 0, true)
             assert.strictEqual(_listFiles3[0].last_modified.length > 0, true)
@@ -975,7 +1251,7 @@ describe('Ovh Object Storage Swift', function () {
             assert.strictEqual(_listFiles3[0].name.length > 0, true)
             assert.strictEqual(_listFiles3[0].content_type.length > 0, true)
 
-            let _listFiles4 = JSON.parse((await getListFilesPromise()).toString());
+            const _listFiles4 = await getListFilesPromise();
             assert.strictEqual(_listFiles4.length > 0, true)
             assert.strictEqual(_listFiles4[0].bytes > 0, true)
             assert.strictEqual(_listFiles4[0].last_modified.length > 0, true)
@@ -1010,6 +1286,9 @@ describe('Ovh Object Storage Swift', function () {
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
           let thirdNock = nock(publicUrlSBG)
+            .defaultReplyHeaders({
+              'content-type': 'application/json',
+            })
             .get('/templates')
             .reply(200, () => {
               return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
@@ -1027,7 +1306,7 @@ describe('Ovh Object Storage Swift', function () {
           Promise.all([promise1, promise2]).then(results => {
             assert.strictEqual(results.length, 2)
 
-            const _listFiles1 = JSON.parse(results[0].toString());
+            const _listFiles1 = results[0];
             assert.strictEqual(_listFiles1.length > 0, true)
             assert.strictEqual(_listFiles1[0].bytes > 0, true)
             assert.strictEqual(_listFiles1[0].last_modified.length > 0, true)
@@ -1035,7 +1314,7 @@ describe('Ovh Object Storage Swift', function () {
             assert.strictEqual(_listFiles1[0].name.length > 0, true)
             assert.strictEqual(_listFiles1[0].content_type.length > 0, true)
 
-            const _listFiles2 = JSON.parse(results[1].toString());
+            const _listFiles2 = results[1];
             assert.strictEqual(_listFiles2.length > 0, true)
             assert.strictEqual(_listFiles2[0].bytes > 0, true)
             assert.strictEqual(_listFiles2[0].last_modified.length > 0, true)
@@ -1069,6 +1348,9 @@ describe('Ovh Object Storage Swift', function () {
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
           let thirdNock = nock(publicUrlSBG)
+            .defaultReplyHeaders({
+              'content-type': 'application/json',
+            })
             .get('/templates')
             .reply(200, () => {
               return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
@@ -1085,7 +1367,7 @@ describe('Ovh Object Storage Swift', function () {
           Promise.all([promise1, promise2]).then(results => {
             assert.strictEqual(results.length, 2)
 
-            const _listFiles1 = JSON.parse(results[0]);
+            const _listFiles1 = results[0];
             assert.strictEqual(_listFiles1.length > 0, true)
             assert.strictEqual(_listFiles1[0].bytes > 0, true)
             assert.strictEqual(_listFiles1[0].last_modified.length > 0, true)
@@ -1093,7 +1375,7 @@ describe('Ovh Object Storage Swift', function () {
             assert.strictEqual(_listFiles1[0].name.length > 0, true)
             assert.strictEqual(_listFiles1[0].content_type.length > 0, true)
 
-            const _listFiles2 = JSON.parse(results[1]);
+            const _listFiles2 = results[1];
             assert.strictEqual(_listFiles2.length > 0, true)
             assert.strictEqual(_listFiles2[0].bytes > 0, true)
             assert.strictEqual(_listFiles2[0].last_modified.length > 0, true)
@@ -1132,6 +1414,9 @@ describe('Ovh Object Storage Swift', function () {
 
 
           let thirdNock = nock(publicUrlSBG)
+            .defaultReplyHeaders({
+              'content-type': 'application/json',
+            })
             .get('/templates')
             .reply(200, () => {
               return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
@@ -1147,7 +1432,7 @@ describe('Ovh Object Storage Swift', function () {
           Promise.all([promise1, promise2]).then(async results => {
             assert.strictEqual(results.length, 2)
 
-            const _listFiles1 = JSON.parse(results[0].toString());
+            const _listFiles1 = results[0];
             assert.strictEqual(_listFiles1.length > 0, true)
             assert.strictEqual(_listFiles1[0].bytes > 0, true)
             assert.strictEqual(_listFiles1[0].last_modified.length > 0, true)
@@ -1155,7 +1440,7 @@ describe('Ovh Object Storage Swift', function () {
             assert.strictEqual(_listFiles1[0].name.length > 0, true)
             assert.strictEqual(_listFiles1[0].content_type.length > 0, true)
 
-            const _listFiles2 = JSON.parse(results[1].toString());
+            const _listFiles2 = results[1];
             assert.strictEqual(_listFiles2.length > 0, true)
             assert.strictEqual(_listFiles2[0].bytes > 0, true)
             assert.strictEqual(_listFiles2[0].last_modified.length > 0, true)

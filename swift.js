@@ -4,13 +4,12 @@ const { getUrlParameters, isFnStream } = require('./helper.js')
 
 /**
  *
- * @description Initialise and return an instance of the Object Storage SDK.
+ * @description Initialise and return an instance of the Open Stack SWIFT client.
  *
  * @param {Object} config
  * @param {String} config.authUrl URL used for authentication, default: "https://auth.cloud.ovh.net/v3"
  * @param {String} config.username Username for authentication
  * @param {String} config.password Password for authentication
- * @param {String} config.tenantName Tenant Name/Tenant ID for authentication
  * @param {String} config.region Region used to retreive the Object Storage endpoint to request
  */
 module.exports = (config) => {
@@ -26,7 +25,7 @@ module.exports = (config) => {
   /**
    * @description Authenticate and initialise the auth token and retreive the endpoint based on the region
    *
-   * @param {function} callback function(err):void = The `err` is null by default, return an object if an error occurs.
+   * @param {function} callback function(err):void = The `err` is null by default.
    */
   function connection (callback, originStorage = 0) {
     const arrayArguments = [callback, originStorage];
@@ -117,7 +116,7 @@ module.exports = (config) => {
    *
    * @param {String} container container name
    * @param {Object} options [OPTIONAL]: { headers: {}, queries: {} } List of headers and queries: https://docs.openstack.org/api-ref/object-store/?expanded=show-container-details-and-list-objects-detail#show-container-details-and-list-objects
-   * @param {function} callback function(err, body):void = The second argument `body` is the content of the file as a Buffer. The `err` argument is null by default, return an object if an error occurs.
+   * @param {function} callback (err, {statusCode, body, header}) => { }
    */
   function listFiles(container, options, callback) {
     if (!callback) {
@@ -125,7 +124,19 @@ module.exports = (config) => {
       options = {};
     }
 
-    return request('GET', `/${container}`, options, callback);
+    return request('GET', `/${container}`, options, (err, resp) => {
+      if (err) {
+        return callback(err);
+      }
+      if (resp.headers?.['content-type']?.includes('application/json') === true) {
+        try {
+          resp.body = JSON.parse(resp.body.toString())
+        } catch(err) {
+          return callback(new Error('Listing files JSON parse: ' + err.toString()), resp);
+        }
+      }
+      return callback(err, resp);
+    });
   }
 
   /**
@@ -135,7 +146,7 @@ module.exports = (config) => {
    * @param {string} filename file to store
    * @param {string|Buffer|Function} localPathOrBuffer absolute path to the file
    * @param {Object} options [OPTIONAL]: { headers: {}, queries: {} } List of query parameters and headers: https://docs.openstack.org/api-ref/object-store/?expanded=create-or-replace-object-detail#create-or-replace-object
-   * @param {function} callback function(err):void = The `err` is null by default, return an object if an error occurs.
+   * @param {function} callback (err, {statusCode, body, header}) => { }
    * @returns {void}
    */
   function uploadFile (container, filename, localPathOrBuffer, options, callback) {
@@ -164,7 +175,7 @@ module.exports = (config) => {
    * @param {string} container Container name
    * @param {string} filename filename to download
    * @param {Object} options [OPTIONAL]: { headers: {}, queries: {} } List of query parameters and headers: https://docs.openstack.org/api-ref/object-store/?expanded=create-or-replace-object-detail#get-object-content-and-metadata
-   * @param {function} callback function(err, body):void = The second argument `body` is the content of the file as a Buffer. The `err` argument is null by default, return an object if an error occurs.
+   * @param {function} callback (err, {statusCode, body, header}) => { }
    * @returns {void}
    */
   function downloadFile (container, filename, options, callback) {
@@ -181,7 +192,7 @@ module.exports = (config) => {
    * @param {string} container Container name
    * @param {string} filename filename to store
    * @param {Object} options [OPTIONAL]: { headers: {}, queries: {} } List of query parameters and headers: https://docs.openstack.org/api-ref/object-store/?expanded=create-or-replace-object-detail#delete-object
-   * @param {function} callback function(err):void = The `err` argument is null by default, return an object if an error occurs.
+   * @param {function} callback (err, {statusCode, body, header}) => { }
    * @returns {void}
    */
   function deleteFile (container, filename, options, callback) {
@@ -198,7 +209,7 @@ module.exports = (config) => {
    * @param {string} container Container name
    * @param {string} filename filename to store
    * @param {Object} options [OPTIONAL]: { headers: {}, queries: {} } List of query parameters and headers: https://docs.openstack.org/api-ref/object-store/?expanded=create-or-replace-object-detail#show-object-metadata
-   * @param {function} callback function(err, headers):void = The `err` argument is null by default, return an object if an error occurs.
+   * @param {function} callback (err, {statusCode, body, header}) => { }
    * @returns {void}
    */
   function getFileMetadata(container, filename, options, callback) {
@@ -208,6 +219,92 @@ module.exports = (config) => {
     }
     return request('HEAD', `/${container}/${filename}`, options, callback);
    }
+
+
+   /**
+    * @param {string} container Container name
+    * @param {string} objects List of files, it can be: ['file1', 'file2'] OR [{ name: 'file1' }, { name: 'file2' }] OR [{ key: 'file1' }, { key: 'file2' }]
+    * @param {Object} options [OPTIONAL]: { headers: {}, queries: {} }
+    * @param {function} callback (err, {statusCode, body, header}) => { }
+    * @returns 
+    * 
+    * Swift Official documentation: https://docs.openstack.org/swift/latest/api/bulk-delete.html
+    */
+  function deleteFiles (container, objects, options, callback) {
+    if (!callback) {
+      callback = options;
+      options = {};
+    }
+    let _filesAsText = '';
+    for (let i = 0; i < objects.length; i++) {
+      const _fileName = objects[i]?.name ?? objects[i]?.key ?? objects[i];
+      if (typeof _fileName !== 'string') {
+        continue;
+      }
+      _filesAsText += `${container}/${encodeURIComponent(_fileName)}\n`;
+    }
+    options.body = _filesAsText;
+    options.headers = {
+      ...options?.headers,
+      'Content-Type': 'text/plain'
+    }
+    options.defaultQueries = 'bulk-delete';
+    return request('POST', `/`, options, (err, resp) => {
+      if (err) {
+        return callback(err);
+      }
+      if (resp.headers?.['content-type']?.includes('application/json') === true) {
+        try {
+          resp.body = JSON.parse(resp.body.toString())
+        } catch(err) {
+          return callback(new Error('Deleting files JSON parse: ' + err.toString()), resp);
+        }
+      }
+      return callback(err, resp);
+    });
+  }
+
+  /**
+   * 
+   * @param {String} container Container name
+   * @param {Object} options [OPTIONAL]: { headers: {}, queries: {} } List of query parameters and headers: https://docs.openstack.org/api-ref/object-store/?expanded=create-or-replace-object-detail#show-container-metadata
+   * @param {Function} callback (err, {statusCode, body, header}) => { }
+   * @returns 
+   */
+  function headBucket(container, options, callback) {
+    if (!callback) {
+      callback = options;
+      options = {};
+    }
+    return request('HEAD', `/${container}`, options, callback);
+  }
+
+  /**
+   * Show account details and list containers
+   * 
+   * @param {Optional} options [OPTIONAL]: { headers: {}, queries: {} } List of query parameters and headers: https://docs.openstack.org/api-ref/object-store/?expanded=create-or-replace-object-detail#show-account-details-and-list-containers
+   * @param {Function} callback (err, {statusCode, body, header}) => { }
+   * @returns 
+   */
+  function listBuckets(options, callback) {
+    if (!callback) {
+      callback = options;
+      options = {};
+    }
+    return request('GET', `/`, options, (err, resp) => {
+      if (err) {
+        return callback(err);
+      }
+      if (resp.headers?.['content-type']?.includes('application/json') === true) {
+        try {
+          resp.body = JSON.parse(resp.body.toString())
+        } catch(err) {
+          return callback(new Error('Listing bucket JSON parse: ' + err.toString()), resp);
+        }
+      }
+      return callback(err, resp);
+    });
+  }
 
    /**
    * @description Create or update object metadata.
@@ -394,6 +491,9 @@ module.exports = (config) => {
     getConfig,
     setLogFunction,
     request,
-    getRockReqDefaults
+    getRockReqDefaults,
+    deleteFiles,
+    headBucket,
+    listBuckets
   }
 }
