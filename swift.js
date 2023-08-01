@@ -496,6 +496,12 @@ module.exports = (config) => {
     return rock.defaults;
   }
 
+  function setRockReqDefaults (newDefaults) {
+    if (newDefaults && typeof newDefaults === 'object') {
+      Object.assign(rock.defaults, newDefaults);
+    }
+  }
+
   setStorages(config)
 
   return {
@@ -513,6 +519,7 @@ module.exports = (config) => {
     setLogFunction,
     request,
     getRockReqDefaults,
+    setRockReqDefaults,
     deleteFiles,
     headBucket,
     listBuckets

@@ -1,9 +1,12 @@
+/** Init retry delay for "Rock-req" tests */
+const rock   = require('rock-req');
 const storageSDK   = require('../index.js');
 const nock   = require('nock');
 const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 var stream = require('stream');
+
 
 const authURL   = 'https://auth.cloud.ovh.net/v3';
 const publicUrlGRA = 'https://storage.gra.cloud.ovh.net/v1/AUTH_ce3e510224d740a685cb0ae7bdb8ebc3';
@@ -5736,12 +5739,36 @@ describe('Ovh Object Storage Swift', function () {
       });
     });
   });
-  describe('global.rockReqConf', function() {
-    it("should set rock-req default values", function(done) {
-      assert.strictEqual(storage.getRockReqDefaults().retryDelay, 200);
-      done();
+  
+  describe('setRockReqDefaults', function() {
+    describe('setRockReqDefaults function', function() {
+      it("should set rock-req default values", function(done) {
+        const _newOptions = {
+          ...storage.getRockReqDefaults(),
+          newOption: 4321
+        }
+        storage.setRockReqDefaults(_newOptions);
+        assert.strictEqual(storage.getRockReqDefaults().newOption, 4321);
+        done();
+      })
+
+      it("should not set rock-req default values if the value is undefined", function(done) {
+        storage.setRockReqDefaults(null);
+        storage.setRockReqDefaults(undefined);
+        storage.setRockReqDefaults("string");
+        assert.strictEqual(typeof storage.getRockReqDefaults(), 'object');
+        done();
+      })
+    });
+
+    describe('getRockReqDefaults', function() {
+      it("should get rock-req default values", function(done) {
+        assert.strictEqual(storage.getRockReqDefaults().retryDelay, 200);
+        done();
+      })
     })
-  })
+
+  });
 });
 
 let connectionResultSuccessV3 = {
