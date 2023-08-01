@@ -8,6 +8,7 @@
   - `deleteFiles` to bulk delete files
   - `headBucket` to determine if a bucket (container) exists and you have permission to access it
   - `listBucket` to return a list of all buckets (containers) owned by the authenticated sender of the request. On success, the JSON body is automatically converted into a Javascript Object. If the body returned is not `application/json`, the raw body is returned.
+  - `setRockReqDefaults` to configure the HTTP client
 - SWIFT Code change: important refactoring 
 
 ### v2.2.5
