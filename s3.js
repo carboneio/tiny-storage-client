@@ -3,8 +3,7 @@ const aws4 = require('aws4');
 const crypto = require('crypto');
 const fs = require('fs');
 const xmlToJson = require('./xmlToJson.js')
-
-const isFnStream = o => o instanceof Function
+const { getUrlParameters, isFnStream } = require('./helper.js')
 
 module.exports = (config) => {
 
@@ -293,7 +292,7 @@ module.exports = (config) => {
       request('GET', `/`, { requestStorageIndex: 0 }, function (err, resp) {
         /** If everything is alright, the active storage is reset to the main */
         if (resp?.statusCode === 200) {
-          log(`🟢 S3 Storage | Main storage available - reconnecting for next requests`);
+          log(`S3 Storage | Main storage available - reconnecting for next requests`);
           _config.activeStorage = 0;
         }
         retryReconnectMainStorage = false;
@@ -387,34 +386,6 @@ module.exports = (config) => {
   /** ========= PRIVATE FUNCTIONS ========== */
 
   /**
-   * Convert an object of queries into a concatenated string of URL parameters.
-   * @param {Object|String} queries
-   * @param {String} defaultQueries
-   * @returns {String} URL parameters
-   */
-  function getUrlParameters (queries, defaultQueries) {
-    let _queries = '';
-
-    if (defaultQueries) {
-      _queries += defaultQueries + '&';
-    }
-
-    if (queries && typeof queries === 'string') {
-      _queries += queries;
-    } else if (queries && typeof queries === "object") {
-      const _queriesEntries = Object.keys(queries);
-      const _totalQueries = _queriesEntries.length;
-      for (let i = 0; i < _totalQueries; i++) {
-        _queries += `${_queriesEntries[i]}=${encodeURIComponent(queries[_queriesEntries[i]])}`
-        if (i + 1 !== _totalQueries) {
-          _queries += '&'
-        }
-      }
-    }
-    return _queries ? '?' + _queries : '';
-  }
-
-  /**
    * Used for the 'Content-MD5' header:
    * The base64-encoded 128-bit MD5 digest of the message
    * (without the headers) according to RFC 1864.
@@ -435,7 +406,7 @@ module.exports = (config) => {
    * @param {type} type warning, error
    */
   function log(msg, level = '') {
-    return console.log(level === 'error' ? `❗️ Error: ${msg}` : level === 'warning' ? `⚠️  ${msg}` : msg );
+    return console.log(level === 'error' ? `🔴 ${msg}` : level === 'warning' ? `🟠 ${msg}` : `🟢 ${msg}`);
   }
 
   return {

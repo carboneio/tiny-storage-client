@@ -1,17 +1,15 @@
 const rock = require('rock-req');
 const fs = require('fs');
-
-const isFnStream = o => o instanceof Function
+const { getUrlParameters, isFnStream } = require('./helper.js')
 
 /**
  *
- * @description Initialise and return an instance of the Object Storage SDK.
+ * @description Initialise and return an instance of the Open Stack SWIFT client.
  *
  * @param {Object} config
  * @param {String} config.authUrl URL used for authentication, default: "https://auth.cloud.ovh.net/v3"
  * @param {String} config.username Username for authentication
  * @param {String} config.password Password for authentication
- * @param {String} config.tenantName Tenant Name/Tenant ID for authentication
  * @param {String} config.region Region used to retreive the Object Storage endpoint to request
  */
 module.exports = (config) => {
@@ -27,7 +25,7 @@ module.exports = (config) => {
   /**
    * @description Authenticate and initialise the auth token and retreive the endpoint based on the region
    *
-   * @param {function} callback function(err):void = The `err` is null by default, return an object if an error occurs.
+   * @param {function} callback function(err):void = The `err` is null by default.
    */
   function connection (callback, originStorage = 0) {
     const arrayArguments = [callback, originStorage];
@@ -35,11 +33,11 @@ module.exports = (config) => {
     if (_config.activeStorage === _config.storages.length) {
       /**  Reset the index of the actual storage */
       _config.activeStorage = 0;
-      log(`Object Storages are not available`, 'error');
+      log(`SWIFT Storage | Object Storages are not available`, 'error');
       return callback(new Error('Object Storages are not available'));
     }
     const _storage = _config.storages[_config.activeStorage];
-    log(`Object Storage index "${_config.activeStorage}" region "${_storage.region}" connection...`, 'info');
+    log(`SWIFT Storage | Index "${_config.activeStorage}" region "${_storage.region}" connection...`);
     const _json = {
       auth : {
         identity : {
@@ -73,14 +71,14 @@ module.exports = (config) => {
       timeout: _config.timeout
     }, (err, res, data) => {
       if (err) {
-        log(`Object Storage index "${_config.activeStorage}" region "${_storage.region}" Action "connection" ${err.toString()}`, 'error');
+        log(`SWIFT Storage | Index "${_config.activeStorage}" region "${_storage.region}" Action "connection" ${err.toString()}`, 'warning');
         activateFallbackStorage(originStorage);
         arrayArguments[1] = _config.activeStorage;
         return connection.apply(null, arrayArguments);
       }
 
       if (res.statusCode < 200 || res.statusCode >= 300) {
-        log(`Object Storage index "${_config.activeStorage}" region "${_storage.region}" connexion failled | Status ${res.statusCode.toString()} | Message: ${res.statusMessage}`, 'error');
+        log(`SWIFT Storage | Index "${_config.activeStorage}" region "${_storage.region}" connexion failled | Status ${res.statusCode.toString()} | Message: ${res.statusMessage}`, 'warning');
         activateFallbackStorage(originStorage);
         arrayArguments[1] = _config.activeStorage;
         return connection.apply(null, arrayArguments);
@@ -93,7 +91,7 @@ module.exports = (config) => {
       });
 
       if (!_serviceCatalog) {
-        log(`Object Storage index "${_config.activeStorage}" region "${_storage.region}" Storage catalog not found`, 'error');
+        log(`SWIFT Storage | Index "${_config.activeStorage}" region "${_storage.region}" Storage catalog not found`, 'warning');
         activateFallbackStorage(originStorage);
         arrayArguments[1] = _config.activeStorage;
         return connection.apply(null, arrayArguments);
@@ -104,12 +102,12 @@ module.exports = (config) => {
       });
 
       if (!_config.endpoints) {
-        log(`Object Storage index "${_config.activeStorage}" region "${_storage.region} Storage endpoint not found, invalid region`, 'error');
+        log(`SWIFT Storage | Index "${_config.activeStorage}" region "${_storage.region} Storage endpoint not found, invalid region`, 'warning');
         activateFallbackStorage(originStorage);
         arrayArguments[1] = _config.activeStorage;
         return connection.apply(null, arrayArguments);
       }
-      log(`Object Storage index "${_config.activeStorage}" region "${_storage.region}" connected!`, 'info');
+      log(`SWIFT Storage | Index "${_config.activeStorage}" region "${_storage.region}" connected!`, 'info');
       return callback(null);
     });
   }
@@ -118,54 +116,26 @@ module.exports = (config) => {
    *
    * @param {String} container container name
    * @param {Object} options [OPTIONAL]: { headers: {}, queries: {} } List of headers and queries: https://docs.openstack.org/api-ref/object-store/?expanded=show-container-details-and-list-objects-detail#show-container-details-and-list-objects
-   * @param {function} callback function(err, body):void = The second argument `body` is the content of the file as a Buffer. The `err` argument is null by default, return an object if an error occurs.
+   * @param {function} callback (err, {statusCode, body, header}) => { }
    */
   function listFiles(container, options, callback) {
-    const arrayArguments = [...arguments];
-
-    if (callback === undefined) {
+    if (!callback) {
       callback = options;
-      arrayArguments.push(options);
-      options = { headers: {}, queries: {} };
-      arrayArguments[1] = options;
+      options = {};
     }
-
-    arrayArguments.push({ originStorage : _config.activeStorage })
-
-    const { headers, queries } = getHeaderAndQueryParameters(options);
-    rock.concat({
-      url     : `${_config.endpoints.url}/${container}${queries}`,
-      method  : 'GET',
-      headers : {
-        'X-Auth-Token' : _config.token,
-        Accept         : 'application/json',
-        ...headers
-      },
-      timeout: _config.timeout
-    }, (err, res, body) => {
-
-      /** Manage special errors: timeouts, too many redirects or any unexpected behavior */
-      res = res || {};
-      res.error = err && err.toString().length > 0 ? err.toString() : null;
-
-      checkIsConnected(res, 'listFiles', arrayArguments, (error) => {
-        if (error) {
-          return callback(error);
+    options.alias = container;
+    return request('GET', `/${container}`, options, (err, resp) => {
+      if (err) {
+        return callback(err);
+      }
+      if (resp.headers?.['content-type']?.includes('application/json') === true) {
+        try {
+          resp.body = JSON.parse(resp.body.toString())
+        } catch(err) {
+          return callback(new Error('Listing files JSON parse: ' + err.toString()), resp);
         }
-
-        if (res && res.statusCode === 404) {
-          return callback(new Error('Container does not exist'));
-        }
-
-        err = err || checkResponseError(res);
-
-        /** TODO: remove? it should never happen as every error switch to another storage */
-        if (err) {
-          return callback(err);
-        }
-
-        return callback(null, body);
-      });
+      }
+      return callback(err, resp);
     });
   }
 
@@ -176,57 +146,28 @@ module.exports = (config) => {
    * @param {string} filename file to store
    * @param {string|Buffer|Function} localPathOrBuffer absolute path to the file
    * @param {Object} options [OPTIONAL]: { headers: {}, queries: {} } List of query parameters and headers: https://docs.openstack.org/api-ref/object-store/?expanded=create-or-replace-object-detail#create-or-replace-object
-   * @param {function} callback function(err):void = The `err` is null by default, return an object if an error occurs.
+   * @param {function} callback (err, {statusCode, body, header}) => { }
    * @returns {void}
    */
   function uploadFile (container, filename, localPathOrBuffer, options, callback) {
-    let readStream = Buffer.isBuffer(localPathOrBuffer) === true || typeof localPathOrBuffer === 'function' ? localPathOrBuffer  : () => { return fs.createReadStream(localPathOrBuffer) } ;
-
-    const arrayArguments = [...arguments];
-
-    if (callback === undefined) {
+    if (!callback) {
       callback = options;
-      arrayArguments.push(options);
-      options = { headers: {}, queries: {} };
-      arrayArguments[3] = options;
+      options = {};
     }
-
-    arrayArguments.push({ originStorage : _config.activeStorage })
-
-    const { headers, queries } = getHeaderAndQueryParameters(options);
-    rock.concat({
-      url     : `${_config.endpoints.url}/${container}/${filename}${queries}`,
-      method  : 'PUT',
-      body    : readStream,
-      headers : {
-        'X-Auth-Token' : _config.token,
-        Accept         : 'application/json',
-        ...headers
-      },
-      timeout: _config.timeout
-    }, (err, res, body) => {
-
-      /** Manage special errors: timeouts, too many redirects or any unexpected behavior */
-      res = res || {};
-      res.error = err && err.toString().length > 0 && err.code !== 'ENOENT' ? err.toString() : null;
-
-      checkIsConnected(res, 'uploadFile', arrayArguments, (error) => {
-        if (error) {
-          return callback(error);
-        }
-
-        err = err || checkResponseError(res, body.toString());
-
-        if (err) {
-          if (err.code === 'ENOENT') {
-            return callback(new Error('The local file does not exist'));
-          }
-
+    options.alias = container;
+    /** Is File Path */
+    if (Buffer.isBuffer(localPathOrBuffer) === false && isFnStream(localPathOrBuffer) === false) {
+      return fs.readFile(localPathOrBuffer, (err, objectBuffer) => {
+        if (err){
           return callback(err);
         }
-        return callback(null);
+        options.body = objectBuffer;
+        return request('PUT', `/${container}/${filename}`, options, callback);
       });
-    });
+    } 
+    /** Is a Buffer or a Function returning a ReadStream */
+    options.body = localPathOrBuffer;
+    return request('PUT', `/${container}/${filename}`, options, callback)
   }
 
   /**
@@ -234,46 +175,17 @@ module.exports = (config) => {
    *
    * @param {string} container Container name
    * @param {string} filename filename to download
-   * @param {function} callback function(err, body):void = The second argument `body` is the content of the file as a Buffer. The `err` argument is null by default, return an object if an error occurs.
+   * @param {Object} options [OPTIONAL]: { headers: {}, queries: {} } List of query parameters and headers: https://docs.openstack.org/api-ref/object-store/?expanded=create-or-replace-object-detail#get-object-content-and-metadata
+   * @param {function} callback (err, {statusCode, body, header}) => { }
    * @returns {void}
    */
-  function downloadFile (container, filename, callback) {
-
-    const arrayArguments = [...arguments, { originStorage : _config.activeStorage }];
-
-    rock.concat({
-      url     : `${_config.endpoints.url}/${container}/${filename}`,
-      method  : 'GET',
-      headers : {
-        'X-Auth-Token' : _config.token,
-        Accept         : 'application/json'
-      },
-      timeout: _config.timeout
-    }, (err, res, body) => {
-
-      /** Manage special errors: timeouts, too many redirects or any unexpected behavior */
-      res = res || {};
-      res.error = err && err.toString().length > 0 ? err.toString() : null;
-
-      checkIsConnected(res, 'downloadFile', arrayArguments, (error) => {
-        if (error) {
-          return callback(error);
-        }
-
-        if (res && res.statusCode === 404) {
-          return callback(new Error('File does not exist'));
-        }
-
-        err = err || checkResponseError(res);
-
-        /** TODO: remove? it should never happen as every error switch to another storage */
-        if (err) {
-          return callback(err);
-        }
-
-        return callback(null, body, res.headers);
-      });
-    });
+  function downloadFile (container, filename, options, callback) {
+    if (!callback) {
+      callback = options;
+      options = {};
+    }
+    options.alias = container;
+    return request('GET', `/${container}/${filename}`, options, callback);
   }
 
   /**
@@ -281,46 +193,17 @@ module.exports = (config) => {
    *
    * @param {string} container Container name
    * @param {string} filename filename to store
-   * @param {function} callback function(err):void = The `err` argument is null by default, return an object if an error occurs.
+   * @param {Object} options [OPTIONAL]: { headers: {}, queries: {} } List of query parameters and headers: https://docs.openstack.org/api-ref/object-store/?expanded=create-or-replace-object-detail#delete-object
+   * @param {function} callback (err, {statusCode, body, header}) => { }
    * @returns {void}
    */
-  function deleteFile (container, filename, callback) {
-
-    const arrayArguments = [...arguments, { originStorage : _config.activeStorage }];
-
-    rock.concat({
-      url     : `${_config.endpoints.url}/${container}/${filename}`,
-      method  : 'DELETE',
-      headers : {
-        'X-Auth-Token' : _config.token,
-        Accept         : 'application/json'
-      },
-      timeout: _config.timeout
-    }, (err, res) => {
-
-      /** Manage special errors: timeouts, too many redirects or any unexpected behavior */
-      res = res || {};
-      res.error = err && err.toString().length > 0 ? err.toString() : null;
-
-      checkIsConnected(res, 'deleteFile', arrayArguments, (error) => {
-        if (error) {
-          return callback(error);
-        }
-
-        if (res && res.statusCode === 404) {
-          return callback(new Error('File does not exist'));
-        }
-
-        err = err || checkResponseError(res);
-
-        /** TODO: remove? it should never happen as every error switch to another storage */
-        if (err) {
-          return callback(err);
-        }
-
-        return callback(null);
-      });
-    });
+  function deleteFile (container, filename, options, callback) {
+    if (!callback) {
+      callback = options;
+      options = {};
+    }
+    options.alias = container;
+    return request('DELETE', `/${container}/${filename}`, options, callback);
   }
 
   /**
@@ -328,107 +211,126 @@ module.exports = (config) => {
    *
    * @param {string} container Container name
    * @param {string} filename filename to store
-   * @param {function} callback function(err, headers):void = The `err` argument is null by default, return an object if an error occurs.
+   * @param {Object} options [OPTIONAL]: { headers: {}, queries: {} } List of query parameters and headers: https://docs.openstack.org/api-ref/object-store/?expanded=create-or-replace-object-detail#show-object-metadata
+   * @param {function} callback (err, {statusCode, body, header}) => { }
    * @returns {void}
    */
-  function getFileMetadata(container, filename, callback) {
-    const arrayArguments = [...arguments, { originStorage : _config.activeStorage }];
-
-    rock.concat({
-      url     : `${_config.endpoints.url}/${container}/${filename}`,
-      method  : 'HEAD',
-      headers : {
-        'X-Auth-Token' : _config.token,
-        Accept         : 'application/json'
-      },
-      timeout: _config.timeout
-    }, (err, res) => {
-
-      /** Manage special errors: timeouts, too many redirects or any unexpected behavior */
-      res = res || {};
-      res.error = err && err.toString().length > 0 ? err.toString() : null;
-
-      checkIsConnected(res, 'getFileMetadata', arrayArguments, (error) => {
-        if (error) {
-          return callback(error);
-        }
-
-        if (res && res.statusCode === 404) {
-          return callback(new Error('File does not exist'));
-        }
-
-        err = err || checkResponseError(res);
-
-        /** TODO: remove? it should never happen as every error switch to another storage */
-        if (err) {
-          return callback(err);
-        }
-
-        return callback(null, res.headers);
-      });
-    });
+  function getFileMetadata(container, filename, options, callback) {
+    if (!callback) {
+      callback = options;
+      options = {};
+    }
+    options.alias = container;
+    return request('HEAD', `/${container}/${filename}`, options, callback);
    }
+
+
+   /**
+    * @param {string} container Container name
+    * @param {string} objects List of files, it can be: ['file1', 'file2'] OR [{ name: 'file1' }, { name: 'file2' }] OR [{ key: 'file1' }, { key: 'file2' }]
+    * @param {Object} options [OPTIONAL]: { headers: {}, queries: {} }
+    * @param {function} callback (err, {statusCode, body, header}) => { }
+    * @returns 
+    * 
+    * Swift Official documentation: https://docs.openstack.org/swift/latest/api/bulk-delete.html
+    */
+  function deleteFiles (container, objects, options, callback) {
+    if (!callback) {
+      callback = options;
+      options = {};
+    }
+    let _filesAsText = '';
+    for (let i = 0; i < objects.length; i++) {
+      const _fileName = objects[i]?.name ?? objects[i]?.key ?? objects[i];
+      if (typeof _fileName !== 'string') {
+        continue;
+      }
+      _filesAsText += `${container}/${encodeURIComponent(_fileName)}\n`;
+    }
+    options.body = _filesAsText;
+    options.headers = {
+      ...options?.headers,
+      'Content-Type': 'text/plain'
+    }
+    options.defaultQueries = 'bulk-delete';
+    options.alias = container;
+    return request('POST', `/`, options, (err, resp) => {
+      if (err) {
+        return callback(err);
+      }
+      if (resp.headers?.['content-type']?.includes('application/json') === true) {
+        try {
+          resp.body = JSON.parse(resp.body.toString())
+        } catch(err) {
+          return callback(new Error('Deleting files JSON parse: ' + err.toString()), resp);
+        }
+      }
+      return callback(err, resp);
+    });
+  }
+
+  /**
+   * 
+   * @param {String} container Container name
+   * @param {Object} options [OPTIONAL]: { headers: {}, queries: {} } List of query parameters and headers: https://docs.openstack.org/api-ref/object-store/?expanded=create-or-replace-object-detail#show-container-metadata
+   * @param {Function} callback (err, {statusCode, body, header}) => { }
+   * @returns 
+   */
+  function headBucket(container, options, callback) {
+    if (!callback) {
+      callback = options;
+      options = {};
+    }
+    options.alias = container;
+    return request('HEAD', `/${container}`, options, callback);
+  }
+
+  /**
+   * Show account details and list containers
+   * 
+   * @param {Optional} options [OPTIONAL]: { headers: {}, queries: {} } List of query parameters and headers: https://docs.openstack.org/api-ref/object-store/?expanded=create-or-replace-object-detail#show-account-details-and-list-containers
+   * @param {Function} callback (err, {statusCode, body, header}) => { }
+   * @returns 
+   */
+  function listBuckets(options, callback) {
+    if (!callback) {
+      callback = options;
+      options = {};
+    }
+    return request('GET', `/`, options, (err, resp) => {
+      if (err) {
+        return callback(err);
+      }
+      if (resp.headers?.['content-type']?.includes('application/json') === true) {
+        try {
+          resp.body = JSON.parse(resp.body.toString())
+        } catch(err) {
+          return callback(new Error('Listing bucket JSON parse: ' + err.toString()), resp);
+        }
+      }
+      return callback(err, resp);
+    });
+  }
 
    /**
    * @description Create or update object metadata.
    * @description To create or update custom metadata
    * @description use the X-Object-Meta-name header,
-   * @description where name is the name of the metadata item.
+   * @description where "name" is the name of the metadata item.
    *
    * @param {string} container Container name
-   * @param {string} filename file to store
-   * @param {string|Buffer} localPathOrBuffer absolute path to the file
+   * @param {string} filename filename
    * @param {Object} options { headers: {}, queries: {} } List of query parameters and headers: https://docs.openstack.org/api-ref/object-store/?expanded=create-or-update-object-metadata-detail#create-or-update-object-metadata
    * @param {function} callback function(err, headers):void = The `err` is null by default, return an object if an error occurs.
    * @returns {void}
    */
   function setFileMetadata (container, filename, options, callback) {
-
-    const arrayArguments = [...arguments];
-
-    if (callback === undefined) {
+    if (!callback) {
       callback = options;
-      arrayArguments.push(options);
-      options = { headers: {}, queries: {} };
-      arrayArguments[3] = options;
+      options = {};
     }
-
-    arrayArguments.push({ originStorage : _config.activeStorage })
-
-    const { headers, queries } = getHeaderAndQueryParameters(options);
-    rock.concat({
-      url     : `${_config.endpoints.url}/${container}/${filename}${queries}`,
-      method  : 'POST',
-      headers : {
-        'X-Auth-Token' : _config.token,
-        Accept         : 'application/json',
-        ...headers
-      },
-      timeout: _config.timeout
-    }, (err, res) => {
-
-      /** Manage special errors: timeouts, too many redirects or any unexpected behavior */
-      res = res || {};
-      res.error = err && err.toString().length > 0 ? err.toString() : null;
-
-      checkIsConnected(res, 'setFileMetadata', arrayArguments, (error) => {
-        if (error) {
-          return callback(error);
-        }
-
-        if (res && res.statusCode === 404) {
-          return callback(new Error('File does not exist'));
-        }
-
-        err = err || checkResponseError(res);
-
-        /** TODO: remove? it should never happen as every error switch to another storage */
-        if (err) {
-          return callback(err);
-        }
-        return callback(null, res.headers);
-      });
-    });
+    options.alias = container;
+    return request('POST', `/${container}/${filename}`, options, callback);
   }
 
    /**
@@ -453,123 +355,61 @@ module.exports = (config) => {
 
     arrayArguments.push({ originStorage : _config.activeStorage })
 
-    const { headers, queries, body } = getHeaderAndQueryParameters(options);
+    const _urlParams = getUrlParameters(options?.queries ?? '', options?.defaultQueries ?? '');
+
+    /**
+     * Return a bucket name based on an alias and current active storage.
+     * If the alias does not exist, the alias is returned as bucket name
+     */
+    let _path = path;
+    let _body = options?.body;
+    const _activeBucket = _config.storages[_config.activeStorage]?.buckets?.[options?.alias] ?? options?.alias;
+    if (_activeBucket !== options?.alias) {
+      _path = _path.replace(options?.alias, _activeBucket);
+      if (_urlParams.includes('bulk-delete') === true) {
+        _body = _body.replaceAll(options?.alias, _activeBucket);
+      }
+    }
 
     const _requestOptions = {
-      url     : `${_config.endpoints.url}${path}${queries}`,
+      url     : `${_config.endpoints.url}${_path}${_urlParams}`,
       method  : method,
       headers : {
         'X-Auth-Token' : _config.token,
         Accept         : 'application/json',
-        ...headers
+        ...(options?.headers ? options?.headers : {})
       },
       timeout: _config.timeout,
       output: isFnStream(options?.output) ? options?.output : null, /** Handle Streams */
-      ...(body ? { body } : {})
+      ...(_body ? { body: _body } : {}),
     }
 
     const _requestCallback = function (err, res, body) {
-      /** Manage special errors: timeouts, too many redirects or any unexpected behavior */
-      res = res || {};
-      res.error = err && err.toString().length > 0 ? err.toString() : null;
-      checkIsConnected(res, 'request', arrayArguments, (error) => {
-        if (error) {
-          return callback(error);
-        }
-        err = err || checkResponseError(res);
+      /** Catch error and retry */
+      if ((err || res?.statusCode >= 500)) {
+        log(`SWIFT Storage | Index "${_config.activeStorage}" region "${_config.storages[_config.activeStorage].region}" | ${res?.statusCode ?? err?.toString()}`, 'error');
+        activateFallbackStorage(arrayArguments[arrayArguments.length - 1].originStorage);
+      } else if (res?.statusCode === 401) {
+        log(`SWIFT Storage | Index "${_config.activeStorage}" region "${_config.storages[_config.activeStorage].region}" try reconnect...`, 'info');
+      }
 
-        /** TODO: remove? it should never happen as every error switch to another storage */
-        if (err) {
-          return callback(err);
-        }
-        return isFnStream(options?.output) === true ? callback(null, res) : callback(null, body, res.headers);
-      });
+      /** If something went wrong: connect again and request again */
+      if (err || res?.statusCode >= 500 || res?.statusCode === 401) {
+        return connection(
+          (err) => {
+            if (err) {
+              return callback(err);
+            }
+            // Request again with the new Auth token
+            return request.apply(null, arrayArguments);
+          }, 
+          arrayArguments[arrayArguments.length - 1].originStorage
+        );
+      }
+      return isFnStream(options?.output) === true ? callback(null, res) : callback(null, { headers : res.headers, statusCode: res.statusCode, body : body });
     }
     return isFnStream(options?.output) === true ? rock(_requestOptions, _requestCallback) : rock.concat(_requestOptions, _requestCallback);
   }
-
-  /**
-   * @description Check the response status code and return an Error.
-   *
-   * @param {Object} response Response object from request
-   * @returns {null|Error}
-   */
-  function checkResponseError (response, body = '') {
-    /** TODO: remove? it should never happen as every error switch to another storage */
-    if (!response) {
-      return new Error('No response');
-    }
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      return new Error(`${response.statusCode.toString()} ${response.statusMessage || body}`);
-    }
-
-    return null;
-  }
-
-  /**
-   * @description Check if the request is authorized, if not, it authenticate again to generate a new token, and execute again the initial request.
-   *
-   * @param {Object} response Request response
-   * @param {String} from Original function called
-   * @param {Object} args Arguments of the original function.
-   * @param {function} callback function(err):void = The `err` argument is null by default, return an object if an error occurs.
-   * @returns {void}
-   */
-  function checkIsConnected (response, from, args, callback) {
-    if (!response || (response?.statusCode < 500 && response?.statusCode !== 401) || (!response?.statusCode && !!response?.error !== true)) {
-      return callback(null);
-    }
-
-    if (response?.statusCode >= 500) {
-      log(`Object Storage index "${_config.activeStorage}" region "${_config.storages[_config.activeStorage].region}" Action "${from}" Status ${response?.statusCode}`, 'error');
-      activateFallbackStorage(args[args.length - 1].originStorage);
-    }
-
-    if (!!response?.error === true) {
-      log(`Object Storage index "${_config.activeStorage}" region "${_config.storages[_config.activeStorage].region}" Action "${from}" ${response.error}`, 'error');
-      activateFallbackStorage(args[args.length - 1].originStorage);
-    }
-
-    if (response?.statusCode === 401) {
-      log(`Object Storage index "${_config.activeStorage}" region "${_config.storages[_config.activeStorage].region}" try reconnect...`, 'info');
-    }
-
-    // Reconnect to object storage
-    connection((err) => {
-      if (err) {
-        return callback(err);
-      }
-
-      switch (from) {
-        case 'downloadFile':
-          downloadFile.apply(null, args);
-          break;
-        case 'uploadFile':
-          uploadFile.apply(null, args);
-          break;
-        case 'deleteFile':
-          deleteFile.apply(null, args);
-          break;
-        case 'listFiles':
-          listFiles.apply(null, args);
-          break;
-        case 'getFileMetadata':
-          getFileMetadata.apply(null, args);
-          break;
-        case 'setFileMetadata':
-          setFileMetadata.apply(null, args);
-          break;
-        case 'request':
-          request.apply(null, args);
-          break;
-        default:
-          /** TODO: remove? it should never happen */
-          return callback(null);
-      }
-    }, args[args.length - 1].originStorage);
-  }
-
 
   /**
    * @description Set and overwrite the Object Storage SDK configurations
@@ -629,7 +469,7 @@ module.exports = (config) => {
    * @param {type} type warning, error
    */
   function log(msg, level = 'info') {
-    return console.log(level === 'error' ? `❗️ Error: ${msg}` : level === 'warning' ? `⚠️  ${msg}` : msg );
+    return console.log(level === 'error' ? `🔴 ${msg}` : level === 'warning' ? `🟠 ${msg}` : `🟢 ${msg}`);
   }
 
   /**
@@ -647,57 +487,19 @@ module.exports = (config) => {
 
   function activateFallbackStorage(originStorage) {
     if (originStorage === _config.activeStorage && _config.activeStorage + 1 <= _config.storages.length) {
+      log(`SWIFT Storage | Activate Fallback Storage: switch from "${_config.activeStorage}" to "${_config.activeStorage + 1}"`, 'warning');
       _config.activeStorage += 1;
-      log(`Object Storage Activate Fallback Storage index "${_config.activeStorage}" 🚩`, 'warning');
     }
-  }
-
-
-  /**
-   * Convert an Object of query parameters into a string
-   * Example: { "prefix" : "user_id_1234", "format" : "xml"} => "?prefix=user_id_1234&format=xml"
-   *
-   * @param {Object} queries
-   * @returns
-   */
-  function getQueryParameters (queries) {
-    let _queries = '';
-
-    if (queries && typeof queries === "object") {
-      const _queriesEntries = Object.keys(queries);
-      const _totalQueries = _queriesEntries.length;
-      for (let i = 0; i < _totalQueries; i++) {
-        if (i === 0) {
-          _queries += '?'
-        }
-        _queries += `${_queriesEntries[i]}=${queries[_queriesEntries[i]]}`
-        if (i + 1 !== _totalQueries) {
-          _queries += '&'
-        }
-      }
-    }
-    return _queries;
-  }
-
-  function getHeaderAndQueryParameters (options) {
-    let headers = {};
-    let queries = '';
-    let body = null
-
-    if (options?.queries) {
-      queries = getQueryParameters(options.queries);
-    }
-    if (options?.headers) {
-      headers = options.headers;
-    }
-    if (options?.body) {
-      body = options.body;
-    }
-    return { headers, queries, body }
   }
 
   function getRockReqDefaults() {
     return rock.defaults;
+  }
+
+  function setRockReqDefaults (newDefaults) {
+    if (newDefaults && typeof newDefaults === 'object') {
+      Object.assign(rock.defaults, newDefaults);
+    }
   }
 
   setStorages(config)
@@ -716,6 +518,10 @@ module.exports = (config) => {
     getConfig,
     setLogFunction,
     request,
-    getRockReqDefaults
+    getRockReqDefaults,
+    setRockReqDefaults,
+    deleteFiles,
+    headBucket,
+    listBuckets
   }
 }
