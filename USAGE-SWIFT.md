@@ -469,7 +469,7 @@ const swift = storageClient([
  * On the following example, "downloadFile" will request the main storage "invoices-ovh-gra"
  * or the backup "invoices-aws-paris" if something goes wrong.
  */
-s3storage.downloadFile('invoices', '2023-invoice.pdf', (err, resp) => {
+swift.downloadFile('invoices', '2023-invoice.pdf', (err, resp) => {
   if (err) {
     return console.log("Error on download: ", err);
   }
