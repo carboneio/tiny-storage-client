@@ -123,7 +123,7 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
-
+    options.alias = container;
     return request('GET', `/${container}`, options, (err, resp) => {
       if (err) {
         return callback(err);
@@ -154,6 +154,7 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
+    options.alias = container;
     /** Is File Path */
     if (Buffer.isBuffer(localPathOrBuffer) === false && isFnStream(localPathOrBuffer) === false) {
       return fs.readFile(localPathOrBuffer, (err, objectBuffer) => {
@@ -183,6 +184,7 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
+    options.alias = container;
     return request('GET', `/${container}/${filename}`, options, callback);
   }
 
@@ -200,6 +202,7 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
+    options.alias = container;
     return request('DELETE', `/${container}/${filename}`, options, callback);
   }
 
@@ -217,6 +220,7 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
+    options.alias = container;
     return request('HEAD', `/${container}/${filename}`, options, callback);
    }
 
@@ -249,6 +253,7 @@ module.exports = (config) => {
       'Content-Type': 'text/plain'
     }
     options.defaultQueries = 'bulk-delete';
+    options.alias = container;
     return request('POST', `/`, options, (err, resp) => {
       if (err) {
         return callback(err);
@@ -276,6 +281,7 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
+    options.alias = container;
     return request('HEAD', `/${container}`, options, callback);
   }
 
@@ -323,6 +329,7 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
+    options.alias = container;
     return request('POST', `/${container}/${filename}`, options, callback);
   }
 
@@ -350,8 +357,21 @@ module.exports = (config) => {
 
     const _urlParams = getUrlParameters(options?.queries ?? '', options?.defaultQueries ?? '');
 
+    /**
+     * Return a bucket name based on an alias and current active storage.
+     * If the alias does not exist, the alias is returned as bucket name
+     */
+    let _path = path;
+    const _activeBucket = _config.storages[_config.activeStorage]?.buckets?.[options?.alias] ?? options?.alias;
+    if (_activeBucket !== options?.alias) {
+      _path = _path.replace(options?.alias, _activeBucket);
+      if (_urlParams.includes('bulk-delete') === true) {
+        options.body = options.body.replaceAll(options?.alias, _activeBucket);
+      }
+    }
+
     const _requestOptions = {
-      url     : `${_config.endpoints.url}${path}${_urlParams}`,
+      url     : `${_config.endpoints.url}${_path}${_urlParams}`,
       method  : method,
       headers : {
         'X-Auth-Token' : _config.token,

@@ -87,8 +87,7 @@ let storage = storageClient([{
   authUrl    : 'https://auth.cloud.ovh.net/v3',
   username   : 'username-2',
   password   : 'password-2',
-  region     : 'region-2',
-  tenantName : 'tenantName-2'
+  region     : 'region-2'
 }]);
 
 storage.connection((err) => {
@@ -104,35 +103,55 @@ storage.connection((err) => {
 const path = require(path);
 
 /** SOLUTION 1: The file content can be passed by giving the file absolute path **/
-storage.uploadFile('container', 'filename.jpg', path.join(__dirname, './assets/file.txt'), (err) => {
+storage.uploadFile('container', 'filename.jpg', path.join(__dirname, './assets/file.txt'), (err, resp) => {
   if (err) {
     // handle error
   }
-  // success
+  /**
+   * Response details:
+   * - resp.headers
+   * - resp.statusCode
+   * - resp.body
+   **/
 });
 
 /** SOLUTION 2: A Buffer can be passed for the file content **/
-storage.uploadFile('container', 'filename.jpg', Buffer.from("File content"), (err) => {
+storage.uploadFile('container', 'filename.jpg', Buffer.from("File content"), (err, resp) => {
   if (err) {
     // handle error
   }
-  // success
+  /**
+   * Response details:
+   * - resp.headers
+   * - resp.statusCode
+   * - resp.body
+   **/
 });
 
 /** SOLUTION 3: Pass a function returning a ReadStream **/
-storage.uploadFile('container', 'filename.jpg', () => fs.createReadStream(path.join(__dirname, './assets/file.txt')), (err) => {
+storage.uploadFile('container', 'filename.jpg', () => fs.createReadStream(path.join(__dirname, './assets/file.txt')), (err, resp) => {
   if (err) {
     // handle error
   }
-  // success
+    /** 
+   * Response details:
+   * - resp.headers
+   * - resp.statusCode
+   * - resp.body
+   **/
 });
 
 /** SOLUTION 4: the function accepts a optionnal fourth argument `option` including query parameters and headers. List of query parameters and headers: https://docs.openstack.org/api-ref/object-store/?expanded=create-or-replace-object-detail#create-or-replace-object **/
-storage.uploadFile('container', 'filename.jpg', Buffer.from("File content"), { queries: { temp_url_expires: '1440619048' }, headers: { 'X-Object-Meta-LocationOrigin': 'Paris/France' }}, (err) => {
+storage.uploadFile('container', 'filename.jpg', Buffer.from("File content"), { queries: { temp_url_expires: '1440619048' }, headers: { 'X-Object-Meta-LocationOrigin': 'Paris/France' }}, (err, resp) => {
   if (err) {
     // handle error
   }
-  // success
+  /**
+   * Response details:
+   * - resp.headers
+   * - resp.statusCode
+   * - resp.body
+   **/
 });
 ```
 
@@ -140,11 +159,16 @@ storage.uploadFile('container', 'filename.jpg', Buffer.from("File content"), { q
 
 ```js
 /** Solution 1: Download the file as Buffer **/
-storage.downloadFile('containerName', 'filename.jpg', (err, body, headers) => {
+storage.downloadFile('containerName', 'filename.jpg', (err, resp) => {
   if (err) {
     // handle error
   }
-  // success, the `body` argument is the content of the file as a Buffer
+  /**
+   * Response details:
+   * - resp.headers
+   * - resp.statusCode
+   * - resp.body => the content of the file as a Buffer
+   **/
 });
 
 /** Solution 2: Download the file as Stream,  set the option `output` with a function returning the output Stream */
@@ -172,11 +196,16 @@ storage.downloadFile('containerName', '2023-invoice.pdf', { output: createOutput
 ### Delete a file
 
 ```js
-storage.deleteFile('templates', 'filename.jpg', (err) => {
+storage.deleteFile('templates', 'filename.jpg', (err, resp) => {
   if (err) {
     // handle error
   }
-  // success
+  /**
+   * Response details:
+   * - resp.headers
+   * - resp.statusCode
+   * - resp.body
+   **/
 });
 ```
 
@@ -186,22 +215,41 @@ storage.deleteFile('templates', 'filename.jpg', (err) => {
 /**
  * SOLUTION 1
  **/
-storage.listFiles('templates', function (err, body) {
+storage.listFiles('templates', function (err, resp) {
   if (err) {
     // handle error
   }
-  // success
+  /**
+   * Response details:
+   * - resp.headers
+   * - resp.statusCode
+   * - resp.body => List of objects as an Array, example:
+   * [
+   *    {
+   *      "bytes": 47560,
+   *      "last_modified": "2020-12-03T10:14:40.049830",
+   *      "hash": "bd3593e317e71fd9992405f29475afd4",
+   *      "name": "invoice.pdf",
+   *      "content_type": "application/pdf"
+   *    }
+   * ]
+   **/
 });
 
 /**
  * SOLUTION 2
  * Possible to pass queries and overwrite request headers, list of options: https://docs.openstack.org/api-ref/object-store/? expanded=show-container-details-and-list-objects-detail#show-container-details-and-list-objects
  **/
-storage.listFiles('templates', { queries: { prefix: 'prefixName' }, headers: { Accept: 'application/xml' } }, function (err, body) {
+storage.listFiles('templates', { queries: { prefix: 'prefixName' }, headers: { Accept: 'application/xml' } }, function (err, resp) {
   if (err) {
     // handle error
   }
-  // success
+  /**
+   * Response details:
+   * - resp.headers
+   * - resp.statusCode
+   * - resp.body
+   **/
 });
 ```
 
@@ -210,12 +258,19 @@ storage.listFiles('templates', { queries: { prefix: 'prefixName' }, headers: { A
 Shows object metadata. Checkout the list of [headers](https://docs.openstack.org/api-ref/object-store/?expanded=create-or-update-object-metadata-detail,show-object-metadata-detail#show-object-metadata).
 
 ```js
-storage.getFileMetadata('templates', 'filename.jpg', (err, headers) => {
+storage.getFileMetadata('templates', 'filename.jpg', (err, resp) => {
   if (err) {
     // handle error
   }
   /**
-   * Returned headers: {
+   * Response details:
+   * - resp.headers
+   * - resp.statusCode
+   * - resp.body
+   **/
+
+  /**
+   * Returned headers `resp.headers`: {
    *  Content-Length: 14
    *  Accept-Ranges: bytes
    *  Last-Modified: Thu, 16 Jan 2014 21:12:31 GMT
@@ -229,7 +284,8 @@ storage.getFileMetadata('templates', 'filename.jpg', (err, headers) => {
    *  X-Object-Meta-Custom-Metadata-1: Value
    *  X-Object-Meta-Custom-Metadata-2: Value
    * }
-   * // Details: https://docs.openstack.org/api-ref/object-store/?expanded=show-object-metadata-detail#show-object-metadata
+   * 
+   * Related documentation: https://docs.openstack.org/api-ref/object-store/?expanded=show-object-metadata-detail#show-object-metadata
    */
 });
 ```
@@ -240,13 +296,83 @@ To create or update custom metadata, use the "X-Object-Meta-name" header, where 
 Checkout the list of [headers availables](https://docs.openstack.org/api-ref/object-store/?expanded=create-or-replace-object-detail,create-or-update-object-metadata-detail#create-or-update-object-metadata).
 
 ```js
-storage.setFileMetadata('templates', 'filename.jpg', { headers: { 'Content-Type': 'image/jpeg', 'X-Object-Meta-LocationOrigin': 'Paris/France', 'X-Delete-At': 1440619048 }} (err, headers) => {
+storage.setFileMetadata('templates', 'filename.jpg', { headers: { 'Content-Type': 'image/jpeg', 'X-Object-Meta-LocationOrigin': 'Paris/France', 'X-Delete-At': 1440619048 }} (err, resp) => {
   if (err) {
     // handle error
   }
-  // success
+  /**
+   * Response details:
+   * - resp.headers
+   * - resp.statusCode
+   * - resp.body
+   **/
 });
 ```
+
+### Delete files
+
+Bulk delete files (Maximum 10 000 objects per requests).
+
+```js
+const filesToDelete = [ { name: '1685696359848.jpg' }, { name: 'template-column.docx' }, { name: 'test file |1234.odt' } ]
+
+swift.deleteFiles('', filesToDelete, function(err, resp) {
+  if (err) {
+    // handle error
+  }
+ /**
+   * Request reponse:
+   * - resp.headers
+   * - resp.statusCode
+   * - resp.body => body as Object, example: {"Response Status":"200 OK","Response Body":"","Number Deleted":3,"Number Not Found":0,"Errors":[]}
+   **/
+})
+```
+
+### Head Bucket
+
+Shows container metadata, including the number of objects and the total bytes of all objects stored in the container.
+
+```js
+storage.headBucket('templates', (err, resp) => {
+  if (err) {
+    // handle error
+  }
+   /**
+   * Request reponse:
+   * - resp.headers
+   * - resp.statusCode
+   * - resp.body
+   **/
+});
+```
+
+### List Buckets
+
+Shows details for an account and lists containers, sorted by name, in the account.
+
+```js
+storage.listBuckets((err, resp) => {
+  if (err) {
+    // handle error
+  }
+  /**
+   * Request reponse:
+   * - resp.headers
+   * - resp.statusCode
+   * - resp.body > The response body returns a list of containers as an Array, example: 
+   * [
+   *     {
+   *      name: 'container1',
+   *      count: 55,
+   *      bytes: 106522,
+   *      last_modified: '2022-01-12T14:02:33.672010'
+   *    }
+   * ]
+   **/
+})
+```
+
 
 ### Custom request
 
@@ -279,17 +405,13 @@ Example of custom request, bulk delete file from a `customerDocuments` container
     'Accept'      : 'application/json'
   }
 
- storage.request('POST', '/customerDocuments?bulk-delete', { headers: _headers, body: 'file1\nfile2\n' }, (err, body, headers) => {
+ storage.request('POST', '/customerDocuments?bulk-delete', { headers: _headers, body: 'file1\nfile2\n' }, (err, resp) => {
   /**
-  * body: {
-  *  "Number Not Found": 0,
-  *  "Response Status": "200 OK",
-  *  "Errors": [],
-  *  "Number Deleted": 2,
-  *  "Response Body": ""
-  * }
-  */
-  done();
+   * Response details:
+   * - resp.headers
+   * - resp.statusCode
+   * - resp.body => body as Javascript Object, example: {"Response Status":"200 OK","Response Body":"","Number Deleted":3,"Number Not Found":0,"Errors":[]}
+   **/
 });
 ```
 
@@ -309,4 +431,53 @@ storage.setLogFunction((message, level) => {
 The default request timeout is 5 seconds, change it by calling `setTimeout`:
 ```js
 storage.setTimeout(30000); // 30 seconds
+```
+
+### Container Alias
+
+To simplify requests to custom named containers into different SWIFT providers, it is possible to create aliases by providing a `buckets` object on credentials. When calling a function, define the bucket alias as first argument, it will request the current active storage automatically.
+
+```js
+const storageClient = require('')
+
+const swift = storageClient([
+  /** SWIFT Storage 1 **/
+  {
+    username                     : '',
+    password                     : '',
+    authUrl                      : '',
+    region                       : '',
+    buckets                      : {
+      invoices: "invoices-ovh-gra",
+      www     : "www-ovh-gra"
+    }
+  },
+  /** SWIFT Storage 2 **/
+  {
+    username                     : '',
+    password                     : '',
+    authUrl                      : '',
+    region                       : '',
+    buckets                      : {
+      invoices: "invoices-aws-paris",
+      www     : "www-aws-paris"
+    }
+  }
+])
+
+/**
+ * On the following example, "downloadFile" will request the main storage "invoices-ovh-gra"
+ * or the backup "invoices-aws-paris" if something goes wrong.
+ */
+s3storage.downloadFile('invoices', '2023-invoice.pdf', (err, resp) => {
+  if (err) {
+    return console.log("Error on download: ", err);
+  }
+  /**
+   * Request reponse:
+   * - resp.body => downloaded file as Buffer
+   * - resp.headers
+   * - resp.statusCode
+   */
+})
 ```

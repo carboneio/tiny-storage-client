@@ -72,7 +72,10 @@ describe('Ovh Object Storage Swift', function () {
       password                     : 'storage-1-password',
       authUrl                      : authURL,
       tenantName                   : 'storage-1-tenant',
-      region                       : 'GRA'
+      region                       : 'GRA',
+      buckets                      : {
+        invoices: 'invoices-gra-1234'
+      }
     }]);
     storage.connection((err) => {
       assert.strictEqual(err, null)
@@ -448,6 +451,31 @@ describe('Ovh Object Storage Swift', function () {
       })
     })
 
+    it('should deletes files (ALIAS)', function(done){
+      const _filesToDelete = [ { name: '1685696359848.jpg' }, { name: 'invoice.docx' }, { name: 'test file |1234.odt' }]
+      const _headers = { 'content-type': 'application/json' }
+      const _returnedBody = '{"Response Status":"200 OK","Response Body":"","Number Deleted":3,"Number Not Found":0,"Errors":[]}'
+
+      let firstNock = nock(publicUrlGRA)
+        .defaultReplyHeaders(_headers)
+        .post(/\/.*bulk-delete.*/g)
+        .reply(200, (url, body) => {
+          assert.strictEqual(body.includes('invoices-gra-1234/test%20file%20%7C1234.odt'), true);
+          assert.strictEqual(body.includes('invoices-gra-1234/invoice.docx'), true);
+          assert.strictEqual(body.includes('invoices-gra-1234/1685696359848.jpg'), true);
+          return _returnedBody;
+        });
+
+      storage.deleteFiles('invoices', _filesToDelete, function(err, resp) {
+        assert.strictEqual(err, null);
+        assert.strictEqual(resp.statusCode, 200);
+        assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+        assert.strictEqual(JSON.stringify(resp.body), _returnedBody);
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
+        done();
+      })
+    })
+
     it('should return the raw result as XML (Buffer)', function(done) {
       const _returnedBodyXML = '<delete><number_deleted>0</number_deleted><number_not_found>3</number_not_found><response_body></response_body><response_status>200 OK</response_status><errors></errors></delete>'
       const _filesToDelete = [ { name: '1685696359848.jpg' }, { name: 'invoice.docx' }, { name: 'test file |1234.odt' }]
@@ -512,6 +540,43 @@ describe('Ovh Object Storage Swift', function () {
 
       
       storage.headBucket('container1', function(err, resp) {
+        assert.strictEqual(err, null);
+        assert.strictEqual(resp.statusCode, _statusCode);
+        assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+        assert.strictEqual(resp.body.toString(), '');
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
+        done();
+      });
+    }); 
+
+    it('should return metadatas about a container (ALIAS)', function(done){
+      const _statusCode = 204;
+      const _headers = {
+        'content-type': 'application/json; charset=utf-8',
+        'x-container-object-count': '4',
+        'x-container-bytes-used': '431631',
+        'x-timestamp': '1641995016.74740',
+        'x-container-sync-key': 'ZAIrQQjDzWM+APD5Fz6stQ/pBUe+Nck2UnPPswJw1cU=',
+        'x-container-sync-to': '//OVH_PUBLIC_CLOUD/GRA/AUTH_XXXX/container1',
+        'last-modified': 'Wed, 12 Jan 2022 13:58:51 GMT',
+        'accept-ranges': 'bytes',
+        'x-storage-policy': 'PCS',
+        vary: 'Accept',
+        'x-trans-id': 'tx3bd64d99f87147f18ffd9-0064c7d400',
+        'x-openstack-request-id': 'tx3bd64d99f87147f18ffd9-0064c7d400',
+        date: 'Mon, 31 Jul 2023 15:32:17 GMT',
+        'transfer-encoding': 'chunked',
+        'x-iplb-request-id': '53C629C3:E1FB_3626E64B:01BB_64C7D3FF_150CAC23:25615',
+        'x-iplb-instance': '12309'
+      };
+
+      let firstNock = nock(publicUrlGRA)
+        .defaultReplyHeaders(_headers)
+        .intercept("/invoices-gra-1234", "HEAD")
+        .reply(_statusCode);
+
+      
+      storage.headBucket('invoices', function(err, resp) {
         assert.strictEqual(err, null);
         assert.strictEqual(resp.statusCode, _statusCode);
         assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
@@ -712,7 +777,7 @@ describe('Ovh Object Storage Swift', function () {
 
 
     describe("SINGLE STORAGE", function () {
-      it('should return a list of files as a JSON and as an XML', function (done) {
+      it('should return a list of files as a JSON', function (done) {
         let firstNock = nock(publicUrlGRA)
           .defaultReplyHeaders({
             'content-type': 'application/json',
@@ -723,6 +788,32 @@ describe('Ovh Object Storage Swift', function () {
           });
 
         storage.listFiles('templates', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(JSON.stringify(resp.headers), '{"content-type":"application/json"}');
+          const _files = resp.body;
+          assert.strictEqual(_files.length > 0, true)
+          assert.strictEqual(_files[0].bytes > 0, true)
+          assert.strictEqual(_files[0].last_modified.length > 0, true)
+          assert.strictEqual(_files[0].hash.length > 0, true)
+          assert.strictEqual(_files[0].name.length > 0, true)
+          assert.strictEqual(_files[0].content_type.length > 0, true)
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return a list of files as a JSON (ALIAS)', function (done) {
+        let firstNock = nock(publicUrlGRA)
+          .defaultReplyHeaders({
+            'content-type': 'application/json',
+          })
+          .get('/invoices-gra-1234')
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
+          });
+
+        storage.listFiles('invoices', (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(JSON.stringify(resp.headers), '{"content-type":"application/json"}');
@@ -1492,6 +1583,36 @@ describe('Ovh Object Storage Swift', function () {
         });
       });
 
+      it('should download file (ALIAS)', function (done) {
+        const firstNock = nock(publicUrlGRA)
+          .defaultReplyHeaders({
+            'content-length': '1492',
+            'accept-ranges': 'bytes',
+            'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
+            'content-type': 'application/json',
+            etag: 'a30776a059eaf26eebf27756a849097d',
+            'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+            date: 'Wed, 03 Nov 2021 14:28:48 GMT',
+            'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
+          })
+          .get('/invoices-gra-1234/test.odt')
+          .reply(200, () => {
+            return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
+          });
+
+        storage.downloadFile('invoices', 'test.odt', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.body.toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(resp.headers['etag'].length > 0, true);
+          assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(resp.headers['content-length'].length > 0, true);
+          assert.strictEqual(resp.headers['date'].length > 0, true);
+          assert.strictEqual(resp.statusCode, 200);
+          done();
+        });
+      });
+
       it('should reconnect automatically to object storage and retry', function (done) {
         let firstNock = nock(publicUrlGRA)
           .defaultReplyHeaders({
@@ -2057,13 +2178,15 @@ describe('Ovh Object Storage Swift', function () {
   describe('uploadFile', function () {
 
     describe("SINGLE STORAGE", function () {
-      it('should write file on server from a local path', function (done) {
-        const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
 
+      const _fileTxt = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
+
+      it('should write file on server from a local path', function (done) {
+    
         const firstNock = nock(publicUrlGRA)
           .put('/templates/test.odt')
           .reply(201, (uri, requestBody) => {
-            assert.strictEqual(requestBody, _expectedFileContent.toString());
+            assert.strictEqual(requestBody, _fileTxt.toString());
             return '';
           });
 
@@ -2074,13 +2197,28 @@ describe('Ovh Object Storage Swift', function () {
         });
       });
 
-      it('should write file on server from a read Stream function', function (done) {
-        const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
+      it('should write file on server from a local path (container name as Alias', function (done) {
+    
+        const firstNock = nock(publicUrlGRA)
+          .put('/invoices-gra-1234/test.odt')
+          .reply(201, (uri, requestBody) => {
+            assert.strictEqual(requestBody, _fileTxt.toString());
+            return '';
+          });
 
+        storage.uploadFile('invoices', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should write file on server from a read Stream function', function (done) {
+      
         const firstNock = nock(publicUrlGRA)
           .put('/templates/test.odt')
           .reply(201, (uri, requestBody) => {
-            assert.strictEqual(requestBody, _expectedFileContent.toString());
+            assert.strictEqual(requestBody, _fileTxt.toString());
             return '';
           });
 
@@ -2092,16 +2230,15 @@ describe('Ovh Object Storage Swift', function () {
       });
 
       it('should write file on server from a buffer', function (done) {
-        const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
 
         const firstNock = nock(publicUrlGRA)
           .put('/templates/test.odt')
           .reply(201, (uri, requestBody) => {
-            assert.strictEqual(requestBody, _expectedFileContent.toString());
+            assert.strictEqual(requestBody, _fileTxt.toString());
             return '';
           });
 
-        storage.uploadFile('templates', 'test.odt', _expectedFileContent, (err) => {
+        storage.uploadFile('templates', 'test.odt', _fileTxt, (err) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
@@ -2143,7 +2280,6 @@ describe('Ovh Object Storage Swift', function () {
 
 
       it('should write file on server from a local path with query parameters and params', function (done) {
-        const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
         const _headers = { ETag: "md5CheckSum" }
         const _queries = { temp_url_expires: "1440619048" }
 
@@ -2151,7 +2287,7 @@ describe('Ovh Object Storage Swift', function () {
           .put('/templates/test.odt')
           .query(_queries)
           .reply(201, (uri, requestBody) => {
-            assert.strictEqual(requestBody, _expectedFileContent.toString());
+            assert.strictEqual(requestBody, _fileTxt.toString());
             return '';
           });
 
@@ -2232,14 +2368,20 @@ describe('Ovh Object Storage Swift', function () {
           password                     : 'storage-1-password',
           authUrl                      : authURL,
           tenantName                   : 'storage-1-tenant',
-          region                       : 'GRA'
+          region                       : 'GRA',
+          buckets                      : {
+            invoices: "invoices-gra-12345"
+          }
         },
         {
           username                     : 'storage-2-user',
           password                     : 'storage-2-password',
           authUrl                      : authURL,
           tenantName                   : 'storage-2-tenant',
-          region                       : 'SBG'
+          region                       : 'SBG',
+          buckets                      : {
+            invoices: "invoices-sbg-12345"
+          }
         }]);
         storage.connection((err) => {
           assert.strictEqual(err, null)
@@ -2270,6 +2412,39 @@ describe('Ovh Object Storage Swift', function () {
           .reply(201, '');
 
         storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 201)
+          assert.strictEqual(resp.body.toString(), '')
+          assert.strictEqual(JSON.stringify(resp.headers), '{}')
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          done();
+        });
+      })
+
+      it('should reconnect automatically to the second object storage if the first storage authentication fail and should retry the request (Bucket ALIAS)', function(done){
+
+        let firstNock = nock(publicUrlGRA)
+          /** 1 */
+          .put('/invoices-gra-12345/test.odt')
+          .reply(401, 'Unauthorized')
+
+
+        let secondNock = nock(authURL)
+          /** 2 */
+          .post('/auth/tokens')
+          .reply(500, {})
+          /** 3 */
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          /** 4 */
+          .put('/invoices-sbg-12345/test.odt')
+          .reply(201, '');
+
+        storage.uploadFile('invoices', 'test.odt', path.join(__dirname, './assets/file.txt'), (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 201)
           assert.strictEqual(resp.body.toString(), '')
@@ -2632,12 +2807,27 @@ describe('Ovh Object Storage Swift', function () {
   describe('deleteFile', function () {
     describe('SINGLE STORAGE', function () {
 
-      it('should delete a file on the server', function (done) {
+      it('should delete a file', function (done) {
         const firstNock = nock(publicUrlGRA)
           .delete('/templates/test.odt')
           .reply(201, '');
 
         storage.deleteFile('templates', 'test.odt', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 201);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(JSON.stringify(resp.headers), '{}');
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should delete a file (ALIAS)', function (done) {
+        const firstNock = nock(publicUrlGRA)
+          .delete('/invoices-gra-1234/test.odt')
+          .reply(201, '');
+
+        storage.deleteFile('invoices', 'test.odt', (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 201);
           assert.strictEqual(resp.body.toString(), '');
@@ -3082,7 +3272,7 @@ describe('Ovh Object Storage Swift', function () {
   describe('getFileMetadata', function () {
 
     describe('SINGLE STORAGE', function () {
-      it('should get file metadata (headers)', function (done) {
+      it('should get file metadata', function (done) {
         const firstNock = nock(publicUrlGRA)
           .defaultReplyHeaders({
             'content-length': '1492',
@@ -3098,6 +3288,34 @@ describe('Ovh Object Storage Swift', function () {
           .reply(200,"OK");
 
         storage.getFileMetadata('templates', 'test.odt', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.toString(), 'OK');
+          assert.strictEqual(resp.headers['etag'].length > 0, true);
+          assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(resp.headers['content-length'].length > 0, true);
+          assert.strictEqual(resp.headers['date'].length > 0, true);
+          done();
+        });
+      });
+
+      it('should get file metadata (ALIAS)', function (done) {
+        const firstNock = nock(publicUrlGRA)
+          .defaultReplyHeaders({
+            'content-length': '1492',
+            'accept-ranges': 'bytes',
+            'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
+            'content-type': 'application/json',
+            etag: 'a30776a059eaf26eebf27756a849097d',
+            'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+            date: 'Wed, 03 Nov 2021 14:28:48 GMT',
+            'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
+          })
+          .intercept("/invoices-gra-1234/test.odt", "HEAD")
+          .reply(200,"OK");
+
+        storage.getFileMetadata('invoices', 'test.odt', (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(resp.statusCode, 200);
@@ -3684,6 +3902,33 @@ describe('Ovh Object Storage Swift', function () {
           .reply(200)
 
         storage.setFileMetadata('templates', 'test.odt', { headers: _headers }, (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(resp.headers['x-trans-id'].length > 0, true);
+          assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
+          assert.strictEqual(resp.headers['content-length'] === '0', true);
+          assert.strictEqual(resp.headers['date'].length > 0, true);
+          done();
+        });
+      });
+
+      it('should set file metadata (ALIAS)', function (done) {
+        const firstNock = nock(publicUrlGRA)
+          .matchHeader('x-object-meta-locationorigin', 'Paris/France')
+          .matchHeader('Content-Type', 'image/jpeg')
+          .matchHeader('X-Delete-At', 1440619048)
+          .defaultReplyHeaders({
+            'content-length': '0',
+            'date': 'Wed, 03 Nov 2021 14:28:48 GMT',
+            'x-trans-id': 'tx37ea34dcd1ed48ca9bc7d-0052d84b6f',
+            'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
+          })
+          .post('/invoices-gra-1234/test.odt')
+          .reply(200)
+
+        storage.setFileMetadata('invoices', 'test.odt', { headers: _headers }, (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(resp.statusCode, 200);
