@@ -508,6 +508,78 @@ describe('Ovh Object Storage Swift', function () {
       })
     });
 
+    describe("MUTLIPLE STORAGES", function () {
+      beforeEach(function (done) {
+        const firstNock = nock(authURL)
+            .post('/auth/tokens')
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        storage.setTimeout(5000);
+        storage.setStorages([{
+          username                     : 'storage-1-user',
+          password                     : 'storage-1-password',
+          authUrl                      : authURL,
+          region                       : 'GRA',
+          buckets                      : {
+            invoices: 'invoices-ovh-gra'
+          }
+        },
+        {
+          username                     : 'storage-2-user',
+          password                     : 'storage-2-password',
+          authUrl                      : authURL,
+          region                       : 'SBG',
+          buckets                      : {
+            invoices: 'invoices-aws-paris'
+          }
+        }]);
+        storage.connection((err) => {
+          assert.strictEqual(err, null)
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+      it('should reconnect automatically to the second object storage if the first storage authentication fail and should retry the request (alias)', function (done) {
+        const _filesToDelete = [ { name: '1685696359848.jpg' }, { name: 'invoice.docx' }, { name: 'test file |1234.odt' }]
+        const _headers = { 'content-type': 'application/json' }
+        const _returnedBody = '{"Response Status":"200 OK","Response Body":"","Number Deleted":3,"Number Not Found":0,"Errors":[]}'
+        let firstNock = nock(publicUrlGRA)
+          /** 1 */
+          .post(/\/.*bulk-delete.*/g)
+          .reply(401)
+
+        let secondNock = nock(authURL)
+          /** 2 */
+          .post('/auth/tokens')
+          .reply(500, {})
+          /** 3 */
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        let thirdNock = nock(publicUrlSBG)
+          .defaultReplyHeaders(_headers)
+          /** 4 */
+          .post(/\/.*bulk-delete.*/g)
+          .reply(200, (url, body) => {
+            assert.strictEqual(body.includes('invoices-aws-paris/test%20file%20%7C1234.odt'), true);
+            assert.strictEqual(body.includes('invoices-aws-paris/invoice.docx'), true);
+            assert.strictEqual(body.includes('invoices-aws-paris/1685696359848.jpg'), true);
+            return _returnedBody;
+          });
+
+        storage.deleteFiles('invoices', _filesToDelete, function(err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+          assert.strictEqual(JSON.stringify(resp.body), _returnedBody);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          done();
+        })
+      });
+    });
     
   });
 

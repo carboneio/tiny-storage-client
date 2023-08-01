@@ -362,11 +362,12 @@ module.exports = (config) => {
      * If the alias does not exist, the alias is returned as bucket name
      */
     let _path = path;
+    let _body = options?.body;
     const _activeBucket = _config.storages[_config.activeStorage]?.buckets?.[options?.alias] ?? options?.alias;
     if (_activeBucket !== options?.alias) {
       _path = _path.replace(options?.alias, _activeBucket);
       if (_urlParams.includes('bulk-delete') === true) {
-        options.body = options.body.replaceAll(options?.alias, _activeBucket);
+        _body = _body.replaceAll(options?.alias, _activeBucket);
       }
     }
 
@@ -380,7 +381,7 @@ module.exports = (config) => {
       },
       timeout: _config.timeout,
       output: isFnStream(options?.output) ? options?.output : null, /** Handle Streams */
-      ...(options?.body ? { body: options?.body } : {}),
+      ...(_body ? { body: _body } : {}),
     }
 
     const _requestCallback = function (err, res, body) {
