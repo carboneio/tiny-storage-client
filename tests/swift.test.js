@@ -136,12 +136,12 @@ describe('Ovh Object Storage Swift', function () {
 
   describe('Connection', function () {
 
-    it('should connect to object storage swift (without tenantName)', function(done) {
+    it('should connect to object storage swift (without tenantName and the region as lowercase)', function(done) {
       let storageTest = storageSDK([{
         username                     : 'storage-X-user',
         password                     : 'storage-X-password',
         authUrl                      : authURL,
-        region                       : 'GRA'
+        region                       : 'gra'
       }]);
 
       const firstNock = nock(authURL)

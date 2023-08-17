@@ -1,3 +1,6 @@
+### v3.0.1
+- Fixed SWIFT authentication: the `region` value is case insensitive, it can be `GRA` or `gra`.
+
 ### v3.0.0
 - New major version to make S3 and Swift methods identical (function arguments and callback functions)
 - SWIFT Breaking changes:

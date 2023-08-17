@@ -1,6 +1,6 @@
 {
   "name": "tiny-storage-client",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Tiny node client to request distributed AWS S3 or the OpenStack Swift Object Storage.",
   "main": "index.js",
   "scripts": {

@@ -98,7 +98,7 @@ module.exports = (config) => {
       }
 
       _config.endpoints = _serviceCatalog.endpoints.find((element) => {
-        return element.region === _storage.region;
+        return element.region?.toLowerCase() === _storage.region?.toLowerCase();
       });
 
       if (!_config.endpoints) {
