@@ -833,7 +833,7 @@ describe('S3 SDK', function () {
       })
 
       it('should download a file from the second storage if the authentication on the main storage is not allowed', function(done) {
-        let nockRequestS1 = nock(url1S3)
+        const nockRequestS1 = nock(url1S3)
           .get('/bucket/file.docx')
           .reply(401, 'Unauthorized')
 
@@ -860,7 +860,7 @@ describe('S3 SDK', function () {
       })
 
       it('should download a file as Stream from the second storage if the authentication on the main storage is not allowed', function(done) {
-        let nockRequestS1 = nock(url1S3)
+        const nockRequestS1 = nock(url1S3)
           .get('/bucket/file.docx')
           .reply(401, 'Unauthorized')
 
@@ -888,7 +888,7 @@ describe('S3 SDK', function () {
 
       it('should download a file from the second storage if the main storage timeout', function(done) {
         storage.setTimeout(200);
-        let nockRequestS1 = nock(url1S3)
+        const nockRequestS1 = nock(url1S3)
           .get('/bucket/file.docx')
           .delayConnection(500)
           .reply(200, {});
@@ -916,7 +916,7 @@ describe('S3 SDK', function () {
       })
 
       it('should download a file from the second storage if the main storage returns any kind of error', function(done) {
-        let nockRequestS1 = nock(url1S3)
+        const nockRequestS1 = nock(url1S3)
           .get('/bucket/file.docx')
           .replyWithError('Error Message 1234');
 
@@ -963,6 +963,32 @@ describe('S3 SDK', function () {
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+          done();
+        })
+      })
+
+      it('should return an error and should not create an infinite loop of retry', function(done) {
+        storage.setTimeout(200);
+        const nockRequestS1 = nock(url1S3)
+          .get('/bucket/file.docx')
+          .replyWithError(new Error('ERR_STREAM_PREMATURE_CLOSE'))
+          .get('/')
+          .reply(200)
+          .get('/bucket/file.docx')
+          .replyWithError(new Error('TIMEOUT'))
+        const nockRequestS2 = nock(url2S3)
+          .get('/bucket/file.docx')
+          .delayConnection(400)
+          .replyWithError(new Error('TIMEOUT'));
+          
+
+        storage.downloadFile('bucket', 'file.docx', function (err, resp) {
+          assert.strictEqual(err.toString(), 'Error: All S3 storages are not available');
+          assert.strictEqual(resp, undefined);
+          const _config = storage.getConfig();
+          assert.strictEqual(_config.activeStorage, 0);
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
           done();
         })
       })
@@ -2558,6 +2584,8 @@ describe('S3 SDK', function () {
 
       const nockRequestS1 = nock(url1S3)
         .intercept("/bucket", "HEAD")
+        .reply(500, "")
+        .intercept("/", "GET")
         .reply(500, "");
       const nockRequestS2 = nock(url2S3)
         .intercept("/bucket", "HEAD")

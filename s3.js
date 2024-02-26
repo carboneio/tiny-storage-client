@@ -277,7 +277,9 @@ module.exports = (config) => {
    */
   function request (method, path, options, callback) {
 
-    if (_config.activeStorage >= _config.storages.length) {
+    if (!options?.try) { options.try = 0 }
+
+    if (_config.activeStorage >= _config.storages.length || options.try >= _config.storages.length) {
       /** Reset the index of the main storage if any storage are available */
       _config.activeStorage = 0;
       log(`S3 Storage | All storages are not available - switch to the main storage`, 'error');
@@ -346,6 +348,7 @@ module.exports = (config) => {
         if (options.originalStorage === _config.activeStorage) {
           log(`S3 Storage | Activate fallback storage: switch from "${_config.activeStorage}" to "${_config.activeStorage + 1}" | ${err?.toString() || "Status code: " + res?.statusCode}`, 'warning');
           _config.activeStorage += 1;
+          options.try += 1;
         }
         return request(method, path, options, callback);
       } else if (err) {

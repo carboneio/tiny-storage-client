@@ -1,3 +1,6 @@
+### v3.1.0
+- S3 methods patched: A request can only request one time each region.
+
 ### v3.0.1
 - Fixed SWIFT authentication: the `region` value is case insensitive, it can be `GRA` or `gra`.
 
