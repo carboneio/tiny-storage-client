@@ -157,9 +157,11 @@ Bulk delete files (Maximum 1000 keys per requests)
 
 ```js
 /**
- * Create a list of objects, it can be:
+ * Provide a list of filenames as second argument, it can be:
  * - a list of string ["object1.pdf", "object2.docx", "object3.pptx"]
  * - a list of object with `keys` as attribute name [{ "keys": "object1.pdf"}, { "keys": "object2.docx" }, { "keys": "object3.pptx" }]
+ * - Or a list of objects with `name` as attribute for the filename: [{ "name" : "file1.png" }, { "name": "file2.docx" }]
+ * - Or a list of objects with a custom Key for filenames, you must define `fileNameKey` as option (third argument). 
 */
 const files = ["object1.pdf", "object2.docx", "object3.pptx"];
 

@@ -314,6 +314,13 @@ storage.setFileMetadata('templates', 'filename.jpg', { headers: { 'Content-Type'
 Bulk delete files (Maximum 10 000 objects per requests).
 
 ```js
+/**
+ * Provide a list of filenames as second argument, it can be:
+ * - a list of string ["object1.pdf", "object2.docx", "object3.pptx"]
+ * - a list of object with `keys` as attribute name [{ "keys": "object1.pdf"}, { "keys": "object2.docx" }, { "keys": "object3.pptx" }]
+ * - Or a list of objects with `name` as attribute for the filename: [{ "name" : "file1.png" }, { "name": "file2.docx" }]
+ * - Or a list of objects with a custom Key for filenames, you must define `fileNameKey` as option (third argument). 
+*/
 const filesToDelete = [ { name: '1685696359848.jpg' }, { name: 'template-column.docx' }, { name: 'test file |1234.odt' } ]
 
 swift.deleteFiles('', filesToDelete, function(err, resp) {
