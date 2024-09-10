@@ -422,7 +422,7 @@ describe('Ovh Object Storage Swift', function () {
 
   describe('deleteFiles', function() {
     it('should deletes files', function(done){
-      const _filesToDelete = [ { name: '1685696359848.jpg' }, { name: 'invoice.docx' }, { name: 'test file |1234.odt' }]
+      const _filesToDelete = [{ 'filenameCustom1234': 'contract-2024.pdf' }, '1685696359848.jpg', { key: 'invoice.docx' }, { name: 'test file |1234.odt' }]
       const _headers = {
         'content-type': 'application/json',
         'x-trans-id': 'tx34d586803a5e4acbb9ac5-0064c7dfbc',
@@ -432,19 +432,20 @@ describe('Ovh Object Storage Swift', function () {
         'x-iplb-request-id': '53C629C3:E4CA_5762BBC9:01BB_64C7DFBC_B48B74E:1342B',
         'x-iplb-instance': '42087'
       }
-      const _returnedBody = '{"Response Status":"200 OK","Response Body":"","Number Deleted":3,"Number Not Found":0,"Errors":[]}'
+      const _returnedBody = '{"Response Status":"200 OK","Response Body":"","Number Deleted":4,"Number Not Found":0,"Errors":[]}'
 
       let firstNock = nock(publicUrlGRA)
         .defaultReplyHeaders(_headers)
         .post(/\/.*bulk-delete.*/g)
         .reply(200, (url, body) => {
+          assert.strictEqual(body.includes('container1/contract-2024.pdf'), true);
           assert.strictEqual(body.includes('container1/test%20file%20%7C1234.odt'), true);
           assert.strictEqual(body.includes('container1/invoice.docx'), true);
           assert.strictEqual(body.includes('container1/1685696359848.jpg'), true);
           return _returnedBody;
         });
 
-      storage.deleteFiles('container1', _filesToDelete, function(err, resp) {
+      storage.deleteFiles('container1', _filesToDelete, {"fileNameKey": 'filenameCustom1234'}, function(err, resp) {
         assert.strictEqual(err, null);
         assert.strictEqual(resp.statusCode, 200);
         assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));

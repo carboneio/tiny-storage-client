@@ -227,7 +227,11 @@ module.exports = (config) => {
 
    /**
     * @param {string} container Container name
-    * @param {string} objects List of files, it can be: ['file1', 'file2'] OR [{ name: 'file1' }, { name: 'file2' }] OR [{ key: 'file1' }, { key: 'file2' }]
+    * @param {Array} objects List of files, it can be:
+    *                 - A list of String, each string is the filename: ["file1.png", "file2.docx"]
+    *                 - Or a list of objects with `key` as attribute for the filename: [{"key": "file1.png"}, {"key": "file2.docx"}]
+    *                 - Or a list of objects with `name` as attribute for the filename: [{"name": "file1.png"}, {"name": "file2.docx"}]
+    *                 - Or a list of objects with a custom key for filenames, you must define `fileNameKey` as option (third argument)
     * @param {Object} options [OPTIONAL]: { headers: {}, queries: {} }
     * @param {function} callback (err, {statusCode, body, header}) => { }
     * @returns 
@@ -241,7 +245,7 @@ module.exports = (config) => {
     }
     let _filesAsText = '';
     for (let i = 0; i < objects.length; i++) {
-      const _fileName = objects[i]?.name ?? objects[i]?.key ?? objects[i];
+      const _fileName = objects[i]?.[options?.fileNameKey] ?? objects[i]?.name ?? objects[i]?.key ?? objects[i];
       if (typeof _fileName !== 'string') {
         continue;
       }

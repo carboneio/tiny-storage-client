@@ -1,3 +1,20 @@
+### v3.2.0
+- S3 and Swift `deleteFiles` improved: For the second argument, you must provide a list of files, it can be:
+  - A list of String, each string is the filename: ["file1.png", "file2.docx"]
+  - Or a list of objects with `key` as attribute for the filename: [{"key": "file1.png"}, {"key": "file2.docx"}]
+  - Or a list of objects with `name` as attribute for the filename: [{"name": "file1.png"}, {"name": "file2.docx"}]
+  - **NEW** Or a list of objects with a custom key for filenames, you must define `fileNameKey` as option (third argument). Usage example with a custom key name:
+```js
+const files = [
+  { filename: 'invoice-1.pdf'},
+  { filename: 'contract-2021.docx'},
+]
+
+storage.deleteFiles('bucket-name', files, { fileNameKey: "filename" }, (err, resp) => {
+  
+})
+```
+
 ### v3.1.0
 - S3 methods patched: A request can only request one time each region.
 

@@ -1722,15 +1722,16 @@ describe('S3 SDK', function () {
         }
 
         const _filesToDelete = [
+          { filenameCustom1234: 'contract 2024.docx' },
           { key: 'invoice 2023.pdf' },
-          { key: 'carbone(1).png' },
-          { key: 'file.txt' }
+          { name: 'carbone(1).png' },
+          'file.txt'
         ]
 
         const _expectedBody = {
           deleted: _filesToDelete.map((value) => {
             return {
-              key: value.key
+              key: value?.filenameCustom1234 ?? value?.key ?? value?.name ?? value
             }
           })
         }
@@ -1743,11 +1744,11 @@ describe('S3 SDK', function () {
             return true;
           })
           .reply(200, function(uri, body) {
-            assert.strictEqual(body, '<Delete><Object><Key>invoice 2023.pdf</Key></Object><Object><Key>carbone(1).png</Key></Object><Object><Key>file.txt</Key></Object><Quiet>false</Quiet></Delete>');
-            return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><DeleteResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Deleted><Key>invoice 2023.pdf</Key></Deleted><Deleted><Key>carbone(1).png</Key></Deleted><Deleted><Key>file.txt</Key></Deleted></DeleteResult>";
+            assert.strictEqual(body, '<Delete><Object><Key>contract 2024.docx</Key></Object><Object><Key>invoice 2023.pdf</Key></Object><Object><Key>carbone(1).png</Key></Object><Object><Key>file.txt</Key></Object><Quiet>false</Quiet></Delete>');
+            return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><DeleteResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Deleted><Key>contract 2024.docx</Key></Deleted><Deleted><Key>invoice 2023.pdf</Key></Deleted><Deleted><Key>carbone(1).png</Key></Deleted><Deleted><Key>file.txt</Key></Deleted></DeleteResult>";
           })
 
-        storage.deleteFiles('www', _filesToDelete, (err, resp) => {
+        storage.deleteFiles('www', _filesToDelete, { fileNameKey: "filenameCustom1234" }, (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(JSON.stringify(resp.body), JSON.stringify(_expectedBody));

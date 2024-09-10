@@ -225,6 +225,14 @@ module.exports = (config) => {
 
   /**
    * BULK DELETE 1000 files maximum
+   * @argument {String} bucket The bucket name
+   * @argument {Array} files List of files, it can be:
+   *                 - A list of String, each string is the filename: ["file1.png", "file2.docx"]
+   *                 - Or a list of objects with `key` as attribute for the filename: [{"key": "file1.png"}, {"key": "file2.docx"}]
+   *                 - Or a list of objects with `name` as attribute for the filename: [{"name": "file1.png"}, {"name": "file2.docx"}]
+   *                 - Or a list of objects with a custom key for filenames, you must define `fileNameKey` as option (third argument)
+   * @argument {Object} options [OPTIONAL]: { headers: {}, queries: {}, fileNameKey: '' }
+   * @argument {Function} callback (err, {statusCode, body, header}) => { }
    * @documentation https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjects.html#API_DeleteObjects_Examples
    */
   function deleteFiles (bucket, files, options, callback) {
@@ -236,7 +244,7 @@ module.exports = (config) => {
 
     let _body = '<Delete>';
     for (let i = 0; i < files.length; i++) {
-      _body += `<Object><Key>${files?.[i]?.name ?? files?.[i]?.key ?? files?.[i]}</Key></Object>`;
+      _body += `<Object><Key>${files?.[i]?.[options?.fileNameKey] ?? files?.[i]?.name ?? files?.[i]?.key ?? files?.[i]}</Key></Object>`;
     }
     _body += '<Quiet>false</Quiet></Delete>';
     options.body = _body;
