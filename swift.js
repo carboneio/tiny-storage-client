@@ -27,8 +27,8 @@ module.exports = (config) => {
    *
    * @param {function} callback function(err):void = The `err` is null by default.
    */
-  function connection (callback, originStorage = 0) {
-    const arrayArguments = [callback, originStorage];
+  function connection (callback, originStorage = 0, options) {
+    const arrayArguments = [callback, originStorage, options];
 
     if (_config.activeStorage === _config.storages.length) {
       /**  Reset the index of the actual storage */
@@ -98,7 +98,11 @@ module.exports = (config) => {
       }
 
       _config.endpoints = _serviceCatalog.endpoints.find((element) => {
-        return element.region?.toLowerCase() === _storage.region?.toLowerCase();
+        const isSameRegion = element.region?.toLowerCase() === _storage.region?.toLowerCase();
+
+        return options && options.interface
+          ? element.interface?.toLowerCase() === options.interface.toLowerCase() && isSameRegion
+          : isSameRegion;
       });
 
       if (!_config.endpoints) {
