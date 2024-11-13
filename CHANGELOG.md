@@ -1,3 +1,18 @@
+### v3.3.0
+- Added for SWIFT storage only: When calling the 'connection' function, you can now specify the interface (admin/public/internal) in the Swift configuration. This ensures that the SDK picks the correct endpoints from the Swift server, preventing inconsistencies. Example of auth configuration for Swift with interface: 
+```js
+const swift = storageSDK([{
+  username  : 'user',
+  password  : 'password',
+  authUrl   : 'url',
+  region    : 'region',
+  interface : 'admin' // or public, or internal
+}]);
+```
+- Updated dependency "aws4" version from "1.12.0" to "1.13.2"
+- Updated dev dependency "mocha/eslint/nock"
+- Lint code with new eslint configuration
+
 ### v3.2.0
 - S3 and Swift `deleteFiles` improved: For the second argument, you must provide a list of files, it can be:
   - A list of String, each string is the filename: ["file1.png", "file2.docx"]

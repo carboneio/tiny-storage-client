@@ -1,5 +1,5 @@
 /** Init retry delay for "Rock-req" tests */
-const rock   = require('rock-req');
+const _rock = require('rock-req');
 const storageSDK   = require('../index.js');
 const nock   = require('nock');
 const assert = require('assert');
@@ -12,19 +12,19 @@ const authURL   = 'https://auth.cloud.ovh.net/v3';
 const publicUrlGRA = 'https://storage.gra.cloud.ovh.net/v1/AUTH_ce3e510224d740a685cb0ae7bdb8ebc3';
 const publicUrlSBG = 'https://storage.sbg.cloud.ovh.net/v1/AUTH_ce3e510224d740a685cb0ae7bdb8ebc3';
 
-const tokenAuth = 'gAAAAABe8JlEGYPUwwOyjqgUBl11gSjDOw5VTtUZ5n8SWxghRGwakDkP_lelLfRctzyhbIFUXjsdPaGmV2xicL-9333lJUnL3M4JYlYCYMWsX3IhnLPYboyti835VdhAHQ7K_d0OC4OYvM04bvL3w_uSbkxPmL27uO0ISUgQdB_mHxoYlol8xYI'
+const tokenAuth = 'gAAAAABe8JlEGYPUwwOyjqgUBl11gSjDOw5VTtUZ5n8SWxghRGwakDkP_lelLfRctzyhbIFUXjsdPaGmV2xicL-9333lJUnL3M4JYlYCYMWsX3IhnLPYboyti835VdhAHQ7K_d0OC4OYvM04bvL3w_uSbkxPmL27uO0ISUgQdB_mHxoYlol8xYI';
 
 const fileTxt = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
 
 let _dataStreams = ['', '', '', ''];
 function resetDataStreams() {
-  _dataStreams = ['', '', '', '']
+  _dataStreams = ['', '', '', ''];
 }
 function getOutputStreamFunction (index) {
-  return function (opt, res) {
-    _dataStreams[index] = ''
+  return function (_opt, _res) {
+    _dataStreams[index] = '';
     const outputStream = new stream.Writable();
-    outputStream._write = function (chunk, encoding, done) {
+    outputStream._write = function (chunk, _encoding, done) {
       _dataStreams[index] += chunk;
       done();
     };
@@ -33,16 +33,16 @@ function getOutputStreamFunction (index) {
       console.log('Error Stream:', err.toString());
       _dataStreams[index] = '';
     });
-    return outputStream
-  }
+    return outputStream;
+  };
 }
 
-let dataStream = ''
-const outputStreamFunction = function (opt, res) {
+let dataStream = '';
+const outputStreamFunction = function (_opt, _res) {
 
-  dataStream = ''
+  dataStream = '';
   const outputStream = new stream.Writable();
-  outputStream._write = function (chunk, encoding, done) {
+  outputStream._write = function (chunk, _encoding, done) {
     dataStream += chunk;
     done();
   };
@@ -51,12 +51,12 @@ const outputStreamFunction = function (opt, res) {
     console.log('Error Stream:', err.toString());
     dataStream = '';
   });
-  return outputStream
-}
+  return outputStream;
+};
 
 
 describe('Ovh Object Storage Swift', function () {
-  let storage = storageSDK([{
+  const storage = storageSDK([{
     username                     : 'storage-1-user',
     password                     : 'storage-1-password',
     authUrl                      : authURL,
@@ -81,11 +81,11 @@ describe('Ovh Object Storage Swift', function () {
       }
     }]);
     storage.connection((err) => {
-      assert.strictEqual(err, null)
+      assert.strictEqual(err, null);
       assert.strictEqual(firstNock.pendingMocks().length, 0);
       done();
-    })
-  })
+    });
+  });
 
   describe('New instance', function() {
     it('should create 2 new instances', function () {
@@ -95,14 +95,14 @@ describe('Ovh Object Storage Swift', function () {
         authUrl                      : 'swift.gra.ovh.io',
         tenantName                   : 'storage-1-tenant',
         region                       : 'GRA'
-      })
+      });
       const _swift2 = storageSDK({
         username                     : 'storage-2-user',
         password                     : 'storage-2-password',
         authUrl                      : 'swift.sbg.ovh.io',
         tenantName                   : 'storage-2-tenant',
         region                       : 'SBG'
-      })
+      });
       assert.strictEqual(_swift1.getConfig().storages.length, 1);
       assert.strictEqual(_swift1.getConfig().storages[0].username, 'storage-1-user');
       assert.strictEqual(_swift1.getConfig().storages[0].password, 'storage-1-password');
@@ -123,7 +123,7 @@ describe('Ovh Object Storage Swift', function () {
         password                     : 'storage-1-password',
         authUrl                      : 'swift.gra.ovh.io',
         region                       : 'GRA'
-      })
+      });
       assert.strictEqual(_swift1.getConfig().storages.length, 1);
       assert.strictEqual(_swift1.getConfig().storages[0].username, 'storage-1-user');
       assert.strictEqual(_swift1.getConfig().storages[0].password, 'storage-1-password');
@@ -131,13 +131,13 @@ describe('Ovh Object Storage Swift', function () {
       assert.strictEqual(_swift1.getConfig().storages[0].region, 'GRA');
       assert.strictEqual(_swift1.getConfig().storages[0]?.tenantName, undefined);
       done();
-    })
+    });
   });
 
   describe('Connection', function () {
 
     it('should connect to object storage swift (without tenantName and the region as lowercase)', function(done) {
-      let storageTest = storageSDK([{
+      const storageTest = storageSDK([{
         username                     : 'storage-X-user',
         password                     : 'storage-X-password',
         authUrl                      : authURL,
@@ -146,27 +146,27 @@ describe('Ovh Object Storage Swift', function () {
 
       const firstNock = nock(authURL)
         .post('/auth/tokens')
-        .reply(200, function (uri, body) {
+        .reply(200, function (_uri, body) {
           assert.strictEqual(!!body?.auth?.scope, false);
-          assert.strictEqual(JSON.stringify(body), '{"auth":{"identity":{"methods":["password"],"password":{"user":{"name":"storage-X-user","domain":{"id":"default"},"password":"storage-X-password"}}}}}')
+          assert.strictEqual(JSON.stringify(body), '{"auth":{"identity":{"methods":["password"],"password":{"user":{"name":"storage-X-user","domain":{"id":"default"},"password":"storage-X-password"}}}}}');
           return connectionResultSuccessV3;
         }, { "X-Subject-Token": tokenAuth });
       
       storageTest.connection((err) => {
         assert.strictEqual(err, null);
-        assert.deepStrictEqual(storage.getConfig().token, tokenAuth);
-        assert.deepStrictEqual(storage.getConfig().endpoints.url, connectionResultSuccessV3.token.catalog[9].endpoints[20].url);
+        assert.deepStrictEqual(storageTest.getConfig().token, tokenAuth);
+        assert.deepStrictEqual(storageTest.getConfig().endpoints.url, connectionResultSuccessV3.token.catalog[9].endpoints[20].url);
         assert.strictEqual(firstNock.pendingMocks().length, 0);
         done();
       });
     });
 
-    it('should connect to object storage swift (with a tenantName)', function (done) {
+    it('should connect to object storage swift with a tenantName', function (done) {
       const firstNock = nock(authURL)
         .post('/auth/tokens')
-        .reply(200, function (uri, body) {
+        .reply(200, function (_uri, body) {
           assert.strictEqual(!!body?.auth?.scope, true);
-          assert.strictEqual(JSON.stringify(body), '{"auth":{"identity":{"methods":["password"],"password":{"user":{"name":"storage-1-user","domain":{"id":"default"},"password":"storage-1-password"}}},"scope":{"project":{"domain":{"id":"default"},"name":"storage-1-tenant"}}}}')
+          assert.strictEqual(JSON.stringify(body), '{"auth":{"identity":{"methods":["password"],"password":{"user":{"name":"storage-1-user","domain":{"id":"default"},"password":"storage-1-password"}}},"scope":{"project":{"domain":{"id":"default"},"name":"storage-1-tenant"}}}}');
           return connectionResultSuccessV3;
         }, { "X-Subject-Token": tokenAuth });
 
@@ -178,6 +178,69 @@ describe('Ovh Object Storage Swift', function () {
         done();
       });
     });
+
+    it('should connect to object storage swift with the interface (ADMIN)', function(done) {
+      /** ADMIN INTERFACE */
+      const storageTest = storageSDK([{
+        username  : 'storage-X-user',
+        password  : 'storage-X-password',
+        authUrl   : authURL,
+        region    : 'DE',
+        interface : 'ADMIN'
+      }]);
+
+      const firstNock = nock(authURL)
+        .post('/auth/tokens')
+        .reply(200, function (_uri, body) {
+          assert.strictEqual(!!body?.auth?.scope, false);
+          assert.strictEqual(JSON.stringify(body), '{"auth":{"identity":{"methods":["password"],"password":{"user":{"name":"storage-X-user","domain":{"id":"default"},"password":"storage-X-password"}}}}}');
+          return connectionResultSuccessV3;
+        }, { "X-Subject-Token": tokenAuth });
+      
+      storageTest.connection((err) => {
+        assert.strictEqual(err, null);
+        console.log(storageTest.getConfig());
+        assert.deepStrictEqual(storageTest.getConfig().token, tokenAuth);
+        assert.deepStrictEqual(storageTest.getConfig().endpoints.region, 'DE');
+        assert.deepStrictEqual(storageTest.getConfig().endpoints.interface, 'admin');
+        assert.deepStrictEqual(storageTest.getConfig().endpoints.url.includes("_admin"), true);
+        assert.deepStrictEqual(storageTest.getConfig().endpoints.url, connectionResultSuccessV3.token.catalog[9].endpoints[3].url);
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
+        done();
+      });
+    });
+
+    it('should connect to object storage swift with the interface (PUBLIC)', function(done) {
+      /** PUBLIC INTERFACE */
+      const storageTest = storageSDK([{
+        username  : 'storage-X-user',
+        password  : 'storage-X-password',
+        authUrl   : authURL,
+        region    : 'DE',
+        interface : 'PUBLIC'
+      }]);
+
+      const firstNock = nock(authURL)
+        .post('/auth/tokens')
+        .reply(200, function (_uri, body) {
+          assert.strictEqual(!!body?.auth?.scope, false);
+          assert.strictEqual(JSON.stringify(body), '{"auth":{"identity":{"methods":["password"],"password":{"user":{"name":"storage-X-user","domain":{"id":"default"},"password":"storage-X-password"}}}}}');
+          return connectionResultSuccessV3;
+        }, { "X-Subject-Token": tokenAuth });
+      
+      storageTest.connection((err) => {
+        assert.strictEqual(err, null);
+        console.log(storageTest.getConfig());
+        assert.deepStrictEqual(storageTest.getConfig().token, tokenAuth);
+        assert.deepStrictEqual(storageTest.getConfig().endpoints.region, 'DE');
+        assert.deepStrictEqual(storageTest.getConfig().endpoints.interface, 'public');
+        assert.deepStrictEqual(storageTest.getConfig().endpoints.url.includes("_public"), true);
+        assert.deepStrictEqual(storageTest.getConfig().endpoints.url, connectionResultSuccessV3.token.catalog[9].endpoints[10].url);
+        assert.strictEqual(firstNock.pendingMocks().length, 0);
+        done();
+      });
+    });
+
 
     it('should return an error if status code is not a 200', function (done) {
       const firstNock = nock(authURL)
@@ -232,7 +295,7 @@ describe('Ovh Object Storage Swift', function () {
         authUrl                      : authURL,
         tenantName                   : 'storage-2-tenant',
         region                       : 'SBG'
-      }])
+      }]);
 
       const firstNock = nock(authURL)
         .post('/auth/tokens')
@@ -264,7 +327,7 @@ describe('Ovh Object Storage Swift', function () {
         authUrl                      : authURL,
         tenantName                   : 'storage-2-tenant',
         region                       : 'SBG'
-      }])
+      }]);
 
       const firstNock = nock(authURL)
         .post('/auth/tokens')
@@ -298,7 +361,7 @@ describe('Ovh Object Storage Swift', function () {
         authUrl                      : authURL,
         tenantName                   : 'storage-2-tenant',
         region                       : 'SBG'
-      }])
+      }]);
 
       const firstNock = nock(authURL)
         .post('/auth/tokens')
@@ -331,7 +394,7 @@ describe('Ovh Object Storage Swift', function () {
         authUrl                      : authURL,
         tenantName                   : 'storage-2-tenant',
         region                       : 'SBG'
-      }])
+      }]);
 
       const firstNock = nock(authURL)
         .post('/auth/tokens')
@@ -363,7 +426,7 @@ describe('Ovh Object Storage Swift', function () {
         authUrl                      : authURL,
         tenantName                   : 'storage-2-tenant',
         region                       : 'SBG'
-      }])
+      }]);
 
       const firstNock = nock(authURL)
         .post('/auth/tokens')
@@ -395,7 +458,7 @@ describe('Ovh Object Storage Swift', function () {
         authUrl                      : authURL,
         tenantName                   : 'storage-2-tenant',
         region                       : 'SBG'
-      }])
+      }]);
 
       const firstNock = nock(authURL)
         .post('/auth/tokens')
@@ -422,7 +485,7 @@ describe('Ovh Object Storage Swift', function () {
 
   describe('deleteFiles', function() {
     it('should deletes files', function(done){
-      const _filesToDelete = [{ 'filenameCustom1234': 'contract-2024.pdf' }, '1685696359848.jpg', { key: 'invoice.docx' }, { name: 'test file |1234.odt' }]
+      const _filesToDelete = [{ 'filenameCustom1234': 'contract-2024.pdf' }, '1685696359848.jpg', { key: 'invoice.docx' }, { name: 'test file |1234.odt' }];
       const _headers = {
         'content-type': 'application/json',
         'x-trans-id': 'tx34d586803a5e4acbb9ac5-0064c7dfbc',
@@ -431,13 +494,13 @@ describe('Ovh Object Storage Swift', function () {
         'transfer-encoding': 'chunked',
         'x-iplb-request-id': '53C629C3:E4CA_5762BBC9:01BB_64C7DFBC_B48B74E:1342B',
         'x-iplb-instance': '42087'
-      }
-      const _returnedBody = '{"Response Status":"200 OK","Response Body":"","Number Deleted":4,"Number Not Found":0,"Errors":[]}'
+      };
+      const _returnedBody = '{"Response Status":"200 OK","Response Body":"","Number Deleted":4,"Number Not Found":0,"Errors":[]}';
 
-      let firstNock = nock(publicUrlGRA)
+      const firstNock = nock(publicUrlGRA)
         .defaultReplyHeaders(_headers)
         .post(/\/.*bulk-delete.*/g)
-        .reply(200, (url, body) => {
+        .reply(200, (_url, body) => {
           assert.strictEqual(body.includes('container1/contract-2024.pdf'), true);
           assert.strictEqual(body.includes('container1/test%20file%20%7C1234.odt'), true);
           assert.strictEqual(body.includes('container1/invoice.docx'), true);
@@ -452,18 +515,18 @@ describe('Ovh Object Storage Swift', function () {
         assert.strictEqual(JSON.stringify(resp.body), _returnedBody);
         assert.strictEqual(firstNock.pendingMocks().length, 0);
         done();
-      })
-    })
+      });
+    });
 
     it('should deletes files (ALIAS)', function(done){
-      const _filesToDelete = [ { name: '1685696359848.jpg' }, { name: 'invoice.docx' }, { name: 'test file |1234.odt' }]
-      const _headers = { 'content-type': 'application/json' }
-      const _returnedBody = '{"Response Status":"200 OK","Response Body":"","Number Deleted":3,"Number Not Found":0,"Errors":[]}'
+      const _filesToDelete = [ { name: '1685696359848.jpg' }, { name: 'invoice.docx' }, { name: 'test file |1234.odt' }];
+      const _headers = { 'content-type': 'application/json' };
+      const _returnedBody = '{"Response Status":"200 OK","Response Body":"","Number Deleted":3,"Number Not Found":0,"Errors":[]}';
 
-      let firstNock = nock(publicUrlGRA)
+      const firstNock = nock(publicUrlGRA)
         .defaultReplyHeaders(_headers)
         .post(/\/.*bulk-delete.*/g)
-        .reply(200, (url, body) => {
+        .reply(200, (_url, body) => {
           assert.strictEqual(body.includes('invoices-gra-1234/test%20file%20%7C1234.odt'), true);
           assert.strictEqual(body.includes('invoices-gra-1234/invoice.docx'), true);
           assert.strictEqual(body.includes('invoices-gra-1234/1685696359848.jpg'), true);
@@ -477,12 +540,12 @@ describe('Ovh Object Storage Swift', function () {
         assert.strictEqual(JSON.stringify(resp.body), _returnedBody);
         assert.strictEqual(firstNock.pendingMocks().length, 0);
         done();
-      })
-    })
+      });
+    });
 
     it('should return the raw result as XML (Buffer)', function(done) {
-      const _returnedBodyXML = '<delete><number_deleted>0</number_deleted><number_not_found>3</number_not_found><response_body></response_body><response_status>200 OK</response_status><errors></errors></delete>'
-      const _filesToDelete = [ { name: '1685696359848.jpg' }, { name: 'invoice.docx' }, { name: 'test file |1234.odt' }]
+      const _returnedBodyXML = '<delete><number_deleted>0</number_deleted><number_not_found>3</number_not_found><response_body></response_body><response_status>200 OK</response_status><errors></errors></delete>';
+      const _filesToDelete = [ { name: '1685696359848.jpg' }, { name: 'invoice.docx' }, { name: 'test file |1234.odt' }];
       const _headers = {
         'content-type': 'application/xml',
         'x-trans-id': 'tx76823c2b380f47bab5908-0064c7e60d',
@@ -491,11 +554,11 @@ describe('Ovh Object Storage Swift', function () {
         'transfer-encoding': 'chunked',
         'x-iplb-request-id': '53C629C3:E61B_3626E64B:01BB_64C7E60D_151EBF17:1C316',
         'x-iplb-instance': '33618'
-      }
-      let firstNock = nock(publicUrlGRA)
+      };
+      const firstNock = nock(publicUrlGRA)
         .defaultReplyHeaders(_headers)
         .post(/\/.*bulk-delete.*/g)
-        .reply(200, (url, body) => {
+        .reply(200, (_url, body) => {
           assert.strictEqual(body.includes('container1/test%20file%20%7C1234.odt'), true);
           assert.strictEqual(body.includes('container1/invoice.docx'), true);
           assert.strictEqual(body.includes('container1/1685696359848.jpg'), true);
@@ -509,7 +572,7 @@ describe('Ovh Object Storage Swift', function () {
         assert.strictEqual(resp.body.toString(), _returnedBodyXML);
         assert.strictEqual(firstNock.pendingMocks().length, 0);
         done();
-      })
+      });
     });
 
     describe("MUTLIPLE STORAGES", function () {
@@ -538,22 +601,22 @@ describe('Ovh Object Storage Swift', function () {
           }
         }]);
         storage.connection((err) => {
-          assert.strictEqual(err, null)
+          assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
-        })
-      })
+        });
+      });
 
       it('should reconnect automatically to the second object storage if the first storage authentication fail and should retry the request (alias)', function (done) {
-        const _filesToDelete = [ { name: '1685696359848.jpg' }, { name: 'invoice.docx' }, { name: 'test file |1234.odt' }]
-        const _headers = { 'content-type': 'application/json' }
-        const _returnedBody = '{"Response Status":"200 OK","Response Body":"","Number Deleted":3,"Number Not Found":0,"Errors":[]}'
-        let firstNock = nock(publicUrlGRA)
+        const _filesToDelete = [ { name: '1685696359848.jpg' }, { name: 'invoice.docx' }, { name: 'test file |1234.odt' }];
+        const _headers = { 'content-type': 'application/json' };
+        const _returnedBody = '{"Response Status":"200 OK","Response Body":"","Number Deleted":3,"Number Not Found":0,"Errors":[]}';
+        const firstNock = nock(publicUrlGRA)
           /** 1 */
           .post(/\/.*bulk-delete.*/g)
-          .reply(401)
+          .reply(401);
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           /** 2 */
           .post('/auth/tokens')
           .reply(500, {})
@@ -561,11 +624,11 @@ describe('Ovh Object Storage Swift', function () {
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .defaultReplyHeaders(_headers)
           /** 4 */
           .post(/\/.*bulk-delete.*/g)
-          .reply(200, (url, body) => {
+          .reply(200, (_url, body) => {
             assert.strictEqual(body.includes('invoices-aws-paris/test%20file%20%7C1234.odt'), true);
             assert.strictEqual(body.includes('invoices-aws-paris/invoice.docx'), true);
             assert.strictEqual(body.includes('invoices-aws-paris/1685696359848.jpg'), true);
@@ -581,7 +644,7 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
           done();
-        })
+        });
       });
     });
     
@@ -609,7 +672,7 @@ describe('Ovh Object Storage Swift', function () {
         'x-iplb-instance': '12309'
       };
 
-      let firstNock = nock(publicUrlGRA)
+      const firstNock = nock(publicUrlGRA)
         .defaultReplyHeaders(_headers)
         .intercept("/container1", "HEAD")
         .reply(_statusCode);
@@ -646,7 +709,7 @@ describe('Ovh Object Storage Swift', function () {
         'x-iplb-instance': '12309'
       };
 
-      let firstNock = nock(publicUrlGRA)
+      const firstNock = nock(publicUrlGRA)
         .defaultReplyHeaders(_headers)
         .intercept("/invoices-gra-1234", "HEAD")
         .reply(_statusCode);
@@ -672,9 +735,9 @@ describe('Ovh Object Storage Swift', function () {
         date: 'Mon, 31 Jul 2023 15:35:56 GMT',
         'x-iplb-request-id': '53C629C3:E222_3626E64B:01BB_64C7D4DB_169B0C5F:9CAC',
         'x-iplb-instance': '12308'
-      }
+      };
 
-      let firstNock = nock(publicUrlGRA)
+      const firstNock = nock(publicUrlGRA)
         .defaultReplyHeaders(_headers)
         .intercept("/container1", "HEAD")
         .reply(_statusCode);
@@ -687,7 +750,7 @@ describe('Ovh Object Storage Swift', function () {
         assert.strictEqual(firstNock.pendingMocks().length, 0);
         done();
       });
-    })
+    });
   });
 
   describe('listBuckets', function() {
@@ -707,7 +770,7 @@ describe('Ovh Object Storage Swift', function () {
         date: 'Mon, 31 Jul 2023 15:19:28 GMT',
         'x-iplb-request-id': '53C629C3:E186_5762BBC9:01BB_64C7D0FF_C1131CF:1263E',
         'x-iplb-instance': '48126'
-      }
+      };
       const _body = [
         {
           name: 'container1',
@@ -727,8 +790,8 @@ describe('Ovh Object Storage Swift', function () {
           bytes: 431631,
           last_modified: '2022-01-12T13:58:50.868090'
         }
-      ]
-      let firstNock = nock(publicUrlGRA)
+      ];
+      const firstNock = nock(publicUrlGRA)
         .defaultReplyHeaders(_headers)
         .intercept("/", "GET")
         .reply(200, JSON.stringify(_body));
@@ -745,22 +808,22 @@ describe('Ovh Object Storage Swift', function () {
         assert.strictEqual(resp.body[2].name, _body[2].name);
         assert.strictEqual(firstNock.pendingMocks().length, 0);
         done();
-      })
+      });
     });
 
     it('should return an error if the body returned is not a valid JSON format (should never happen)', function (done) {
-      const _expectedBody = "BODY NOT VALID"
-      let firstNock = nock(publicUrlGRA)
+      const _expectedBody = "BODY NOT VALID";
+      const firstNock = nock(publicUrlGRA)
         .defaultReplyHeaders({ 'content-type': 'application/json; charset=utf-8' })
         .intercept("/", "GET")
         .reply(200, _expectedBody);
 
       storage.listBuckets(function(err, resp) {
-        assert.strictEqual(err.toString(), 'Error: Listing bucket JSON parse: SyntaxError: Unexpected token B in JSON at position 0');
+        assert.strictEqual(err.toString(), 'Error: Listing bucket JSON parse: SyntaxError: Unexpected token \'B\', "BODY NOT VALID" is not valid JSON');
         assert.strictEqual(resp.body.toString(), _expectedBody);
         assert.strictEqual(firstNock.pendingMocks().length, 0);
         done();
-      })
+      });
     });
 
     it('should return the body as Buffer if the content-type is `application/xml`', function(done) {
@@ -780,9 +843,9 @@ describe('Ovh Object Storage Swift', function () {
         date: 'Mon, 31 Jul 2023 15:19:28 GMT',
         'x-iplb-request-id': '53C629C3:E186_5762BBC9:01BB_64C7D0FF_C1131CF:1263E',
         'x-iplb-instance': '48126'
-      }
+      };
 
-      let firstNock = nock(publicUrlGRA)
+      const firstNock = nock(publicUrlGRA)
         .defaultReplyHeaders(_headers)
         .intercept("/", "GET")
         .reply(200, _expectedBody);
@@ -794,7 +857,7 @@ describe('Ovh Object Storage Swift', function () {
         assert.strictEqual(resp.body.toString(), _expectedBody);
         assert.strictEqual(firstNock.pendingMocks().length, 0);
         done();
-      })
+      });
     });
   });
 
@@ -803,9 +866,9 @@ describe('Ovh Object Storage Swift', function () {
       let i = 0;
 
       storage.setLogFunction(function (message) {
-        assert.strictEqual(message.length > 0, true)
+        assert.strictEqual(message.length > 0, true);
         i++;
-      })
+      });
 
       const firstMock = nock(authURL)
         .post('/auth/tokens')
@@ -831,8 +894,8 @@ describe('Ovh Object Storage Swift', function () {
         password   : 'Wick',
         tenantName : 'toto',
         region     : 'GRA22'
-      }
-      storage.setStorages(_expectedConfig)
+      };
+      storage.setStorages(_expectedConfig);
       const _storages = storage.getStorages();
       assert.strictEqual(_storages[0].authUrl, _expectedConfig.authUrl);
       assert.strictEqual(_storages[0].username, _expectedConfig.username);
@@ -854,7 +917,7 @@ describe('Ovh Object Storage Swift', function () {
 
     describe("SINGLE STORAGE", function () {
       it('should return a list of files as a JSON', function (done) {
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .defaultReplyHeaders({
             'content-type': 'application/json',
           })
@@ -868,19 +931,19 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(JSON.stringify(resp.headers), '{"content-type":"application/json"}');
           const _files = resp.body;
-          assert.strictEqual(_files.length > 0, true)
-          assert.strictEqual(_files[0].bytes > 0, true)
-          assert.strictEqual(_files[0].last_modified.length > 0, true)
-          assert.strictEqual(_files[0].hash.length > 0, true)
-          assert.strictEqual(_files[0].name.length > 0, true)
-          assert.strictEqual(_files[0].content_type.length > 0, true)
+          assert.strictEqual(_files.length > 0, true);
+          assert.strictEqual(_files[0].bytes > 0, true);
+          assert.strictEqual(_files[0].last_modified.length > 0, true);
+          assert.strictEqual(_files[0].hash.length > 0, true);
+          assert.strictEqual(_files[0].name.length > 0, true);
+          assert.strictEqual(_files[0].content_type.length > 0, true);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
         });
       });
 
       it('should return a list of files as a JSON (ALIAS)', function (done) {
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .defaultReplyHeaders({
             'content-type': 'application/json',
           })
@@ -894,12 +957,12 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(JSON.stringify(resp.headers), '{"content-type":"application/json"}');
           const _files = resp.body;
-          assert.strictEqual(_files.length > 0, true)
-          assert.strictEqual(_files[0].bytes > 0, true)
-          assert.strictEqual(_files[0].last_modified.length > 0, true)
-          assert.strictEqual(_files[0].hash.length > 0, true)
-          assert.strictEqual(_files[0].name.length > 0, true)
-          assert.strictEqual(_files[0].content_type.length > 0, true)
+          assert.strictEqual(_files.length > 0, true);
+          assert.strictEqual(_files[0].bytes > 0, true);
+          assert.strictEqual(_files[0].last_modified.length > 0, true);
+          assert.strictEqual(_files[0].hash.length > 0, true);
+          assert.strictEqual(_files[0].name.length > 0, true);
+          assert.strictEqual(_files[0].content_type.length > 0, true);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
         });
@@ -907,7 +970,7 @@ describe('Ovh Object Storage Swift', function () {
 
 
       it('should return a list of files as a XML and the header is overwritted', function (done) {
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .defaultReplyHeaders({
             'content-type': 'application/xml',
           })
@@ -921,24 +984,24 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(JSON.stringify(resp.headers), '{"content-type":"application/xml"}');
           const _files = resp.body.toString();
-          assert.strictEqual(_files.includes('<?xml'), true)
-          assert.strictEqual(_files.includes('<container name="templates">'), true)
-          assert.strictEqual(_files.includes('<bytes>47560</bytes>'), true)
+          assert.strictEqual(_files.includes('<?xml'), true);
+          assert.strictEqual(_files.includes('<container name="templates">'), true);
+          assert.strictEqual(_files.includes('<bytes>47560</bytes>'), true);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
         });
-      })
+      });
 
 
       it('should return a list of files with a prefix', function (done) {
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .defaultReplyHeaders({
             'content-type': 'application/json',
           })
           .get('/templates')
           .query({ prefix : 'keys' })
           .reply(200, () => {
-            let _file = fs.readFileSync(path.join(__dirname, 'assets', 'files.json'))
+            const _file = fs.readFileSync(path.join(__dirname, 'assets', 'files.json'));
             return Buffer.from(JSON.stringify(JSON.parse(_file.toString()).filter((el => el.name.includes('keys')))));
           });
 
@@ -956,7 +1019,7 @@ describe('Ovh Object Storage Swift', function () {
       });
 
       it('should reconnect automatically to the storage', function (done) {
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .defaultReplyHeaders({
             'content-type': 'application/json',
           })
@@ -967,7 +1030,7 @@ describe('Ovh Object Storage Swift', function () {
             return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
           });
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -976,12 +1039,12 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(JSON.stringify(resp.headers), '{"content-type":"application/json"}');
           const _files = resp.body;
-          assert.strictEqual(_files.length > 0, true)
-          assert.strictEqual(_files[0].bytes > 0, true)
-          assert.strictEqual(_files[0].last_modified.length > 0, true)
-          assert.strictEqual(_files[0].hash.length > 0, true)
-          assert.strictEqual(_files[0].name.length > 0, true)
-          assert.strictEqual(_files[0].content_type.length > 0, true)
+          assert.strictEqual(_files.length > 0, true);
+          assert.strictEqual(_files[0].bytes > 0, true);
+          assert.strictEqual(_files[0].last_modified.length > 0, true);
+          assert.strictEqual(_files[0].hash.length > 0, true);
+          assert.strictEqual(_files[0].name.length > 0, true);
+          assert.strictEqual(_files[0].content_type.length > 0, true);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           done();
@@ -989,7 +1052,7 @@ describe('Ovh Object Storage Swift', function () {
       });
 
       it('should reconnect automatically to the storage with a prefix and delimiter as option/query parameters', function (done) {
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .defaultReplyHeaders({
             'content-type': 'application/json',
           })
@@ -1005,7 +1068,7 @@ describe('Ovh Object Storage Swift', function () {
               }]));
           });
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -1014,7 +1077,7 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(JSON.stringify(resp.headers), '{"content-type":"application/json"}');
           const _files = resp.body;
-          assert.strictEqual(_files[0].subdir, 'keys/')
+          assert.strictEqual(_files[0].subdir, 'keys/');
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           done();
@@ -1026,7 +1089,7 @@ describe('Ovh Object Storage Swift', function () {
         const firstNock = nock(publicUrlGRA)
           .get('/templates')
           .delayConnection(500)
-          .reply(200, {})
+          .reply(200, {});
 
         storage.listFiles('templates', (err, resp) => {
           assert.strictEqual(err.toString(), 'Error: Object Storages are not available');
@@ -1038,9 +1101,9 @@ describe('Ovh Object Storage Swift', function () {
       });
 
       it('should return an error if the single storage return any kind of errors', function (done) {
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .get('/templates')
-          .replyWithError('Error Message 1234')
+          .replyWithError('Error Message 1234');
 
         storage.listFiles('templates', (err, resp) => {
           assert.strictEqual(err.toString(), 'Error: Object Storages are not available');
@@ -1052,8 +1115,8 @@ describe('Ovh Object Storage Swift', function () {
       });
 
       it('should return an error if the container does not exist', function (done) {
-        const _expectedContent = '<html><h1>Not Found</h1><p>The resource could not be found.</p></html>'
-        let firstNock = nock(publicUrlGRA)
+        const _expectedContent = '<html><h1>Not Found</h1><p>The resource could not be found.</p></html>';
+        const firstNock = nock(publicUrlGRA)
           .get('/templates')
           .reply(404, _expectedContent);
 
@@ -1091,20 +1154,20 @@ describe('Ovh Object Storage Swift', function () {
           region                       : 'SBG'
         }]);
         storage.connection((err) => {
-          assert.strictEqual(err, null)
+          assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
-        })
-      })
+        });
+      });
 
       it('should reconnect automatically to the second object storage if the first storage authentication fail and should retry the request', function (done) {
 
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           /** 1 */
           .get('/templates')
-          .reply(401, 'Unauthorized')
+          .reply(401, 'Unauthorized');
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           /** 2 */
           .post('/auth/tokens')
           .reply(500, {})
@@ -1112,7 +1175,7 @@ describe('Ovh Object Storage Swift', function () {
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .defaultReplyHeaders({
             'content-type': 'application/json',
           })
@@ -1128,12 +1191,12 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(JSON.stringify(resp.headers), '{"content-type":"application/json"}');
           const _files = resp.body;
-          assert.strictEqual(_files.length > 0, true)
-          assert.strictEqual(_files[0].bytes > 0, true)
-          assert.strictEqual(_files[0].last_modified.length > 0, true)
-          assert.strictEqual(_files[0].hash.length > 0, true)
-          assert.strictEqual(_files[0].name.length > 0, true)
-          assert.strictEqual(_files[0].content_type.length > 0, true)
+          assert.strictEqual(_files.length > 0, true);
+          assert.strictEqual(_files[0].bytes > 0, true);
+          assert.strictEqual(_files[0].last_modified.length > 0, true);
+          assert.strictEqual(_files[0].hash.length > 0, true);
+          assert.strictEqual(_files[0].name.length > 0, true);
+          assert.strictEqual(_files[0].content_type.length > 0, true);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -1144,15 +1207,15 @@ describe('Ovh Object Storage Swift', function () {
 
       it('should retry the request with the second object storage if the first object storage return a 500 error', function (done) {
 
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .get('/templates')
           .reply(500, {});
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .defaultReplyHeaders({
             'content-type': 'application/json',
           })
@@ -1167,12 +1230,12 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(JSON.stringify(resp.headers), '{"content-type":"application/json"}');
           const _files = resp.body;
-          assert.strictEqual(_files.length > 0, true)
-          assert.strictEqual(_files[0].bytes > 0, true)
-          assert.strictEqual(_files[0].last_modified.length > 0, true)
-          assert.strictEqual(_files[0].hash.length > 0, true)
-          assert.strictEqual(_files[0].name.length > 0, true)
-          assert.strictEqual(_files[0].content_type.length > 0, true)
+          assert.strictEqual(_files.length > 0, true);
+          assert.strictEqual(_files[0].bytes > 0, true);
+          assert.strictEqual(_files[0].last_modified.length > 0, true);
+          assert.strictEqual(_files[0].hash.length > 0, true);
+          assert.strictEqual(_files[0].name.length > 0, true);
+          assert.strictEqual(_files[0].content_type.length > 0, true);
 
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
@@ -1188,16 +1251,16 @@ describe('Ovh Object Storage Swift', function () {
 
         storage.setTimeout(200);
 
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .get('/templates')
           .delayConnection(500)
           .reply(200, {});
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .defaultReplyHeaders({
             'content-type': 'application/json',
           })
@@ -1211,12 +1274,12 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(JSON.stringify(resp.headers), '{"content-type":"application/json"}');
           const _files = resp.body;
-          assert.strictEqual(_files.length > 0, true)
-          assert.strictEqual(_files[0].bytes > 0, true)
-          assert.strictEqual(_files[0].last_modified.length > 0, true)
-          assert.strictEqual(_files[0].hash.length > 0, true)
-          assert.strictEqual(_files[0].name.length > 0, true)
-          assert.strictEqual(_files[0].content_type.length > 0, true)
+          assert.strictEqual(_files.length > 0, true);
+          assert.strictEqual(_files[0].bytes > 0, true);
+          assert.strictEqual(_files[0].last_modified.length > 0, true);
+          assert.strictEqual(_files[0].hash.length > 0, true);
+          assert.strictEqual(_files[0].name.length > 0, true);
+          assert.strictEqual(_files[0].content_type.length > 0, true);
 
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
@@ -1228,16 +1291,16 @@ describe('Ovh Object Storage Swift', function () {
 
       it('should retry the request with the second storage if the first storage return any kind of errors', function (done) {
 
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .get('/templates')
           .replyWithError('Error Message 1234');
 
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .defaultReplyHeaders({
             'content-type': 'application/json',
           })
@@ -1251,8 +1314,8 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(JSON.stringify(resp.headers), '{"content-type":"application/json"}');
           const _files = resp.body;
-          assert.strictEqual(_files.length > 0, true)
-          assert.strictEqual(_files[0].bytes > 0, true)
+          assert.strictEqual(_files.length > 0, true);
+          assert.strictEqual(_files[0].bytes > 0, true);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -1282,20 +1345,20 @@ describe('Ovh Object Storage Swift', function () {
 
         it('should request the object storage in parallel and fallback to SBG if the main storage return any kind of errors', function (done) {
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .get('/templates')
             .replyWithError('Error Message 1234')
             .get('/templates')
             .replyWithError('Error Message 1234');
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .defaultReplyHeaders({
               'content-type': 'application/json',
             })
@@ -1308,28 +1371,28 @@ describe('Ovh Object Storage Swift', function () {
               return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
             });
 
-          let promise1 = getListFilesPromise()
-          let promise2 = getListFilesPromise()
+          const promise1 = getListFilesPromise();
+          const promise2 = getListFilesPromise();
 
 
           Promise.all([promise1, promise2]).then(results => {
-            assert.strictEqual(results.length, 2)
+            assert.strictEqual(results.length, 2);
 
             const _listFiles1 = results[0];
-            assert.strictEqual(_listFiles1.length > 0, true)
-            assert.strictEqual(_listFiles1[0].bytes > 0, true)
-            assert.strictEqual(_listFiles1[0].last_modified.length > 0, true)
-            assert.strictEqual(_listFiles1[0].hash.length > 0, true)
-            assert.strictEqual(_listFiles1[0].name.length > 0, true)
-            assert.strictEqual(_listFiles1[0].content_type.length > 0, true)
+            assert.strictEqual(_listFiles1.length > 0, true);
+            assert.strictEqual(_listFiles1[0].bytes > 0, true);
+            assert.strictEqual(_listFiles1[0].last_modified.length > 0, true);
+            assert.strictEqual(_listFiles1[0].hash.length > 0, true);
+            assert.strictEqual(_listFiles1[0].name.length > 0, true);
+            assert.strictEqual(_listFiles1[0].content_type.length > 0, true);
 
             const _listFiles2 = results[1];
-            assert.strictEqual(_listFiles2.length > 0, true)
-            assert.strictEqual(_listFiles2[0].bytes > 0, true)
-            assert.strictEqual(_listFiles2[0].last_modified.length > 0, true)
-            assert.strictEqual(_listFiles2[0].hash.length > 0, true)
-            assert.strictEqual(_listFiles2[0].name.length > 0, true)
-            assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
+            assert.strictEqual(_listFiles2.length > 0, true);
+            assert.strictEqual(_listFiles2[0].bytes > 0, true);
+            assert.strictEqual(_listFiles2[0].last_modified.length > 0, true);
+            assert.strictEqual(_listFiles2[0].hash.length > 0, true);
+            assert.strictEqual(_listFiles2[0].name.length > 0, true);
+            assert.strictEqual(_listFiles2[0].content_type.length > 0, true);
 
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -1344,15 +1407,15 @@ describe('Ovh Object Storage Swift', function () {
 
         it('should request the object storage in parallel and fallback to SBG if the authentication of the main storage return an error', function (done) {
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .get('/templates')
             .reply(401, 'Unauthorized')
             .get('/templates')
             .reply(401, 'Unauthorized')
             .get('/templates')
-            .reply(401, 'Unauthorized')
+            .reply(401, 'Unauthorized');
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(500, {})
             .post('/auth/tokens')
@@ -1366,7 +1429,7 @@ describe('Ovh Object Storage Swift', function () {
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .defaultReplyHeaders({
               'content-type': 'application/json',
             })
@@ -1387,44 +1450,44 @@ describe('Ovh Object Storage Swift', function () {
               return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
             });
 
-          let promise1 = getListFilesPromise()
-          let promise2 = getListFilesPromise()
-          let promise3 = getListFilesPromise()
+          const promise1 = getListFilesPromise();
+          const promise2 = getListFilesPromise();
+          const promise3 = getListFilesPromise();
 
           Promise.all([promise1, promise2, promise3]).then(async results => {
-            assert.strictEqual(results.length, 3)
+            assert.strictEqual(results.length, 3);
 
             const _listFiles1 = results[0];
-            assert.strictEqual(_listFiles1.length > 0, true)
-            assert.strictEqual(_listFiles1[0].bytes > 0, true)
-            assert.strictEqual(_listFiles1[0].last_modified.length > 0, true)
-            assert.strictEqual(_listFiles1[0].hash.length > 0, true)
-            assert.strictEqual(_listFiles1[0].name.length > 0, true)
-            assert.strictEqual(_listFiles1[0].content_type.length > 0, true)
+            assert.strictEqual(_listFiles1.length > 0, true);
+            assert.strictEqual(_listFiles1[0].bytes > 0, true);
+            assert.strictEqual(_listFiles1[0].last_modified.length > 0, true);
+            assert.strictEqual(_listFiles1[0].hash.length > 0, true);
+            assert.strictEqual(_listFiles1[0].name.length > 0, true);
+            assert.strictEqual(_listFiles1[0].content_type.length > 0, true);
 
             const _listFiles2 = results[1];
-            assert.strictEqual(_listFiles2.length > 0, true)
-            assert.strictEqual(_listFiles2[0].bytes > 0, true)
-            assert.strictEqual(_listFiles2[0].last_modified.length > 0, true)
-            assert.strictEqual(_listFiles2[0].hash.length > 0, true)
-            assert.strictEqual(_listFiles2[0].name.length > 0, true)
-            assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
+            assert.strictEqual(_listFiles2.length > 0, true);
+            assert.strictEqual(_listFiles2[0].bytes > 0, true);
+            assert.strictEqual(_listFiles2[0].last_modified.length > 0, true);
+            assert.strictEqual(_listFiles2[0].hash.length > 0, true);
+            assert.strictEqual(_listFiles2[0].name.length > 0, true);
+            assert.strictEqual(_listFiles2[0].content_type.length > 0, true);
 
             const _listFiles3 = results[2];
-            assert.strictEqual(_listFiles3.length > 0, true)
-            assert.strictEqual(_listFiles3[0].bytes > 0, true)
-            assert.strictEqual(_listFiles3[0].last_modified.length > 0, true)
-            assert.strictEqual(_listFiles3[0].hash.length > 0, true)
-            assert.strictEqual(_listFiles3[0].name.length > 0, true)
-            assert.strictEqual(_listFiles3[0].content_type.length > 0, true)
+            assert.strictEqual(_listFiles3.length > 0, true);
+            assert.strictEqual(_listFiles3[0].bytes > 0, true);
+            assert.strictEqual(_listFiles3[0].last_modified.length > 0, true);
+            assert.strictEqual(_listFiles3[0].hash.length > 0, true);
+            assert.strictEqual(_listFiles3[0].name.length > 0, true);
+            assert.strictEqual(_listFiles3[0].content_type.length > 0, true);
 
             const _listFiles4 = await getListFilesPromise();
-            assert.strictEqual(_listFiles4.length > 0, true)
-            assert.strictEqual(_listFiles4[0].bytes > 0, true)
-            assert.strictEqual(_listFiles4[0].last_modified.length > 0, true)
-            assert.strictEqual(_listFiles4[0].hash.length > 0, true)
-            assert.strictEqual(_listFiles4[0].name.length > 0, true)
-            assert.strictEqual(_listFiles4[0].content_type.length > 0, true)
+            assert.strictEqual(_listFiles4.length > 0, true);
+            assert.strictEqual(_listFiles4[0].bytes > 0, true);
+            assert.strictEqual(_listFiles4[0].last_modified.length > 0, true);
+            assert.strictEqual(_listFiles4[0].hash.length > 0, true);
+            assert.strictEqual(_listFiles4[0].name.length > 0, true);
+            assert.strictEqual(_listFiles4[0].content_type.length > 0, true);
 
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -1438,7 +1501,7 @@ describe('Ovh Object Storage Swift', function () {
 
           storage.setTimeout(200);
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .get('/templates')
             .delayConnection(500)
             .reply(200, {})
@@ -1446,13 +1509,13 @@ describe('Ovh Object Storage Swift', function () {
             .delayConnection(500)
             .reply(200, {});
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .defaultReplyHeaders({
               'content-type': 'application/json',
             })
@@ -1466,28 +1529,28 @@ describe('Ovh Object Storage Swift', function () {
             });
 
 
-          let promise1 = getListFilesPromise()
-          let promise2 = getListFilesPromise()
+          const promise1 = getListFilesPromise();
+          const promise2 = getListFilesPromise();
 
 
           Promise.all([promise1, promise2]).then(results => {
-            assert.strictEqual(results.length, 2)
+            assert.strictEqual(results.length, 2);
 
             const _listFiles1 = results[0];
-            assert.strictEqual(_listFiles1.length > 0, true)
-            assert.strictEqual(_listFiles1[0].bytes > 0, true)
-            assert.strictEqual(_listFiles1[0].last_modified.length > 0, true)
-            assert.strictEqual(_listFiles1[0].hash.length > 0, true)
-            assert.strictEqual(_listFiles1[0].name.length > 0, true)
-            assert.strictEqual(_listFiles1[0].content_type.length > 0, true)
+            assert.strictEqual(_listFiles1.length > 0, true);
+            assert.strictEqual(_listFiles1[0].bytes > 0, true);
+            assert.strictEqual(_listFiles1[0].last_modified.length > 0, true);
+            assert.strictEqual(_listFiles1[0].hash.length > 0, true);
+            assert.strictEqual(_listFiles1[0].name.length > 0, true);
+            assert.strictEqual(_listFiles1[0].content_type.length > 0, true);
 
             const _listFiles2 = results[1];
-            assert.strictEqual(_listFiles2.length > 0, true)
-            assert.strictEqual(_listFiles2[0].bytes > 0, true)
-            assert.strictEqual(_listFiles2[0].last_modified.length > 0, true)
-            assert.strictEqual(_listFiles2[0].hash.length > 0, true)
-            assert.strictEqual(_listFiles2[0].name.length > 0, true)
-            assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
+            assert.strictEqual(_listFiles2.length > 0, true);
+            assert.strictEqual(_listFiles2[0].bytes > 0, true);
+            assert.strictEqual(_listFiles2[0].last_modified.length > 0, true);
+            assert.strictEqual(_listFiles2[0].hash.length > 0, true);
+            assert.strictEqual(_listFiles2[0].name.length > 0, true);
+            assert.strictEqual(_listFiles2[0].content_type.length > 0, true);
 
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -1502,19 +1565,19 @@ describe('Ovh Object Storage Swift', function () {
 
         it('should request the object storage in parallel and fallback to SBG if the main storage return a 500 error', function (done) {
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .get('/templates')
             .reply(500, {})
             .get('/templates')
             .reply(500, {});
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .defaultReplyHeaders({
               'content-type': 'application/json',
             })
@@ -1527,28 +1590,28 @@ describe('Ovh Object Storage Swift', function () {
               return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
             });
 
-          let promise1 = getListFilesPromise(0)
-          let promise2 = getListFilesPromise(0)
+          const promise1 = getListFilesPromise(0);
+          const promise2 = getListFilesPromise(0);
 
 
           Promise.all([promise1, promise2]).then(results => {
-            assert.strictEqual(results.length, 2)
+            assert.strictEqual(results.length, 2);
 
             const _listFiles1 = results[0];
-            assert.strictEqual(_listFiles1.length > 0, true)
-            assert.strictEqual(_listFiles1[0].bytes > 0, true)
-            assert.strictEqual(_listFiles1[0].last_modified.length > 0, true)
-            assert.strictEqual(_listFiles1[0].hash.length > 0, true)
-            assert.strictEqual(_listFiles1[0].name.length > 0, true)
-            assert.strictEqual(_listFiles1[0].content_type.length > 0, true)
+            assert.strictEqual(_listFiles1.length > 0, true);
+            assert.strictEqual(_listFiles1[0].bytes > 0, true);
+            assert.strictEqual(_listFiles1[0].last_modified.length > 0, true);
+            assert.strictEqual(_listFiles1[0].hash.length > 0, true);
+            assert.strictEqual(_listFiles1[0].name.length > 0, true);
+            assert.strictEqual(_listFiles1[0].content_type.length > 0, true);
 
             const _listFiles2 = results[1];
-            assert.strictEqual(_listFiles2.length > 0, true)
-            assert.strictEqual(_listFiles2[0].bytes > 0, true)
-            assert.strictEqual(_listFiles2[0].last_modified.length > 0, true)
-            assert.strictEqual(_listFiles2[0].hash.length > 0, true)
-            assert.strictEqual(_listFiles2[0].name.length > 0, true)
-            assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
+            assert.strictEqual(_listFiles2.length > 0, true);
+            assert.strictEqual(_listFiles2[0].bytes > 0, true);
+            assert.strictEqual(_listFiles2[0].last_modified.length > 0, true);
+            assert.strictEqual(_listFiles2[0].hash.length > 0, true);
+            assert.strictEqual(_listFiles2[0].name.length > 0, true);
+            assert.strictEqual(_listFiles2[0].content_type.length > 0, true);
 
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -1563,13 +1626,13 @@ describe('Ovh Object Storage Swift', function () {
 
         it('should request the object storage in parallel and fallback to SBG if the authentication of the main storage return does not return the object storage list [Special case and should never happen]', function (done) {
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .get('/templates')
             .reply(401, 'Unauthorized')
             .get('/templates')
-            .reply(401, 'Unauthorized')
+            .reply(401, 'Unauthorized');
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3WithoutObjectStore)
             .post('/auth/tokens')
@@ -1577,10 +1640,10 @@ describe('Ovh Object Storage Swift', function () {
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
+            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .defaultReplyHeaders({
               'content-type': 'application/json',
             })
@@ -1591,29 +1654,29 @@ describe('Ovh Object Storage Swift', function () {
             .get('/templates')
             .reply(200, () => {
               return fs.createReadStream(path.join(__dirname, 'assets', 'files.json'));
-            })
+            });
 
-          let promise1 = getListFilesPromise()
-          let promise2 = getListFilesPromise()
+          const promise1 = getListFilesPromise();
+          const promise2 = getListFilesPromise();
 
           Promise.all([promise1, promise2]).then(async results => {
-            assert.strictEqual(results.length, 2)
+            assert.strictEqual(results.length, 2);
 
             const _listFiles1 = results[0];
-            assert.strictEqual(_listFiles1.length > 0, true)
-            assert.strictEqual(_listFiles1[0].bytes > 0, true)
-            assert.strictEqual(_listFiles1[0].last_modified.length > 0, true)
-            assert.strictEqual(_listFiles1[0].hash.length > 0, true)
-            assert.strictEqual(_listFiles1[0].name.length > 0, true)
-            assert.strictEqual(_listFiles1[0].content_type.length > 0, true)
+            assert.strictEqual(_listFiles1.length > 0, true);
+            assert.strictEqual(_listFiles1[0].bytes > 0, true);
+            assert.strictEqual(_listFiles1[0].last_modified.length > 0, true);
+            assert.strictEqual(_listFiles1[0].hash.length > 0, true);
+            assert.strictEqual(_listFiles1[0].name.length > 0, true);
+            assert.strictEqual(_listFiles1[0].content_type.length > 0, true);
 
             const _listFiles2 = results[1];
-            assert.strictEqual(_listFiles2.length > 0, true)
-            assert.strictEqual(_listFiles2[0].bytes > 0, true)
-            assert.strictEqual(_listFiles2[0].last_modified.length > 0, true)
-            assert.strictEqual(_listFiles2[0].hash.length > 0, true)
-            assert.strictEqual(_listFiles2[0].name.length > 0, true)
-            assert.strictEqual(_listFiles2[0].content_type.length > 0, true)
+            assert.strictEqual(_listFiles2.length > 0, true);
+            assert.strictEqual(_listFiles2[0].bytes > 0, true);
+            assert.strictEqual(_listFiles2[0].last_modified.length > 0, true);
+            assert.strictEqual(_listFiles2[0].hash.length > 0, true);
+            assert.strictEqual(_listFiles2[0].name.length > 0, true);
+            assert.strictEqual(_listFiles2[0].content_type.length > 0, true);
 
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -1690,7 +1753,7 @@ describe('Ovh Object Storage Swift', function () {
       });
 
       it('should reconnect automatically to object storage and retry', function (done) {
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .defaultReplyHeaders({
             'content-length': '1492',
             'accept-ranges': 'bytes',
@@ -1708,7 +1771,7 @@ describe('Ovh Object Storage Swift', function () {
             return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
           });
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -1731,7 +1794,7 @@ describe('Ovh Object Storage Swift', function () {
         const firstNock = nock(publicUrlGRA)
           .get('/templates/test.odt')
           .delayConnection(500)
-          .reply(200, {})
+          .reply(200, {});
 
         storage.downloadFile('templates', 'test.odt', (err, resp) => {
           assert.strictEqual(err.message, 'Object Storages are not available');
@@ -1792,19 +1855,19 @@ describe('Ovh Object Storage Swift', function () {
           region                       : 'SBG'
         }]);
         storage.connection((err) => {
-          assert.strictEqual(err, null)
+          assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
-        })
-      })
+        });
+      });
 
       it('should reconnect automatically to the second object storage if the first storage authentication fail and should retry the request', function(done){
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           /** 1 */
           .get('/templates/test.odt')
           .reply(401, 'Unauthorized');
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           /** 2 */
           .post('/auth/tokens')
           .reply(500, {})
@@ -1812,7 +1875,7 @@ describe('Ovh Object Storage Swift', function () {
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           /** 4 */
           .defaultReplyHeaders({
             'content-length': '1492',
@@ -1845,20 +1908,20 @@ describe('Ovh Object Storage Swift', function () {
         });
 
 
-      })
+      });
 
       it('should retry the request with the second object storage if the first object storage return a 500 error', function(done){
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .get('/templates/test2.odt')
           .reply(500, () => {
             return '';
           });
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .defaultReplyHeaders({
             'content-length': '1492',
             'accept-ranges': 'bytes',
@@ -1888,20 +1951,20 @@ describe('Ovh Object Storage Swift', function () {
           assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
           done();
         });
-      })
+      });
 
       it('should retry the request with the second object storage if the first object storage timeout', function(done){
         storage.setTimeout(200);
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .get('/templates/test.odt')
           .delayConnection(500)
           .reply(200, {});
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .defaultReplyHeaders({
             'content-length': '1492',
             'accept-ranges': 'bytes',
@@ -1932,18 +1995,18 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
           done();
         });
-      })
+      });
 
       it('should retry the request with the second storage if the first storage return any kind of errors', function (done) {
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .get('/templates/test.odt')
           .replyWithError('Error Message 1234');
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .defaultReplyHeaders({
             'content-length': '1492',
             'accept-ranges': 'bytes',
@@ -1995,19 +2058,19 @@ describe('Ovh Object Storage Swift', function () {
 
         it('should request the object storage in parallel and fallback to SBG if the main storage return any kind of errors', function (done) {
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .get('/templates/test.odt')
             .replyWithError('Error Message 1234')
             .get('/templates/test.odt')
             .replyWithError('Error Message 1234');
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .defaultReplyHeaders({
               'content-length': '1492',
               'accept-ranges': 'bytes',
@@ -2027,11 +2090,11 @@ describe('Ovh Object Storage Swift', function () {
               return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
             });
 
-          let promise1 = getDownloadFilePromise()
-          let promise2 = getDownloadFilePromise()
+          const promise1 = getDownloadFilePromise();
+          const promise2 = getDownloadFilePromise();
 
           Promise.all([promise1, promise2]).then(results => {
-            assert.strictEqual(results.length, 2)
+            assert.strictEqual(results.length, 2);
             assert.strictEqual(results[0].statusCode, 200);
             assert.strictEqual(results[0].body.toString(), 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
             assert.strictEqual(results[0].headers['etag'].length > 0, true);
@@ -2057,13 +2120,13 @@ describe('Ovh Object Storage Swift', function () {
 
         it('should request the object storage in parallel and fallback to SBG if the authentication of the main storage return an error', function (done) {
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .get('/templates/test.odt')
             .reply(401, 'Unauthorized')
             .get('/templates/test.odt')
             .reply(401, 'Unauthorized');
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(500, {})
             .post('/auth/tokens')
@@ -2073,7 +2136,7 @@ describe('Ovh Object Storage Swift', function () {
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .defaultReplyHeaders({
               'content-length': '1492',
               'accept-ranges': 'bytes',
@@ -2093,8 +2156,8 @@ describe('Ovh Object Storage Swift', function () {
               return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
             });
 
-          let promise1 = getDownloadFilePromise()
-          let promise2 = getDownloadFilePromise()
+          const promise1 = getDownloadFilePromise();
+          const promise2 = getDownloadFilePromise();
 
           Promise.all([promise1, promise2]).then(async results => {
             assert.strictEqual(results.length, 2);
@@ -2122,7 +2185,7 @@ describe('Ovh Object Storage Swift', function () {
 
           storage.setTimeout(200);
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .get('/templates/test.odt')
             .delayConnection(500)
             .reply(200, {})
@@ -2130,13 +2193,13 @@ describe('Ovh Object Storage Swift', function () {
             .delayConnection(500)
             .reply(200, {});
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .defaultReplyHeaders({
               'content-length': '1492',
               'accept-ranges': 'bytes',
@@ -2156,8 +2219,8 @@ describe('Ovh Object Storage Swift', function () {
               return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
             });
 
-          let promise1 = getDownloadFilePromise()
-          let promise2 = getDownloadFilePromise()
+          const promise1 = getDownloadFilePromise();
+          const promise2 = getDownloadFilePromise();
 
 
           Promise.all([promise1, promise2]).then(results => {
@@ -2187,19 +2250,19 @@ describe('Ovh Object Storage Swift', function () {
 
         it('should request the object storage in parallel and fallback to SBG if the main storage return a 500 error', function (done) {
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .get('/templates/test.odt')
             .reply(500, {})
             .get('/templates/test.odt')
             .reply(500, {});
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .defaultReplyHeaders({
               'content-length': '1492',
               'accept-ranges': 'bytes',
@@ -2219,8 +2282,8 @@ describe('Ovh Object Storage Swift', function () {
               return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
             });
 
-          let promise1 = getDownloadFilePromise()
-          let promise2 = getDownloadFilePromise()
+          const promise1 = getDownloadFilePromise();
+          const promise2 = getDownloadFilePromise();
 
 
           Promise.all([promise1, promise2]).then(results => {
@@ -2261,7 +2324,7 @@ describe('Ovh Object Storage Swift', function () {
     
         const firstNock = nock(publicUrlGRA)
           .put('/templates/test.odt')
-          .reply(201, (uri, requestBody) => {
+          .reply(201, (_uri, requestBody) => {
             assert.strictEqual(requestBody, _fileTxt.toString());
             return '';
           });
@@ -2277,7 +2340,7 @@ describe('Ovh Object Storage Swift', function () {
     
         const firstNock = nock(publicUrlGRA)
           .put('/invoices-gra-1234/test.odt')
-          .reply(201, (uri, requestBody) => {
+          .reply(201, (_uri, requestBody) => {
             assert.strictEqual(requestBody, _fileTxt.toString());
             return '';
           });
@@ -2293,7 +2356,7 @@ describe('Ovh Object Storage Swift', function () {
       
         const firstNock = nock(publicUrlGRA)
           .put('/templates/test.odt')
-          .reply(201, (uri, requestBody) => {
+          .reply(201, (_uri, requestBody) => {
             assert.strictEqual(requestBody, _fileTxt.toString());
             return '';
           });
@@ -2309,7 +2372,7 @@ describe('Ovh Object Storage Swift', function () {
 
         const firstNock = nock(publicUrlGRA)
           .put('/templates/test.odt')
-          .reply(201, (uri, requestBody) => {
+          .reply(201, (_uri, requestBody) => {
             assert.strictEqual(requestBody, _fileTxt.toString());
             return '';
           });
@@ -2322,13 +2385,13 @@ describe('Ovh Object Storage Swift', function () {
       });
 
       it('should reconnect automatically if the token is invalid and retry', function (done) {
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .put('/templates/test.odt')
           .reply(401, 'Unauthorized')
           .put('/templates/test.odt')
           .reply(201, '');
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -2345,7 +2408,7 @@ describe('Ovh Object Storage Swift', function () {
         const firstNock = nock(publicUrlGRA)
           .put('/templates/test.odt')
           .delayConnection(500)
-          .reply(200, {})
+          .reply(200, {});
 
         storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err) => {
           assert.strictEqual(err.message, 'Object Storages are not available');
@@ -2356,13 +2419,13 @@ describe('Ovh Object Storage Swift', function () {
 
 
       it('should write file on server from a local path with query parameters and params', function (done) {
-        const _headers = { ETag: "md5CheckSum" }
-        const _queries = { temp_url_expires: "1440619048" }
+        const _headers = { ETag: "md5CheckSum" };
+        const _queries = { temp_url_expires: "1440619048" };
 
         const firstNock = nock(publicUrlGRA, { reqheaders: _headers })
           .put('/templates/test.odt')
           .query(_queries)
-          .reply(201, (uri, requestBody) => {
+          .reply(201, (_uri, requestBody) => {
             assert.strictEqual(requestBody, _fileTxt.toString());
             return '';
           });
@@ -2415,21 +2478,21 @@ describe('Ovh Object Storage Swift', function () {
       });
 
       it('should return an error if the MD5 etag is not correct', function (done) {
-        const _expectedResult = '<html><h1>Unprocessable Entity</h1><p>Unable to process the contained instructions</p></html>'
+        const _expectedResult = '<html><h1>Unprocessable Entity</h1><p>Unable to process the contained instructions</p></html>';
         const firstNock = nock(publicUrlGRA)
           .put('/templates/test.odt')
           .reply(422, _expectedResult);
 
         storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err, resp) => {
           assert.strictEqual(err, null);
-          assert.strictEqual(resp.statusCode, 422)
-          assert.strictEqual(resp.body.toString(), _expectedResult)
-          assert.strictEqual(JSON.stringify(resp.headers), '{}')
+          assert.strictEqual(resp.statusCode, 422);
+          assert.strictEqual(resp.body.toString(), _expectedResult);
+          assert.strictEqual(JSON.stringify(resp.headers), '{}');
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
         });
       });
-    })
+    });
 
     describe("MULTIPLE STORAGES", function () {
 
@@ -2460,21 +2523,21 @@ describe('Ovh Object Storage Swift', function () {
           }
         }]);
         storage.connection((err) => {
-          assert.strictEqual(err, null)
+          assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
-        })
-      })
+        });
+      });
 
       it('should reconnect automatically to the second object storage if the first storage authentication fail and should retry the request', function(done){
 
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           /** 1 */
           .put('/templates/test.odt')
-          .reply(401, 'Unauthorized')
+          .reply(401, 'Unauthorized');
 
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           /** 2 */
           .post('/auth/tokens')
           .reply(500, {})
@@ -2482,32 +2545,32 @@ describe('Ovh Object Storage Swift', function () {
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           /** 4 */
           .put('/templates/test.odt')
           .reply(201, '');
 
         storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err, resp) => {
           assert.strictEqual(err, null);
-          assert.strictEqual(resp.statusCode, 201)
-          assert.strictEqual(resp.body.toString(), '')
-          assert.strictEqual(JSON.stringify(resp.headers), '{}')
+          assert.strictEqual(resp.statusCode, 201);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(JSON.stringify(resp.headers), '{}');
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
           done();
         });
-      })
+      });
 
       it('should reconnect automatically to the second object storage if the first storage authentication fail and should retry the request (Bucket ALIAS)', function(done){
 
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           /** 1 */
           .put('/invoices-gra-12345/test.odt')
-          .reply(401, 'Unauthorized')
+          .reply(401, 'Unauthorized');
 
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           /** 2 */
           .post('/auth/tokens')
           .reply(500, {})
@@ -2515,102 +2578,102 @@ describe('Ovh Object Storage Swift', function () {
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           /** 4 */
           .put('/invoices-sbg-12345/test.odt')
           .reply(201, '');
 
         storage.uploadFile('invoices', 'test.odt', path.join(__dirname, './assets/file.txt'), (err, resp) => {
           assert.strictEqual(err, null);
-          assert.strictEqual(resp.statusCode, 201)
-          assert.strictEqual(resp.body.toString(), '')
-          assert.strictEqual(JSON.stringify(resp.headers), '{}')
+          assert.strictEqual(resp.statusCode, 201);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(JSON.stringify(resp.headers), '{}');
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
           done();
         });
-      })
+      });
 
       it('should retry the request with the second object storage if the first object storage return a 500 error', function(done){
 
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .put('/templates/test.odt')
           .reply(500, {});
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .put('/templates/test.odt')
           .reply(201, '');
 
         storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err, resp) => {
           assert.strictEqual(err, null);
-          assert.strictEqual(resp.statusCode, 201)
-          assert.strictEqual(resp.body.toString(), '')
-          assert.strictEqual(JSON.stringify(resp.headers), '{}')
+          assert.strictEqual(resp.statusCode, 201);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(JSON.stringify(resp.headers), '{}');
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
           done();
         });
-      })
+      });
 
 
 
       it('should retry the request with the second object storage if the first object storage timeout', function(done){
         storage.setTimeout(200);
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .put('/templates/test.odt')
           .delayConnection(500)
           .reply(200, {});
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .put('/templates/test.odt')
           .reply(201, '');
 
         storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err, resp) => {
           assert.strictEqual(err, null);
-          assert.strictEqual(resp.statusCode, 201)
-          assert.strictEqual(resp.body.toString(), '')
-          assert.strictEqual(JSON.stringify(resp.headers), '{}')
+          assert.strictEqual(resp.statusCode, 201);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(JSON.stringify(resp.headers), '{}');
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
           done();
         });
-      })
+      });
 
       it('should retry the request with the second storage if the first storage return any kind of errors', function (done) {
         const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
 
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .put('/templates/test.odt')
           .replyWithError('Error Message 1234');
 
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .put('/templates/test.odt')
-          .reply(201, (uri, requestBody) => {
+          .reply(201, (_uri, requestBody) => {
             assert.strictEqual(requestBody, _expectedFileContent.toString());
             return '';
           });
 
         storage.uploadFile('templates', 'test.odt', path.join(__dirname, './assets/file.txt'), (err, resp) => {
           assert.strictEqual(err, null);
-          assert.strictEqual(resp.statusCode, 201)
-          assert.strictEqual(resp.body.toString(), '')
-          assert.strictEqual(JSON.stringify(resp.headers), '{}')
+          assert.strictEqual(resp.statusCode, 201);
+          assert.strictEqual(resp.body.toString(), '');
+          assert.strictEqual(JSON.stringify(resp.headers), '{}');
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -2637,43 +2700,43 @@ describe('Ovh Object Storage Swift', function () {
         it('should request the object storage in parallel and fallback to SBG if the main storage return any kind of errors', function (done) {
           const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .put('/templates/test.odt')
             .replyWithError('Error Message 1234')
             .put('/templates/test.odt')
             .replyWithError('Error Message 1234');
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .put('/templates/test.odt')
-            .reply(201, (uri, requestBody) => {
+            .reply(201, (_uri, requestBody) => {
               assert.strictEqual(requestBody, _expectedFileContent.toString());
               return '';
             })
             .put('/templates/test.odt')
-            .reply(201, (uri, requestBody) => {
+            .reply(201, (_uri, requestBody) => {
               assert.strictEqual(requestBody, _expectedFileContent.toString());
               return '';
             });
 
-          let promise1 = uploadFilePromise()
-          let promise2 = uploadFilePromise()
+          const promise1 = uploadFilePromise();
+          const promise2 = uploadFilePromise();
 
 
           Promise.all([promise1, promise2]).then(results => {
             assert.strictEqual(results.length, 2);
-            assert.strictEqual(results[0].statusCode, 201)
-            assert.strictEqual(results[0].body.toString(), '')
-            assert.strictEqual(JSON.stringify(results[0].headers), '{}')
-            assert.strictEqual(results[1].statusCode, 201)
-            assert.strictEqual(results[1].body.toString(), '')
-            assert.strictEqual(JSON.stringify(results[1].headers), '{}')
+            assert.strictEqual(results[0].statusCode, 201);
+            assert.strictEqual(results[0].body.toString(), '');
+            assert.strictEqual(JSON.stringify(results[0].headers), '{}');
+            assert.strictEqual(results[1].statusCode, 201);
+            assert.strictEqual(results[1].body.toString(), '');
+            assert.strictEqual(JSON.stringify(results[1].headers), '{}');
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
@@ -2688,15 +2751,15 @@ describe('Ovh Object Storage Swift', function () {
         it('should request the object storage in parallel and fallback to SBG if the authentication of the main storage return an error', function (done) {
           const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .put('/templates/test.odt')
             .reply(401, 'Unauthorized')
             .put('/templates/test.odt')
             .reply(401, 'Unauthorized')
             .put('/templates/test.odt')
-            .reply(401, 'Unauthorized')
+            .reply(401, 'Unauthorized');
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(500, {})
             .post('/auth/tokens')
@@ -2710,52 +2773,52 @@ describe('Ovh Object Storage Swift', function () {
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .put('/templates/test.odt')
-            .reply(201, (uri, requestBody) => {
+            .reply(201, (_uri, requestBody) => {
               assert.strictEqual(requestBody, _expectedFileContent.toString());
               return '';
             })
             .put('/templates/test.odt')
-            .reply(201, (uri, requestBody) => {
+            .reply(201, (_uri, requestBody) => {
               assert.strictEqual(requestBody, _expectedFileContent.toString());
               return '';
             })
             .put('/templates/test.odt')
-            .reply(201, (uri, requestBody) => {
+            .reply(201, (_uri, requestBody) => {
               assert.strictEqual(requestBody, _expectedFileContent.toString());
               return '';
             })
             .put('/templates/test.odt')
-            .reply(201, (uri, requestBody) => {
+            .reply(201, (_uri, requestBody) => {
               assert.strictEqual(requestBody, _expectedFileContent.toString());
               return '';
             });
 
-          let promise1 = uploadFilePromise()
-          let promise2 = uploadFilePromise()
-          let promise3 = uploadFilePromise()
+          const promise1 = uploadFilePromise();
+          const promise2 = uploadFilePromise();
+          const promise3 = uploadFilePromise();
 
           Promise.all([promise1, promise2, promise3]).then(async results => {
 
             assert.strictEqual(results.length, 3);
 
-            assert.strictEqual(results[0].statusCode, 201)
-            assert.strictEqual(results[0].body.toString(), '')
-            assert.strictEqual(JSON.stringify(results[0].headers), '{}')
+            assert.strictEqual(results[0].statusCode, 201);
+            assert.strictEqual(results[0].body.toString(), '');
+            assert.strictEqual(JSON.stringify(results[0].headers), '{}');
             
-            assert.strictEqual(results[1].statusCode, 201)
-            assert.strictEqual(results[1].body.toString(), '')
-            assert.strictEqual(JSON.stringify(results[1].headers), '{}')
+            assert.strictEqual(results[1].statusCode, 201);
+            assert.strictEqual(results[1].body.toString(), '');
+            assert.strictEqual(JSON.stringify(results[1].headers), '{}');
 
-            assert.strictEqual(results[2].statusCode, 201)
-            assert.strictEqual(results[2].body.toString(), '')
-            assert.strictEqual(JSON.stringify(results[2].headers), '{}')
+            assert.strictEqual(results[2].statusCode, 201);
+            assert.strictEqual(results[2].body.toString(), '');
+            assert.strictEqual(JSON.stringify(results[2].headers), '{}');
 
-            let _result3 = await uploadFilePromise();
-            assert.strictEqual(_result3.statusCode, 201)
-            assert.strictEqual(_result3.body.toString(), '')
-            assert.strictEqual(JSON.stringify(_result3.headers), '{}')
+            const _result3 = await uploadFilePromise();
+            assert.strictEqual(_result3.statusCode, 201);
+            assert.strictEqual(_result3.body.toString(), '');
+            assert.strictEqual(JSON.stringify(_result3.headers), '{}');
 
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -2769,7 +2832,7 @@ describe('Ovh Object Storage Swift', function () {
           const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
           storage.setTimeout(10);
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .put('/templates/test.odt')
             .delayConnection(100)
             .reply(200)
@@ -2777,39 +2840,39 @@ describe('Ovh Object Storage Swift', function () {
             .delayConnection(100)
             .reply(200);
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .put('/templates/test.odt')
-            .reply(201, (uri, requestBody) => {
+            .reply(201, (_uri, requestBody) => {
               assert.strictEqual(requestBody, _expectedFileContent.toString());
               return '';
             })
             .put('/templates/test.odt')
-            .reply(201, (uri, requestBody) => {
+            .reply(201, (_uri, requestBody) => {
               assert.strictEqual(requestBody, _expectedFileContent.toString());
               return '';
             });
 
 
-          let promise1 = uploadFilePromise()
-          let promise2 = uploadFilePromise()
+          const promise1 = uploadFilePromise();
+          const promise2 = uploadFilePromise();
 
 
           Promise.all([promise1, promise2]).then(results => {
             assert.strictEqual(results.length, 2);
 
-            assert.strictEqual(results[0].statusCode, 201)
-            assert.strictEqual(results[0].body.toString(), '')
-            assert.strictEqual(JSON.stringify(results[0].headers), '{}')
+            assert.strictEqual(results[0].statusCode, 201);
+            assert.strictEqual(results[0].body.toString(), '');
+            assert.strictEqual(JSON.stringify(results[0].headers), '{}');
             
-            assert.strictEqual(results[1].statusCode, 201)
-            assert.strictEqual(results[1].body.toString(), '')
-            assert.strictEqual(JSON.stringify(results[1].headers), '{}')
+            assert.strictEqual(results[1].statusCode, 201);
+            assert.strictEqual(results[1].body.toString(), '');
+            assert.strictEqual(JSON.stringify(results[1].headers), '{}');
 
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -2825,43 +2888,43 @@ describe('Ovh Object Storage Swift', function () {
         it('should request the object storage in parallel and fallback to SBG if the main storage return a 500 error', function (done) {
           const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .put('/templates/test.odt')
             .reply(500, {})
             .put('/templates/test.odt')
             .reply(500, {});
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .put('/templates/test.odt')
-            .reply(201, (uri, requestBody) => {
+            .reply(201, (_uri, requestBody) => {
               assert.strictEqual(requestBody, _expectedFileContent.toString());
               return '';
             })
             .put('/templates/test.odt')
-            .reply(201, (uri, requestBody) => {
+            .reply(201, (_uri, requestBody) => {
               assert.strictEqual(requestBody, _expectedFileContent.toString());
               return '';
             });
 
-          let promise1 = uploadFilePromise()
-          let promise2 = uploadFilePromise()
+          const promise1 = uploadFilePromise();
+          const promise2 = uploadFilePromise();
 
           Promise.all([promise1, promise2]).then(results => {
             assert.strictEqual(results.length, 2);
             
-            assert.strictEqual(results[0].statusCode, 201)
-            assert.strictEqual(results[0].body.toString(), '')
-            assert.strictEqual(JSON.stringify(results[0].headers), '{}')
+            assert.strictEqual(results[0].statusCode, 201);
+            assert.strictEqual(results[0].body.toString(), '');
+            assert.strictEqual(JSON.stringify(results[0].headers), '{}');
             
-            assert.strictEqual(results[1].statusCode, 201)
-            assert.strictEqual(results[1].body.toString(), '')
-            assert.strictEqual(JSON.stringify(results[1].headers), '{}')
+            assert.strictEqual(results[1].statusCode, 201);
+            assert.strictEqual(results[1].body.toString(), '');
+            assert.strictEqual(JSON.stringify(results[1].headers), '{}');
 
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
@@ -2914,13 +2977,13 @@ describe('Ovh Object Storage Swift', function () {
       });
 
       it('should reconnect automatically if the token is invalid and retry', function (done) {
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .delete('/templates/test.odt')
           .reply(401, 'Unauthorized')
           .delete('/templates/test.odt')
           .reply(201, '');
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -2940,7 +3003,7 @@ describe('Ovh Object Storage Swift', function () {
         const firstNock = nock(publicUrlGRA)
           .delete('/templates/test.odt')
           .delayConnection(500)
-          .reply(200, {})
+          .reply(200, {});
 
         storage.deleteFile('templates', 'test.odt', (err, resp) => {
           assert.strictEqual(err.message, 'Object Storages are not available');
@@ -2977,7 +3040,7 @@ describe('Ovh Object Storage Swift', function () {
           done();
         });
       });
-    })
+    });
 
     describe('MULTIPLE STORAGES', function () {
 
@@ -3002,20 +3065,20 @@ describe('Ovh Object Storage Swift', function () {
           region                       : 'SBG'
         }]);
         storage.connection((err) => {
-          assert.strictEqual(err, null)
+          assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
-        })
-      })
+        });
+      });
 
       it('should reconnect automatically to the second object storage if the first storage authentication fail and should retry the request', function(done){
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           /** 1 */
           .delete('/templates/test.odt')
-          .reply(401, 'Unauthorized')
+          .reply(401, 'Unauthorized');
           /** 4 */
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           /** 2 */
           .post('/auth/tokens')
           .reply(500, {})
@@ -3023,9 +3086,9 @@ describe('Ovh Object Storage Swift', function () {
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .delete('/templates/test.odt')
-          .reply(200, {})
+          .reply(200, {});
 
 
         storage.deleteFile('templates', 'test.odt', (err) => {
@@ -3039,18 +3102,18 @@ describe('Ovh Object Storage Swift', function () {
 
       it('should retry the request with the second object storage if the first object storage return a 500 error', function(done){
 
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .delete('/templates/test.odt')
-          .reply(500, {})
+          .reply(500, {});
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .delete('/templates/test.odt')
-          .reply(200, {})
+          .reply(200, {});
 
         storage.deleteFile('templates', 'test.odt', (err) => {
           assert.strictEqual(err, null);
@@ -3059,24 +3122,24 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
           done();
         });
-      })
+      });
 
 
       it('should retry the request with the second object storage if the first object storage timeout', function(done){
 
         storage.setTimeout(200);
 
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .delete('/templates/test.odt')
           .delayConnection(500)
           .reply(200, {});
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .delete('/templates/test.odt')
           .reply(200, {});
 
@@ -3087,21 +3150,21 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
           done();
         });
-      })
+      });
 
 
 
       it('should retry the request with the second storage if the first storage return any kind of errors', function (done) {
 
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .delete('/templates/test.odt')
           .replyWithError('Error Message 1234');
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .delete('/templates/test.odt')
           .reply(200, {});
 
@@ -3133,27 +3196,27 @@ describe('Ovh Object Storage Swift', function () {
 
         it('should request the object storage in parallel and fallback to SBG if the main storage return any kind of errors', function (done) {
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .delete('/templates/test.odt')
             .replyWithError('Error Message 1234')
             .delete('/templates/test.odt')
             .replyWithError('Error Message 1234');
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .delete('/templates/test.odt')
             .reply(200)
             .delete('/templates/test.odt')
             .reply(200);
 
-          let promise1 = deleteFilePromise()
-          let promise2 = deleteFilePromise()
+          const promise1 = deleteFilePromise();
+          const promise2 = deleteFilePromise();
 
 
           Promise.all([promise1, promise2]).then(results => {
@@ -3180,15 +3243,15 @@ describe('Ovh Object Storage Swift', function () {
 
         it('should request the object storage in parallel and fallback to SBG if the authentication of the main storage return an error', function (done) {
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .delete('/templates/test.odt')
             .reply(401, 'Unauthorized')
             .delete('/templates/test.odt')
             .reply(401, 'Unauthorized')
             .delete('/templates/test.odt')
-            .reply(401, 'Unauthorized')
+            .reply(401, 'Unauthorized');
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(500, {})
             .post('/auth/tokens')
@@ -3202,7 +3265,7 @@ describe('Ovh Object Storage Swift', function () {
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .delete('/templates/test.odt')
             .reply(200)
             .delete('/templates/test.odt')
@@ -3212,9 +3275,9 @@ describe('Ovh Object Storage Swift', function () {
             .delete('/templates/test.odt')
             .reply(200);
 
-          let promise1 = deleteFilePromise()
-          let promise2 = deleteFilePromise()
-          let promise3 = deleteFilePromise()
+          const promise1 = deleteFilePromise();
+          const promise2 = deleteFilePromise();
+          const promise3 = deleteFilePromise();
 
           Promise.all([promise1, promise2, promise3]).then(async results => {
 
@@ -3231,7 +3294,7 @@ describe('Ovh Object Storage Swift', function () {
             assert.strictEqual(results[2].body.toString(), '');
             assert.strictEqual(JSON.stringify(results[2].headers), '{}');
 
-            let _result3 = await deleteFilePromise();
+            const _result3 = await deleteFilePromise();
 
             assert.strictEqual(_result3.statusCode, 200);
             assert.strictEqual(_result3.body.toString(), '');
@@ -3248,7 +3311,7 @@ describe('Ovh Object Storage Swift', function () {
         it('should request the object storage in parallel and fallback to SBG if the main storage timeout', function (done) {
           storage.setTimeout(200);
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .delete('/templates/test.odt')
             .delayConnection(500)
             .reply(200, {})
@@ -3256,21 +3319,21 @@ describe('Ovh Object Storage Swift', function () {
             .delayConnection(500)
             .reply(200, {});
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .delete('/templates/test.odt')
             .reply(200)
             .delete('/templates/test.odt')
             .reply(200);
 
 
-          let promise1 = deleteFilePromise()
-          let promise2 = deleteFilePromise()
+          const promise1 = deleteFilePromise();
+          const promise2 = deleteFilePromise();
 
 
           Promise.all([promise1, promise2]).then(results => {
@@ -3297,26 +3360,26 @@ describe('Ovh Object Storage Swift', function () {
 
         it('should request the object storage in parallel and fallback to SBG if the main storage return a 500 error', function (done) {
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .delete('/templates/test.odt')
             .reply(500, {})
             .delete('/templates/test.odt')
             .reply(500, {});
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .delete('/templates/test.odt')
             .reply(200)
             .delete('/templates/test.odt')
             .reply(200);
 
-          let promise1 = deleteFilePromise()
-          let promise2 = deleteFilePromise()
+          const promise1 = deleteFilePromise();
+          const promise2 = deleteFilePromise();
 
           Promise.all([promise1, promise2]).then(results => {
             assert.strictEqual(results.length, 2);
@@ -3405,7 +3468,7 @@ describe('Ovh Object Storage Swift', function () {
       });
 
       it('should reconnect automatically to object storage and retry', function (done) {
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .defaultReplyHeaders({
             'content-length': '1492',
             'accept-ranges': 'bytes',
@@ -3421,7 +3484,7 @@ describe('Ovh Object Storage Swift', function () {
           .intercept("/templates/test.odt", "HEAD")
           .reply(200,"OK");
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -3444,7 +3507,7 @@ describe('Ovh Object Storage Swift', function () {
         const firstNock = nock(publicUrlGRA)
           .intercept("/templates/test.odt", "HEAD")
           .delayConnection(500)
-          .reply(200)
+          .reply(200);
 
         storage.getFileMetadata('templates', 'test.odt', (err, resp) => {
           assert.notStrictEqual(err, null);
@@ -3507,19 +3570,19 @@ describe('Ovh Object Storage Swift', function () {
           region                       : 'SBG'
         }]);
         storage.connection((err) => {
-          assert.strictEqual(err, null)
+          assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
-        })
-      })
+        });
+      });
 
       it('should reconnect automatically to the second object storage if the first storage authentication fail and should retry the request', function(done){
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           /** 1 */
           .intercept("/templates/test.odt", "HEAD")
           .reply(401, 'Unauthorized');
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           /** 2 */
           .post('/auth/tokens')
           .reply(500, {})
@@ -3527,7 +3590,7 @@ describe('Ovh Object Storage Swift', function () {
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           /** 4 */
           .defaultReplyHeaders({
             'content-length': '1492',
@@ -3558,20 +3621,20 @@ describe('Ovh Object Storage Swift', function () {
         });
 
 
-      })
+      });
 
       it('should retry the request with the second object storage if the first object storage return a 500 error', function(done){
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .intercept("/templates/test2.odt", "HEAD")
           .reply(500, () => {
             return '';
           });
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .defaultReplyHeaders({
             'content-length': '1492',
             'accept-ranges': 'bytes',
@@ -3599,20 +3662,20 @@ describe('Ovh Object Storage Swift', function () {
           assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
           done();
         });
-      })
+      });
 
       it('should retry the request with the second object storage if the first object storage timeout', function(done){
         storage.setTimeout(200);
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .intercept("/templates/test.odt", "HEAD")
           .delayConnection(500)
           .reply(200);
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .defaultReplyHeaders({
             'content-length': '1492',
             'accept-ranges': 'bytes',
@@ -3641,18 +3704,18 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
           done();
         });
-      })
+      });
 
       it('should retry the request with the second storage if the first storage return any kind of errors', function (done) {
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .intercept("/templates/test.odt", "HEAD")
           .replyWithError('Error Message 1234');
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .defaultReplyHeaders({
             'content-length': '1492',
             'accept-ranges': 'bytes',
@@ -3702,19 +3765,19 @@ describe('Ovh Object Storage Swift', function () {
 
         it('should request the object storage in parallel and fallback to SBG if the main storage return any kind of errors', function (done) {
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .intercept("/templates/test.odt", "HEAD")
             .replyWithError('Error Message 1234')
             .intercept("/templates/test.odt", "HEAD")
             .replyWithError('Error Message 1234');
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .defaultReplyHeaders({
               'content-length': '1492',
               'accept-ranges': 'bytes',
@@ -3730,11 +3793,11 @@ describe('Ovh Object Storage Swift', function () {
             .intercept("/templates/test.odt", "HEAD")
             .reply(200);
 
-          let promise1 = getFileMetadataPromise()
-          let promise2 = getFileMetadataPromise()
+          const promise1 = getFileMetadataPromise();
+          const promise2 = getFileMetadataPromise();
 
           Promise.all([promise1, promise2]).then(results => {
-            assert.strictEqual(results.length, 2)
+            assert.strictEqual(results.length, 2);
             
             assert.strictEqual(results[0].statusCode, 200);
             assert.strictEqual(results[0].body.toString(), '');
@@ -3763,13 +3826,13 @@ describe('Ovh Object Storage Swift', function () {
 
         it('should request the object storage in parallel and fallback to SBG if the authentication of the main storage return an error', function (done) {
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .intercept("/templates/test.odt", "HEAD")
             .reply(401, 'Unauthorized')
             .intercept("/templates/test.odt", "HEAD")
             .reply(401, 'Unauthorized');
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(500, {})
             .post('/auth/tokens')
@@ -3779,7 +3842,7 @@ describe('Ovh Object Storage Swift', function () {
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .defaultReplyHeaders({
               'content-length': '1492',
               'accept-ranges': 'bytes',
@@ -3795,8 +3858,8 @@ describe('Ovh Object Storage Swift', function () {
             .intercept("/templates/test.odt", "HEAD")
             .reply(200);
 
-          let promise1 = getFileMetadataPromise()
-          let promise2 = getFileMetadataPromise()
+          const promise1 = getFileMetadataPromise();
+          const promise2 = getFileMetadataPromise();
 
           Promise.all([promise1, promise2]).then(async results => {
             assert.strictEqual(results.length, 2);
@@ -3827,7 +3890,7 @@ describe('Ovh Object Storage Swift', function () {
 
           storage.setTimeout(200);
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .intercept("/templates/test.odt", "HEAD")
             .delayConnection(500)
             .reply(200, {})
@@ -3835,13 +3898,13 @@ describe('Ovh Object Storage Swift', function () {
             .delayConnection(500)
             .reply(200, {});
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .defaultReplyHeaders({
               'content-length': '1492',
               'accept-ranges': 'bytes',
@@ -3857,8 +3920,8 @@ describe('Ovh Object Storage Swift', function () {
             .intercept("/templates/test.odt", "HEAD")
             .reply(200);
 
-          let promise1 = getFileMetadataPromise()
-          let promise2 = getFileMetadataPromise()
+          const promise1 = getFileMetadataPromise();
+          const promise2 = getFileMetadataPromise();
 
 
           Promise.all([promise1, promise2]).then(results => {
@@ -3891,19 +3954,19 @@ describe('Ovh Object Storage Swift', function () {
 
         it('should request the object storage in parallel and fallback to SBG if the main storage return a 500 error', function (done) {
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .intercept("/templates/test.odt", "HEAD")
             .reply(500, {})
             .intercept("/templates/test.odt", "HEAD")
             .reply(500, {});
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .defaultReplyHeaders({
               'content-length': '1492',
               'accept-ranges': 'bytes',
@@ -3919,8 +3982,8 @@ describe('Ovh Object Storage Swift', function () {
             .intercept("/templates/test.odt", "HEAD")
             .reply(200);
 
-          let promise1 = getFileMetadataPromise()
-          let promise2 = getFileMetadataPromise()
+          const promise1 = getFileMetadataPromise();
+          const promise2 = getFileMetadataPromise();
 
 
           Promise.all([promise1, promise2]).then(results => {
@@ -3960,7 +4023,7 @@ describe('Ovh Object Storage Swift', function () {
       'Content-Type': 'image/jpeg',
       'X-Object-Meta-LocationOrigin': 'Paris/France',
       'X-Delete-At': 1440619048
-    }
+    };
 
     describe("SINGLE STORAGE", function () {
       it('should set file metadata', function (done) {
@@ -3975,7 +4038,7 @@ describe('Ovh Object Storage Swift', function () {
             'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
           })
           .post('/templates/test.odt')
-          .reply(200)
+          .reply(200);
 
         storage.setFileMetadata('templates', 'test.odt', { headers: _headers }, (err, resp) => {
           assert.strictEqual(err, null);
@@ -4002,7 +4065,7 @@ describe('Ovh Object Storage Swift', function () {
             'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
           })
           .post('/invoices-gra-1234/test.odt')
-          .reply(200)
+          .reply(200);
 
         storage.setFileMetadata('invoices', 'test.odt', { headers: _headers }, (err, resp) => {
           assert.strictEqual(err, null);
@@ -4018,7 +4081,7 @@ describe('Ovh Object Storage Swift', function () {
       });
 
       it('should reconnect automatically if the token is invalid and retry', function (done) {
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
           .matchHeader('Content-Type', 'image/jpeg')
           .matchHeader('X-Delete-At', 1440619048)
@@ -4031,9 +4094,9 @@ describe('Ovh Object Storage Swift', function () {
           .post('/templates/test.odt')
           .reply(401, 'Unauthorized')
           .post('/templates/test.odt')
-          .reply(200)
+          .reply(200);
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -4060,7 +4123,7 @@ describe('Ovh Object Storage Swift', function () {
           .matchHeader('X-Delete-At', 1440619048)
           .post('/templates/test.odt')
           .delayConnection(500)
-          .reply(200)
+          .reply(200);
 
         storage.setFileMetadata('templates', 'test.odt', { headers: _headers }, (err, resp) => {
           assert.notStrictEqual(err, null);
@@ -4106,7 +4169,7 @@ describe('Ovh Object Storage Swift', function () {
           done();
         });
       });
-    })
+    });
 
     describe("MULTIPLE STORAGES", function () {
 
@@ -4131,24 +4194,24 @@ describe('Ovh Object Storage Swift', function () {
           region                       : 'SBG'
         }]);
         storage.connection((err) => {
-          assert.strictEqual(err, null)
+          assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
-        })
-      })
+        });
+      });
 
       it('should reconnect automatically to the second object storage if the first storage authentication fail and should retry the request', function(done){
 
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
           .matchHeader('Content-Type', 'image/jpeg')
           .matchHeader('X-Delete-At', 1440619048)
           /** 1 */
           .post('/templates/test.odt')
-          .reply(401, 'Unauthorized')
+          .reply(401, 'Unauthorized');
 
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           /** 2 */
           .post('/auth/tokens')
           .reply(500, {})
@@ -4156,7 +4219,7 @@ describe('Ovh Object Storage Swift', function () {
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
           .matchHeader('Content-Type', 'image/jpeg')
           .matchHeader('X-Delete-At', 1440619048)
@@ -4183,22 +4246,22 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(resp.headers['date'].length > 0, true);
           done();
         });
-      })
+      });
 
       it('should retry the request with the second object storage if the first object storage return a 500 error', function(done){
 
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
           .matchHeader('Content-Type', 'image/jpeg')
           .matchHeader('X-Delete-At', 1440619048)
           .post('/templates/test.odt')
           .reply(500, {});
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
           .matchHeader('Content-Type', 'image/jpeg')
           .matchHeader('X-Delete-At', 1440619048)
@@ -4224,13 +4287,13 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(resp.headers['date'].length > 0, true);
           done();
         });
-      })
+      });
 
 
 
       it('should retry the request with the second object storage if the first object storage timeout', function(done){
         storage.setTimeout(200);
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
           .matchHeader('Content-Type', 'image/jpeg')
           .matchHeader('X-Delete-At', 1440619048)
@@ -4238,11 +4301,11 @@ describe('Ovh Object Storage Swift', function () {
           .delayConnection(500)
           .reply(200, {});
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
           .matchHeader('Content-Type', 'image/jpeg')
           .matchHeader('X-Delete-At', 1440619048)
@@ -4268,11 +4331,11 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(resp.headers['date'].length > 0, true);
           done();
         });
-      })
+      });
 
       it('should retry the request with the second storage if the first storage return any kind of errors', function (done) {
 
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
           .matchHeader('Content-Type', 'image/jpeg')
           .matchHeader('X-Delete-At', 1440619048)
@@ -4280,11 +4343,11 @@ describe('Ovh Object Storage Swift', function () {
           .replyWithError('Error Message 1234');
 
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
           .matchHeader('Content-Type', 'image/jpeg')
           .matchHeader('X-Delete-At', 1440619048)
@@ -4332,7 +4395,7 @@ describe('Ovh Object Storage Swift', function () {
 
         it('should request the object storage in parallel and fallback to SBG if the main storage return any kind of errors', function (done) {
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .matchHeader('x-object-meta-locationorigin', 'Paris/France')
             .matchHeader('Content-Type', 'image/jpeg')
             .matchHeader('X-Delete-At', 1440619048)
@@ -4341,14 +4404,14 @@ describe('Ovh Object Storage Swift', function () {
             .post('/templates/test.odt')
             .replyWithError('Error Message 1234');
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .matchHeader('x-object-meta-locationorigin', 'Paris/France')
             .matchHeader('Content-Type', 'image/jpeg')
             .matchHeader('X-Delete-At', 1440619048)
@@ -4361,10 +4424,10 @@ describe('Ovh Object Storage Swift', function () {
             .post('/templates/test.odt')
             .reply(200)
             .post('/templates/test.odt')
-            .reply(200)
+            .reply(200);
 
-          let promise1 = setFileMetadataPromise()
-          let promise2 = setFileMetadataPromise()
+          const promise1 = setFileMetadataPromise();
+          const promise2 = setFileMetadataPromise();
 
 
           Promise.all([promise1, promise2]).then(results => {
@@ -4397,7 +4460,7 @@ describe('Ovh Object Storage Swift', function () {
 
         it('should request the object storage in parallel and fallback to SBG if the authentication of the main storage return an error', function (done) {
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .matchHeader('x-object-meta-locationorigin', 'Paris/France')
             .matchHeader('Content-Type', 'image/jpeg')
             .matchHeader('X-Delete-At', 1440619048)
@@ -4406,9 +4469,9 @@ describe('Ovh Object Storage Swift', function () {
             .post('/templates/test.odt')
             .reply(401, 'Unauthorized')
             .post('/templates/test.odt')
-            .reply(401, 'Unauthorized')
+            .reply(401, 'Unauthorized');
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(500, {})
             .post('/auth/tokens')
@@ -4422,7 +4485,7 @@ describe('Ovh Object Storage Swift', function () {
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .matchHeader('x-object-meta-locationorigin', 'Paris/France')
             .matchHeader('Content-Type', 'image/jpeg')
             .matchHeader('X-Delete-At', 1440619048)
@@ -4439,11 +4502,11 @@ describe('Ovh Object Storage Swift', function () {
             .post('/templates/test.odt')
             .reply(200)
             .post('/templates/test.odt')
-            .reply(200)
+            .reply(200);
 
-          let promise1 = setFileMetadataPromise()
-          let promise2 = setFileMetadataPromise()
-          let promise3 = setFileMetadataPromise()
+          const promise1 = setFileMetadataPromise();
+          const promise2 = setFileMetadataPromise();
+          const promise3 = setFileMetadataPromise();
 
           Promise.all([promise1, promise2, promise3]).then(async results => {
 
@@ -4471,7 +4534,7 @@ describe('Ovh Object Storage Swift', function () {
             assert.strictEqual(results[2].headers['date'].length > 0, true);
 
 
-            let _result3 = await setFileMetadataPromise();
+            const _result3 = await setFileMetadataPromise();
             assert.strictEqual(_result3.statusCode, 200);
             assert.strictEqual(_result3.body.toString(), '');
             assert.strictEqual(_result3.headers['x-trans-id'].length > 0, true);
@@ -4490,7 +4553,7 @@ describe('Ovh Object Storage Swift', function () {
         it('should request the object storage in parallel and fallback to SBG if the main storage timeout', function (done) {
           storage.setTimeout(200);
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .matchHeader('x-object-meta-locationorigin', 'Paris/France')
             .matchHeader('Content-Type', 'image/jpeg')
             .matchHeader('X-Delete-At', 1440619048)
@@ -4501,13 +4564,13 @@ describe('Ovh Object Storage Swift', function () {
             .delayConnection(500)
             .reply(200, {});
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .matchHeader('x-object-meta-locationorigin', 'Paris/France')
             .matchHeader('Content-Type', 'image/jpeg')
             .matchHeader('X-Delete-At', 1440619048)
@@ -4520,11 +4583,11 @@ describe('Ovh Object Storage Swift', function () {
             .post('/templates/test.odt')
             .reply(200)
             .post('/templates/test.odt')
-            .reply(200)
+            .reply(200);
 
 
-          let promise1 = setFileMetadataPromise()
-          let promise2 = setFileMetadataPromise()
+          const promise1 = setFileMetadataPromise();
+          const promise2 = setFileMetadataPromise();
 
 
           Promise.all([promise1, promise2]).then(results => {
@@ -4557,7 +4620,7 @@ describe('Ovh Object Storage Swift', function () {
 
         it('should request the object storage in parallel and fallback to SBG if the main storage return a 500 error', function (done) {
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .matchHeader('x-object-meta-locationorigin', 'Paris/France')
             .matchHeader('Content-Type', 'image/jpeg')
             .matchHeader('X-Delete-At', 1440619048)
@@ -4566,13 +4629,13 @@ describe('Ovh Object Storage Swift', function () {
             .post('/templates/test.odt')
             .reply(500, {});
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .matchHeader('x-object-meta-locationorigin', 'Paris/France')
             .matchHeader('Content-Type', 'image/jpeg')
             .matchHeader('X-Delete-At', 1440619048)
@@ -4585,10 +4648,10 @@ describe('Ovh Object Storage Swift', function () {
             .post('/templates/test.odt')
             .reply(200)
             .post('/templates/test.odt')
-            .reply(200)
+            .reply(200);
 
-          let promise1 = setFileMetadataPromise()
-          let promise2 = setFileMetadataPromise()
+          const promise1 = setFileMetadataPromise();
+          const promise2 = setFileMetadataPromise();
 
 
           Promise.all([promise1, promise2]).then(results => {
@@ -4628,7 +4691,7 @@ describe('Ovh Object Storage Swift', function () {
       'Content-Type': 'image/jpeg',
       'X-Object-Meta-LocationOrigin': 'Paris/France',
       'X-Delete-At': 1440619048
-    }
+    };
 
     describe("SINGLE STORAGE", function () {
       it('should set file metadata', function (done) {
@@ -4661,18 +4724,18 @@ describe('Ovh Object Storage Swift', function () {
       it('should bulk delete files from a container', function (done) {
         const _expectedBody = '' +
          '/templates/335162359311268850|a07c420feededcd9ddc5c082f7feb8add3bb0571ea8ae4c775af12ea21e8ce08\n' +
-         '/templates/335162359311268850|a07c420feededcd9ddc5c082f7feb8add3bb0571ea8ae4c775af12ea21e8ce08\n'
+         '/templates/335162359311268850|a07c420feededcd9ddc5c082f7feb8add3bb0571ea8ae4c775af12ea21e8ce08\n';
         const _expectedHeader = {
           'Content-Type': 'text/plain',
           'Accept'      : 'application/json'
-        }
+        };
         const _expectedResponse = {
           "Number Not Found": 2,
           "Response Status": "200 OK",
           "Errors": [],
           "Number Deleted": 1,
           "Response Body": ""
-        }
+        };
         const firstNock = nock(publicUrlGRA)
           .matchHeader('Content-Type', 'text/plain')
           .matchHeader('Accept', 'application/json')
@@ -4683,7 +4746,7 @@ describe('Ovh Object Storage Swift', function () {
             'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
           })
           .post("/templates?bulk-delete")
-          .reply(201, (uri, requestBody) => {
+          .reply(201, (_uri, requestBody) => {
             assert.strictEqual(requestBody, _expectedBody);
             return Buffer.from(JSON.stringify(_expectedResponse));
           });
@@ -4703,7 +4766,7 @@ describe('Ovh Object Storage Swift', function () {
 
       it('should reconnect automatically if the token is invalid and retry', function (done) {
 
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
           .matchHeader('Content-Type', 'image/jpeg')
           .matchHeader('X-Delete-At', 1440619048)
@@ -4716,9 +4779,9 @@ describe('Ovh Object Storage Swift', function () {
           .intercept("/templates/test.odt", "COPY")
           .reply(401, 'Unauthorized')
           .intercept("/templates/test.odt", "COPY")
-          .reply(200, 'OK')
+          .reply(200, 'OK');
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -4744,7 +4807,7 @@ describe('Ovh Object Storage Swift', function () {
           .matchHeader('X-Delete-At', 1440619048)
           .intercept("/templates/test.odt", "COPY")
           .delayConnection(500)
-          .reply(200)
+          .reply(200);
 
         storage.request('COPY', '/templates/test.odt', { headers: _headers }, (err, resp) => {
           assert.notStrictEqual(err, null);
@@ -4790,7 +4853,7 @@ describe('Ovh Object Storage Swift', function () {
           done();
         });
       });
-    })
+    });
 
     describe("MULTIPLE STORAGES", function () {
 
@@ -4815,24 +4878,24 @@ describe('Ovh Object Storage Swift', function () {
           region                       : 'SBG'
         }]);
         storage.connection((err) => {
-          assert.strictEqual(err, null)
+          assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
-        })
-      })
+        });
+      });
 
       it('should reconnect automatically to the second object storage if the first storage authentication fail and should retry the request', function(done){
 
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
           .matchHeader('Content-Type', 'image/jpeg')
           .matchHeader('X-Delete-At', 1440619048)
           /** 1 */
           .intercept("/templates/test.odt", "COPY")
-          .reply(401, 'Unauthorized')
+          .reply(401, 'Unauthorized');
 
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           /** 2 */
           .post('/auth/tokens')
           .reply(500, {})
@@ -4840,7 +4903,7 @@ describe('Ovh Object Storage Swift', function () {
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
           .matchHeader('Content-Type', 'image/jpeg')
           .matchHeader('X-Delete-At', 1440619048)
@@ -4867,22 +4930,22 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(resp.statusCode, 201);
           done();
         });
-      })
+      });
 
       it('should retry the request with the second object storage if the first object storage return a 500 error', function(done){
 
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
           .matchHeader('Content-Type', 'image/jpeg')
           .matchHeader('X-Delete-At', 1440619048)
           .intercept("/templates/test.odt", "COPY")
           .reply(500, {});
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
           .matchHeader('Content-Type', 'image/jpeg')
           .matchHeader('X-Delete-At', 1440619048)
@@ -4908,13 +4971,13 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(resp.statusCode, 201);
           done();
         });
-      })
+      });
 
 
 
       it('should retry the request with the second object storage if the first object storage timeout', function(done){
         storage.setTimeout(200);
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
           .matchHeader('Content-Type', 'image/jpeg')
           .matchHeader('X-Delete-At', 1440619048)
@@ -4922,11 +4985,11 @@ describe('Ovh Object Storage Swift', function () {
           .delayConnection(500)
           .reply(200, {});
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
           .matchHeader('Content-Type', 'image/jpeg')
           .matchHeader('X-Delete-At', 1440619048)
@@ -4952,11 +5015,11 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(resp.statusCode, 201);
           done();
         });
-      })
+      });
 
       it('should retry the request with the second storage if the first storage return any kind of errors', function (done) {
 
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
           .matchHeader('Content-Type', 'image/jpeg')
           .matchHeader('X-Delete-At', 1440619048)
@@ -4964,11 +5027,11 @@ describe('Ovh Object Storage Swift', function () {
           .replyWithError('Error Message 1234');
 
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
           .matchHeader('Content-Type', 'image/jpeg')
           .matchHeader('X-Delete-At', 1440619048)
@@ -5016,7 +5079,7 @@ describe('Ovh Object Storage Swift', function () {
 
         it('should request the object storage in parallel and fallback to SBG if the main storage return any kind of errors', function (done) {
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .matchHeader('x-object-meta-locationorigin', 'Paris/France')
             .matchHeader('Content-Type', 'image/jpeg')
             .matchHeader('X-Delete-At', 1440619048)
@@ -5025,14 +5088,14 @@ describe('Ovh Object Storage Swift', function () {
             .intercept("/templates/test.odt", "COPY")
             .replyWithError('Error Message 1234');
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .matchHeader('x-object-meta-locationorigin', 'Paris/France')
             .matchHeader('Content-Type', 'image/jpeg')
             .matchHeader('X-Delete-At', 1440619048)
@@ -5045,10 +5108,10 @@ describe('Ovh Object Storage Swift', function () {
             .intercept("/templates/test.odt", "COPY")
             .reply(200, 'OK')
             .intercept("/templates/test.odt", "COPY")
-            .reply(200, 'OK')
+            .reply(200, 'OK');
 
-          let promise1 = copyRequestPromise()
-          let promise2 = copyRequestPromise()
+          const promise1 = copyRequestPromise();
+          const promise2 = copyRequestPromise();
 
 
           Promise.all([promise1, promise2]).then(results => {
@@ -5078,7 +5141,7 @@ describe('Ovh Object Storage Swift', function () {
 
         it('should request the object storage in parallel and fallback to SBG if the authentication of the main storage return an error', function (done) {
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .matchHeader('x-object-meta-locationorigin', 'Paris/France')
             .matchHeader('Content-Type', 'image/jpeg')
             .matchHeader('X-Delete-At', 1440619048)
@@ -5087,9 +5150,9 @@ describe('Ovh Object Storage Swift', function () {
             .intercept("/templates/test.odt", "COPY")
             .reply(401, 'Unauthorized')
             .intercept("/templates/test.odt", "COPY")
-            .reply(401, 'Unauthorized')
+            .reply(401, 'Unauthorized');
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(500, {})
             .post('/auth/tokens')
@@ -5103,7 +5166,7 @@ describe('Ovh Object Storage Swift', function () {
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .matchHeader('x-object-meta-locationorigin', 'Paris/France')
             .matchHeader('Content-Type', 'image/jpeg')
             .matchHeader('X-Delete-At', 1440619048)
@@ -5120,11 +5183,11 @@ describe('Ovh Object Storage Swift', function () {
             .intercept("/templates/test.odt", "COPY")
             .reply(200, 'OK')
             .intercept("/templates/test.odt", "COPY")
-            .reply(200, 'OK')
+            .reply(200, 'OK');
 
-          let promise1 = copyRequestPromise()
-          let promise2 = copyRequestPromise()
-          let promise3 = copyRequestPromise()
+          const promise1 = copyRequestPromise();
+          const promise2 = copyRequestPromise();
+          const promise3 = copyRequestPromise();
 
           Promise.all([promise1, promise2, promise3]).then(async results => {
 
@@ -5149,7 +5212,7 @@ describe('Ovh Object Storage Swift', function () {
             assert.strictEqual(results[2]['statusCode'], 200);
 
 
-            let _result3 = await copyRequestPromise();
+            const _result3 = await copyRequestPromise();
             assert.strictEqual(_result3['headers']['x-trans-id'].length > 0, true);
             assert.strictEqual(_result3['headers']['x-openstack-request-id'].length > 0, true);
             assert.strictEqual(_result3['headers']['content-length'] === '0', true);
@@ -5168,7 +5231,7 @@ describe('Ovh Object Storage Swift', function () {
         it('should request the object storage in parallel and fallback to SBG if the main storage timeout', function (done) {
           storage.setTimeout(200);
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .matchHeader('x-object-meta-locationorigin', 'Paris/France')
             .matchHeader('Content-Type', 'image/jpeg')
             .matchHeader('X-Delete-At', 1440619048)
@@ -5179,13 +5242,13 @@ describe('Ovh Object Storage Swift', function () {
             .delayConnection(500)
             .reply(200, 'NOT OK');
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .matchHeader('x-object-meta-locationorigin', 'Paris/France')
             .matchHeader('Content-Type', 'image/jpeg')
             .matchHeader('X-Delete-At', 1440619048)
@@ -5198,11 +5261,11 @@ describe('Ovh Object Storage Swift', function () {
             .intercept("/templates/test.odt", "COPY")
             .reply(200, 'OK')
             .intercept("/templates/test.odt", "COPY")
-            .reply(200, 'OK')
+            .reply(200, 'OK');
 
 
-          let promise1 = copyRequestPromise()
-          let promise2 = copyRequestPromise()
+          const promise1 = copyRequestPromise();
+          const promise2 = copyRequestPromise();
 
 
           Promise.all([promise1, promise2]).then(results => {
@@ -5233,7 +5296,7 @@ describe('Ovh Object Storage Swift', function () {
 
         it('should request the object storage in parallel and fallback to SBG if the main storage return a 500 error', function (done) {
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .matchHeader('x-object-meta-locationorigin', 'Paris/France')
             .matchHeader('Content-Type', 'image/jpeg')
             .matchHeader('X-Delete-At', 1440619048)
@@ -5242,13 +5305,13 @@ describe('Ovh Object Storage Swift', function () {
             .intercept("/templates/test.odt", "COPY")
             .reply(500, {});
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .matchHeader('x-object-meta-locationorigin', 'Paris/France')
             .matchHeader('Content-Type', 'image/jpeg')
             .matchHeader('X-Delete-At', 1440619048)
@@ -5261,10 +5324,10 @@ describe('Ovh Object Storage Swift', function () {
             .intercept("/templates/test.odt", "COPY")
             .reply(200, 'OK')
             .intercept("/templates/test.odt", "COPY")
-            .reply(200, 'OK')
+            .reply(200, 'OK');
 
-          let promise1 = copyRequestPromise()
-          let promise2 = copyRequestPromise()
+          const promise1 = copyRequestPromise();
+          const promise2 = copyRequestPromise();
 
 
           Promise.all([promise1, promise2]).then(results => {
@@ -5318,13 +5381,13 @@ describe('Ovh Object Storage Swift', function () {
 
       it('should reconnect automatically if the token is invalid and retry', function (done) {
 
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .intercept("/templates/file.txt", "GET")
           .reply(401, 'Unauthorized')
           .intercept("/templates/file.txt", "GET")
           .reply(200, fileTxt);
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -5383,7 +5446,7 @@ describe('Ovh Object Storage Swift', function () {
           done();
         });
       });
-    })
+    });
 
     describe("MULTIPLE STORAGES", function () {
 
@@ -5408,20 +5471,20 @@ describe('Ovh Object Storage Swift', function () {
           region                       : 'SBG'
         }]);
         storage.connection((err) => {
-          assert.strictEqual(err, null)
+          assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
-        })
-      })
+        });
+      });
 
       it('should reconnect automatically to the second object storage if the first storage authentication fail and should retry the request', function(done){
 
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           /** 1 */
           .intercept('/templates/file.txt', "GET")
-          .reply(401, 'Unauthorized')
+          .reply(401, 'Unauthorized');
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           /** 2 */
           .post('/auth/tokens')
           .reply(500, {})
@@ -5429,36 +5492,8 @@ describe('Ovh Object Storage Swift', function () {
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           /** 4 */
-          .intercept('/templates/file.txt', "GET")
-          .reply(200, fileTxt);
-
-        assert.strictEqual(dataStream, '')
-        storage.request('GET', '/templates/file.txt', { output : outputStreamFunction }, (err, res) => {
-          assert.strictEqual(err, null);
-          assert.strictEqual(firstNock.pendingMocks().length, 0);
-          assert.strictEqual(secondNock.pendingMocks().length, 0);
-          assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          assert.strictEqual(dataStream, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
-          assert.strictEqual(res.statusCode, 200);
-          assert.strictEqual(JSON.stringify(res.headers), '{}');
-          dataStream = '';
-          done();
-        });
-      })
-
-      it('should retry the request with the second object storage if the first object storage return a 500 error', function(done){
-
-        let firstNock = nock(publicUrlGRA)
-          .intercept('/templates/file.txt', "GET")
-          .reply(500, {});
-
-        let secondNock = nock(authURL)
-          .post('/auth/tokens')
-          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
-
-        let thirdNock = nock(publicUrlSBG)
           .intercept('/templates/file.txt', "GET")
           .reply(200, fileTxt);
 
@@ -5474,22 +5509,50 @@ describe('Ovh Object Storage Swift', function () {
           dataStream = '';
           done();
         });
-      })
+      });
+
+      it('should retry the request with the second object storage if the first object storage return a 500 error', function(done){
+
+        const firstNock = nock(publicUrlGRA)
+          .intercept('/templates/file.txt', "GET")
+          .reply(500, {});
+
+        const secondNock = nock(authURL)
+          .post('/auth/tokens')
+          .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+        const thirdNock = nock(publicUrlSBG)
+          .intercept('/templates/file.txt', "GET")
+          .reply(200, fileTxt);
+
+        assert.strictEqual(dataStream, '');
+        storage.request('GET', '/templates/file.txt', { output : outputStreamFunction }, (err, res) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          assert.strictEqual(secondNock.pendingMocks().length, 0);
+          assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          assert.strictEqual(dataStream, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
+          assert.strictEqual(res.statusCode, 200);
+          assert.strictEqual(JSON.stringify(res.headers), '{}');
+          dataStream = '';
+          done();
+        });
+      });
 
 
 
       it('should retry the request with the second object storage if the first object storage timeout', function(done){
         storage.setTimeout(10);
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .intercept('/templates/file.txt', "GET")
           .delayConnection(500)
           .reply(200);
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .intercept('/templates/file.txt', "GET")
           .reply(200, fileTxt);
 
@@ -5505,19 +5568,19 @@ describe('Ovh Object Storage Swift', function () {
           dataStream = '';
           done();
         });
-      })
+      });
 
       it('should retry the request with the second storage if the first storage return any kind of errors', function (done) {
 
-        let firstNock = nock(publicUrlGRA)
+        const firstNock = nock(publicUrlGRA)
           .intercept('/templates/file.txt', "GET")
           .replyWithError('Error Message 1234');
 
-        let secondNock = nock(authURL)
+        const secondNock = nock(authURL)
           .post('/auth/tokens')
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-        let thirdNock = nock(publicUrlSBG)
+        const thirdNock = nock(publicUrlSBG)
           .intercept('/templates/file.txt', "GET")
           .reply(200, fileTxt);
 
@@ -5551,20 +5614,20 @@ describe('Ovh Object Storage Swift', function () {
 
         it('should request the object storage in parallel and fallback to SBG if the main storage return any kind of errors', function (done) {
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .intercept('/templates/file.txt', "GET")
             .replyWithError('Error Message 1234')
             .intercept('/templates/file.txt', "GET")
             .replyWithError('Error Message 1234');
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .intercept('/templates/file.txt', "GET")
             .reply(200, function() {
               return fileTxt;
@@ -5574,8 +5637,8 @@ describe('Ovh Object Storage Swift', function () {
               return fileTxt;
             });
 
-          let promise1 = copyRequestPromise(0)
-          let promise2 = copyRequestPromise(1)
+          const promise1 = copyRequestPromise(0);
+          const promise2 = copyRequestPromise(1);
 
 
           Promise.all([promise1, promise2]).then(results => {
@@ -5596,15 +5659,15 @@ describe('Ovh Object Storage Swift', function () {
 
         it('should request the object storage in parallel and fallback to SBG if the authentication of the main storage return an error', function (done) {
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .intercept('/templates/file.txt', "GET")
             .reply(401, 'Unauthorized')
             .intercept('/templates/file.txt', "GET")
             .reply(401, 'Unauthorized')
             .intercept('/templates/file.txt', "GET")
-            .reply(401, 'Unauthorized')
+            .reply(401, 'Unauthorized');
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(500, {})
             .post('/auth/tokens')
@@ -5618,7 +5681,7 @@ describe('Ovh Object Storage Swift', function () {
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .intercept('/templates/file.txt', "GET")
             .reply(200, fileTxt)
             .intercept('/templates/file.txt', "GET")
@@ -5626,11 +5689,11 @@ describe('Ovh Object Storage Swift', function () {
             .intercept('/templates/file.txt', "GET")
             .reply(200, fileTxt)
             .intercept('/templates/file.txt', "GET")
-            .reply(200, fileTxt)
+            .reply(200, fileTxt);
 
-          let promise1 = copyRequestPromise(0)
-          let promise2 = copyRequestPromise(1)
-          let promise3 = copyRequestPromise(2)
+          const promise1 = copyRequestPromise(0);
+          const promise2 = copyRequestPromise(1);
+          const promise3 = copyRequestPromise(2);
 
           Promise.all([promise1, promise2, promise3]).then(async results => {
 
@@ -5640,7 +5703,7 @@ describe('Ovh Object Storage Swift', function () {
             assert.strictEqual(results[2].body, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
 
 
-            let _result3 = await copyRequestPromise(3);
+            const _result3 = await copyRequestPromise(3);
             assert.strictEqual(_result3.body, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
 
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
@@ -5655,7 +5718,7 @@ describe('Ovh Object Storage Swift', function () {
         it('should request the object storage in parallel and fallback to SBG if the main storage timeout', function (done) {
           storage.setTimeout(10);
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .intercept('/templates/file.txt', "GET")
             .delayConnection(100)
             .reply(200)
@@ -5663,21 +5726,21 @@ describe('Ovh Object Storage Swift', function () {
             .delayConnection(100)
             .reply(200);
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .intercept('/templates/file.txt', "GET")
             .reply(200, fileTxt)
             .intercept('/templates/file.txt', "GET")
-            .reply(200, fileTxt)
+            .reply(200, fileTxt);
 
 
-          let promise1 = copyRequestPromise(0)
-          let promise2 = copyRequestPromise(1)
+          const promise1 = copyRequestPromise(0);
+          const promise2 = copyRequestPromise(1);
 
 
           Promise.all([promise1, promise2]).then(results => {
@@ -5698,26 +5761,26 @@ describe('Ovh Object Storage Swift', function () {
 
         it('should request the object storage in parallel and fallback to SBG if the main storage return a 500 error', function (done) {
 
-          let firstNock = nock(publicUrlGRA)
+          const firstNock = nock(publicUrlGRA)
             .intercept('/templates/file.txt', "GET")
             .reply(500)
             .intercept('/templates/file.txt', "GET")
             .reply(500);
 
-          let secondNock = nock(authURL)
+          const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
-          let thirdNock = nock(publicUrlSBG)
+          const thirdNock = nock(publicUrlSBG)
             .intercept('/templates/file.txt', "GET")
             .reply(200, fileTxt)
             .intercept('/templates/file.txt', "GET")
-            .reply(200, fileTxt)
+            .reply(200, fileTxt);
 
-          let promise1 = copyRequestPromise(0)
-          let promise2 = copyRequestPromise(1)
+          const promise1 = copyRequestPromise(0);
+          const promise2 = copyRequestPromise(1);
 
 
           Promise.all([promise1, promise2]).then(results => {
@@ -5747,11 +5810,11 @@ describe('Ovh Object Storage Swift', function () {
         const _newOptions = {
           ...storage.getRockReqDefaults(),
           newOption: 4321
-        }
+        };
         storage.setRockReqDefaults(_newOptions);
         assert.strictEqual(storage.getRockReqDefaults().newOption, 4321);
         done();
-      })
+      });
 
       it("should not set rock-req default values if the value is undefined", function(done) {
         storage.setRockReqDefaults(null);
@@ -5759,20 +5822,20 @@ describe('Ovh Object Storage Swift', function () {
         storage.setRockReqDefaults("string");
         assert.strictEqual(typeof storage.getRockReqDefaults(), 'object');
         done();
-      })
+      });
     });
 
     describe('getRockReqDefaults', function() {
       it("should get rock-req default values", function(done) {
         assert.strictEqual(storage.getRockReqDefaults().retryDelay, 200);
         done();
-      })
-    })
+      });
+    });
 
   });
 });
 
-let connectionResultSuccessV3 = {
+const connectionResultSuccessV3 = {
   "token": {
     "is_domain": false,
     "methods": [
@@ -7272,7 +7335,7 @@ let connectionResultSuccessV3 = {
           },
           {
             "region_id": "DE",
-            "url": "https://storage.de.cloud.ovh.net/v1/AUTH_ce3e510224d740a685cb0ae7bdb8ebc3",
+            "url": "https://storage.de.cloud.ovh.net/v1/AUTH_ce3e510224d740a685cb0ae7bdb8ebc3_admin",
             "region": "DE",
             "interface": "admin",
             "id": "28c0d13e05b4405dab258dfb1c3bb6ec"
@@ -7321,7 +7384,7 @@ let connectionResultSuccessV3 = {
           },
           {
             "region_id": "DE",
-            "url": "https://storage.de.cloud.ovh.net/v1/AUTH_ce3e510224d740a685cb0ae7bdb8ebc3",
+            "url": "https://storage.de.cloud.ovh.net/v1/AUTH_ce3e510224d740a685cb0ae7bdb8ebc3_public",
             "region": "DE",
             "interface": "public",
             "id": "5a503d582fa54b11bdb53e207ea3e899"
@@ -7412,7 +7475,7 @@ let connectionResultSuccessV3 = {
           },
           {
             "region_id": "DE",
-            "url": "https://storage.de.cloud.ovh.net/v1/AUTH_ce3e510224d740a685cb0ae7bdb8ebc3",
+            "url": "https://storage.de.cloud.ovh.net/v1/AUTH_ce3e510224d740a685cb0ae7bdb8ebc3_internal",
             "region": "DE",
             "interface": "internal",
             "id": "f44fe812408c412586de0cd95c748a09"
@@ -7585,9 +7648,9 @@ let connectionResultSuccessV3 = {
     ],
     "issued_at": "2020-06-22T11:43:00.000000Z"
   }
-}
+};
 
-let connectionResultSuccessV3WithoutObjectStore = {
+const connectionResultSuccessV3WithoutObjectStore = {
   "token": {
     "is_domain": false,
     "methods": [
@@ -7628,9 +7691,9 @@ let connectionResultSuccessV3WithoutObjectStore = {
     ],
     "issued_at": "2020-06-22T11:43:00.000000Z"
   }
-}
+};
 
-let connectionResultSuccessV3WithoutRegion = {
+const connectionResultSuccessV3WithoutRegion = {
   "token": {
     "is_domain": false,
     "methods": [
@@ -7686,4 +7749,4 @@ let connectionResultSuccessV3WithoutRegion = {
     ],
     "issued_at": "2020-06-22T11:43:00.000000Z"
   }
-}
+};

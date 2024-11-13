@@ -14,6 +14,6 @@ module.exports = (config) => {
   } else if (_auth?.username && _auth?.password && _auth?.authUrl && _auth?.region) {
     return swift(config);
   } else {
-    throw new Error("Storage connexion not recognised - did you provide correct credentials for a S3 or Swift storage?")
+    throw new Error("Storage connexion not recognised - did you provide correct credentials for a S3 or Swift storage?");
   }
-}
+};

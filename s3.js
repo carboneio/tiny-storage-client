@@ -2,18 +2,18 @@ const rock = require('rock-req');
 const aws4 = require('aws4');
 const crypto = require('crypto');
 const fs = require('fs');
-const xmlToJson = require('./xmlToJson.js')
-const { getUrlParameters, isFnStream } = require('./helper.js')
+const xmlToJson = require('./xmlToJson.js');
+const { getUrlParameters, isFnStream } = require('./helper.js');
 
 module.exports = (config) => {
 
-  let _config = {
+  const _config = {
     /** List of S3 credentials */
     storages       : [],
     /** Request params */
     timeout        : 5000,
     activeStorage  : 0
-  }
+  };
 
   let retryReconnectMainStorage = false;
 
@@ -30,7 +30,7 @@ module.exports = (config) => {
     for (let i = 0; i < newConfig.length; i++) {
       const _auth = newConfig[i];
       if (!_auth?.accessKeyId || !_auth?.secretAccessKey || !_auth?.url || !_auth?.region) {
-        throw new Error("S3 Storage credentials not correct or missing - did you provide correct credentials?")
+        throw new Error("S3 Storage credentials not correct or missing - did you provide correct credentials?");
       }
     }
     _config.storages        = [...newConfig];
@@ -78,9 +78,9 @@ module.exports = (config) => {
       options.body = objectBuffer;
       options.headers = {
         ...options?.headers
-      }
+      };
       return request('PUT', `/${bucket}/${encodeURIComponent(filename)}`, options, callback);
-    }
+    };
     /**
      * AWS4 does not support computing signature with a Stream
      * https://github.com/mhart/aws4/issues/43
@@ -131,7 +131,7 @@ module.exports = (config) => {
       }
       const _body = resp?.body?.toString();
       if (_body && resp.statusCode === 200) {
-        let _regRes = _body?.match(/<ListBucketResult[^<>]*?>([^]*?)<\/ListBucketResult>/);
+        const _regRes = _body?.match(/<ListBucketResult[^<>]*?>([^]*?)<\/ListBucketResult>/);
         resp.body = xmlToJson(_regRes?.[1], { forceArray: ['contents'] });
       }
       return callback(null, resp);
@@ -181,7 +181,7 @@ module.exports = (config) => {
       }
       const _body = resp?.body?.toString();
       if (_body && resp.statusCode === 200) {
-        let _regRes = _body?.match(/<Buckets[^<>]*?>([^]*?)<\/Buckets>/);
+        const _regRes = _body?.match(/<Buckets[^<>]*?>([^]*?)<\/Buckets>/);
         resp.body = xmlToJson(_regRes?.[1], { forceArray: ['bucket'] });
       }
       return callback(null, resp);
@@ -208,7 +208,7 @@ module.exports = (config) => {
       'x-amz-copy-source': `/${bucket}/${encodeURIComponent(filename)}`,
       'x-amz-metadata-directive': 'REPLACE',
       ...options.headers
-    }
+    };
 
     request('PUT', `/${bucket}/${encodeURIComponent(filename)}`, options, function(err, resp) {
       if (err) {
@@ -216,7 +216,7 @@ module.exports = (config) => {
       }
       const _body = resp?.body?.toString();
       if (_body && resp.statusCode === 200) {
-        let _regRes = _body?.match(/<CopyObjectResult[^<>]*?>([^]*?)<\/CopyObjectResult>/);
+        const _regRes = _body?.match(/<CopyObjectResult[^<>]*?>([^]*?)<\/CopyObjectResult>/);
         resp.body = xmlToJson(_regRes?.[1] ?? '');
       }
       return callback(null, resp);
@@ -251,14 +251,14 @@ module.exports = (config) => {
     options.headers = {
       ...options?.headers,
       'Content-MD5': getMD5(_body)
-    }
+    };
     return request('POST', `/${bucket}/?delete`, options, (err, resp) => {
       if (err) {
         return callback(err);
       }
       const _body = resp?.body?.toString();
       if (_body && resp.statusCode === 200) {
-        let _regRes = _body?.match(/<DeleteResult[^<>]*?>([^]*?)<\/DeleteResult>/);
+        const _regRes = _body?.match(/<DeleteResult[^<>]*?>([^]*?)<\/DeleteResult>/);
         resp.body = xmlToJson(_regRes?.[1], { forceArray: ['deleted', 'error'] });
       }
       return callback(null, resp);
@@ -285,7 +285,7 @@ module.exports = (config) => {
    */
   function request (method, path, options, callback) {
 
-    if (!options?.try) { options.try = 0 }
+    if (!options?.try) { options.try = 0; }
 
     if (_config.activeStorage >= _config.storages.length || options.try >= _config.storages.length) {
       /** Reset the index of the main storage if any storage are available */
@@ -348,7 +348,7 @@ module.exports = (config) => {
     }, {
       accessKeyId: _activeStorage.accessKeyId,
       secretAccessKey: _activeStorage.secretAccessKey
-    })
+    });
 
     const _requestCallback = function (err, res, body) {
       if ((err || res?.statusCode >= 500 || res?.statusCode === 401) && options?.requestStorageIndex === undefined) {
@@ -367,7 +367,7 @@ module.exports = (config) => {
         body = xmlToJson(body?.toString() ?? '');
       }
       return isFnStream(options?.output) === true ? callback(null, res) : callback(null, { headers : res.headers, statusCode: res.statusCode, body : body });
-    }
+    };
     return isFnStream(options?.output) === true ? rock(_requestParams, _requestCallback) : rock.concat(_requestParams, _requestCallback);
   }
 
@@ -391,7 +391,7 @@ module.exports = (config) => {
         _str += element;
       }
     }
-    return Buffer.from(_str).length
+    return Buffer.from(_str).length;
   }
 
   /** ========= PRIVATE FUNCTIONS ========== */
@@ -438,5 +438,5 @@ module.exports = (config) => {
     getMetadataTotalBytes,
     setRockReqDefaults,
     getRockReqDefaults
-  }
-}
+  };
+};

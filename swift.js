@@ -1,6 +1,6 @@
 const rock = require('rock-req');
 const fs = require('fs');
-const { getUrlParameters, isFnStream } = require('./helper.js')
+const { getUrlParameters, isFnStream } = require('./helper.js');
 
 /**
  *
@@ -14,13 +14,13 @@ const { getUrlParameters, isFnStream } = require('./helper.js')
  */
 module.exports = (config) => {
 
-  let _config = {
+  const _config = {
     storages: [],
     activeStorage: 0,
     endpoints: {},
     token: '',
     timeout: 5000
-  }
+  };
 
   /**
    * @description Authenticate and initialise the auth token and retreive the endpoint based on the region
@@ -60,7 +60,7 @@ module.exports = (config) => {
           },
           name : _storage.tenantName
         }
-      }
+      };
     }
 
     rock.concat({
@@ -98,7 +98,11 @@ module.exports = (config) => {
       }
 
       _config.endpoints = _serviceCatalog.endpoints.find((element) => {
-        return element.region?.toLowerCase() === _storage.region?.toLowerCase();
+        const isSameRegion = element.region?.toLowerCase() === _storage.region?.toLowerCase();
+        if (_storage?.interface) {
+          return element?.interface?.toLowerCase() === _storage.interface.toLowerCase() && isSameRegion;
+        }
+        return isSameRegion;
       });
 
       if (!_config.endpoints) {
@@ -130,7 +134,7 @@ module.exports = (config) => {
       }
       if (resp.headers?.['content-type']?.includes('application/json') === true) {
         try {
-          resp.body = JSON.parse(resp.body.toString())
+          resp.body = JSON.parse(resp.body.toString());
         } catch(err) {
           return callback(new Error('Listing files JSON parse: ' + err.toString()), resp);
         }
@@ -167,7 +171,7 @@ module.exports = (config) => {
     } 
     /** Is a Buffer or a Function returning a ReadStream */
     options.body = localPathOrBuffer;
-    return request('PUT', `/${container}/${filename}`, options, callback)
+    return request('PUT', `/${container}/${filename}`, options, callback);
   }
 
   /**
@@ -255,7 +259,7 @@ module.exports = (config) => {
     options.headers = {
       ...options?.headers,
       'Content-Type': 'text/plain'
-    }
+    };
     options.defaultQueries = 'bulk-delete';
     options.alias = container;
     return request('POST', `/`, options, (err, resp) => {
@@ -264,7 +268,7 @@ module.exports = (config) => {
       }
       if (resp.headers?.['content-type']?.includes('application/json') === true) {
         try {
-          resp.body = JSON.parse(resp.body.toString())
+          resp.body = JSON.parse(resp.body.toString());
         } catch(err) {
           return callback(new Error('Deleting files JSON parse: ' + err.toString()), resp);
         }
@@ -307,7 +311,7 @@ module.exports = (config) => {
       }
       if (resp.headers?.['content-type']?.includes('application/json') === true) {
         try {
-          resp.body = JSON.parse(resp.body.toString())
+          resp.body = JSON.parse(resp.body.toString());
         } catch(err) {
           return callback(new Error('Listing bucket JSON parse: ' + err.toString()), resp);
         }
@@ -357,7 +361,7 @@ module.exports = (config) => {
       arrayArguments[3] = options;
     }
 
-    arrayArguments.push({ originStorage : _config.activeStorage })
+    arrayArguments.push({ originStorage : _config.activeStorage });
 
     const _urlParams = getUrlParameters(options?.queries ?? '', options?.defaultQueries ?? '');
 
@@ -386,7 +390,7 @@ module.exports = (config) => {
       timeout: _config.timeout,
       output: isFnStream(options?.output) ? options?.output : null, /** Handle Streams */
       ...(_body ? { body: _body } : {}),
-    }
+    };
 
     const _requestCallback = function (err, res, body) {
       /** Catch error and retry */
@@ -411,7 +415,7 @@ module.exports = (config) => {
         );
       }
       return isFnStream(options?.output) === true ? callback(null, res) : callback(null, { headers : res.headers, statusCode: res.statusCode, body : body });
-    }
+    };
     return isFnStream(options?.output) === true ? rock(_requestOptions, _requestCallback) : rock.concat(_requestOptions, _requestCallback);
   }
 
@@ -435,7 +439,7 @@ module.exports = (config) => {
     } else if (typeof storages === 'object') {
       /** Only a single storage is passed */
       _config.storages = [];
-      _config.storages.push(storages)
+      _config.storages.push(storages);
     }
   }
 
@@ -506,7 +510,7 @@ module.exports = (config) => {
     }
   }
 
-  setStorages(config)
+  setStorages(config);
 
   return {
     connection,
@@ -527,5 +531,5 @@ module.exports = (config) => {
     deleteFiles,
     headBucket,
     listBuckets
-  }
-}
+  };
+};

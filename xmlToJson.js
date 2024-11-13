@@ -10,7 +10,7 @@ function xmlToJson (xml, options) {
   options = options ?? {};
 
   /** JSON variables */
-  let root = {};
+  const root = {};
   let child = null;
   let childName = null;
   let _previousTag = '';
@@ -58,7 +58,7 @@ function xmlToJson (xml, options) {
         childName = null;
       } /** When we reach the end of a tag <color>red</color>, the value is assign to the child or root object */
       else if (_tagFull[0] === '/') {
-        const _value = getValue(xml.slice(_previousLastIndex, _tagParsed.index))
+        const _value = getValue(xml.slice(_previousLastIndex, _tagParsed.index));
         if (child) {
           if (child?.constructor === Array) {
             /** Tag already exist, we must create a new element on the list */
@@ -77,7 +77,7 @@ function xmlToJson (xml, options) {
       _previousTagFull = _tagFull;
       _previousLastIndex = _xmlTagRegExp.lastIndex;
     }
-  } catch(_) {
+  } catch(_err) {
     return root;
   }
   return root;
@@ -90,7 +90,7 @@ function xmlToJson (xml, options) {
  */
 const getValue = (str) => {
   if (!isNaN(str) && !isNaN(parseFloat(str))) {
-    return parseInt(str)
+    return parseInt(str);
   } else if (str.toLowerCase() === "true") {
     return true;
   } else if (str.toLowerCase() === "false") {
@@ -101,6 +101,6 @@ const getValue = (str) => {
     return str.slice(1, str.length - 1);
   }
   return str;
-}
+};
 
 module.exports = xmlToJson;
