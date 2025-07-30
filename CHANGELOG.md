@@ -1,3 +1,7 @@
+### v3.4.0
+- Added support for Localhost Minio as S3 storage: It is possible to define the URL "http://localhost:80" when entering S3 credentials. While trailing slashes at the end of the URL are permitted, their use is not recommended.
+- Updade dev dependencies
+
 ### v3.3.0
 - Added for SWIFT storage only: When calling the 'connection' function, you can now specify the interface (admin/public/internal) in the Swift configuration. This ensures that the SDK picks the correct endpoints from the Swift server, preventing inconsistencies. Example of auth configuration for Swift with interface: 
 ```js

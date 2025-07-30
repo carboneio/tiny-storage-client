@@ -1,5 +1,6 @@
 const rock = require('rock-req');
 const aws4 = require('aws4');
+const URL = require('url').URL;
 const crypto = require('crypto');
 const fs = require('fs');
 const xmlToJson = require('./xmlToJson.js');
@@ -29,9 +30,18 @@ module.exports = (config) => {
 
     for (let i = 0; i < newConfig.length; i++) {
       const _auth = newConfig[i];
-      if (!_auth?.accessKeyId || !_auth?.secretAccessKey || !_auth?.url || !_auth?.region) {
+      if (typeof _auth?.accessKeyId !== 'string' || typeof _auth?.secretAccessKey !== 'string' || typeof _auth?.url !== 'string' || typeof _auth?.region !== 'string') {
         throw new Error("S3 Storage credentials not correct or missing - did you provide correct credentials?");
       }
+      /** If the URL has no protocol, HTTPS is used by default */
+      if (_auth.url?.startsWith('https://') === false && _auth.url?.startsWith('http://') === false) {
+        _auth.url = 'https://' + _auth.url;
+      }
+      if (_auth.url?.endsWith('/') === true) {
+        _auth.url = _auth.url.replace(/\/$/, "");
+      }
+      /** Save the hostname for AWS4 signature */
+      _auth.hostname = new URL(_auth.url).hostname;
     }
     _config.storages        = [...newConfig];
     _config.activeStorage   = 0;
@@ -330,7 +340,7 @@ module.exports = (config) => {
     const _urlParams = getUrlParameters(options?.queries ?? '', options?.defaultQueries ?? '');
     const _requestParams = aws4.sign({
       method: method,
-      url: `https://${_activeStorage.url}${_path}${_urlParams ?? ''}`,
+      url: `${_activeStorage.url}${_path}${_urlParams ?? ''}`,
       ...(options?.body ? { body: options?.body } : {}),
       headers: {
         ...(options?.headers ? options?.headers : {})
@@ -341,10 +351,9 @@ module.exports = (config) => {
       ...(options?.requestOptions ? options?.requestOptions : {}),
       /** REQUIRED FOR AWS4 SIGNATURE */
       service: 's3',
-      hostname: _activeStorage.url,
+      hostname: _activeStorage.hostname,
       path: `${_path}${_urlParams ?? ''}`,
-      region: _activeStorage.region,
-      protocol: 'https:'
+      region: _activeStorage.region
     }, {
       accessKeyId: _activeStorage.accessKeyId,
       secretAccessKey: _activeStorage.secretAccessKey

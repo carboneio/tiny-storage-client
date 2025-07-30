@@ -76,7 +76,7 @@ describe('S3 SDK', function () {
     });
 
     it("should create a new s3 instance if the authentication is provided as List of objects", function () {
-      const _authS3 = [{ accessKeyId: 1, secretAccessKey: 2, region: 3, url: 4 }, { accessKeyId: 5, secretAccessKey: 6, region: 7, url: 8 }, { accessKeyId: 9, secretAccessKey: 10, region: 11, url: 12 }];
+      const _authS3 = [{ accessKeyId: 'id', secretAccessKey: 'access', region: 'GRA', url: 's3.api.com' }, { accessKeyId: 'test', secretAccessKey: 'access', region: 'DE', url: 'api.s3.test' }, { accessKeyId: 'id', secretAccessKey: 'access', region: 'NY', url: 's3.api.test' }];
       const _storage = s3(_authS3);
       const _config = _storage.getConfig();
       assert.strictEqual(_config.timeout, 5000);
@@ -101,7 +101,7 @@ describe('S3 SDK', function () {
 
     it("should set a new config", function () {
       const _storage = s3({ accessKeyId: '-', secretAccessKey: '-', region: '-', url: '-' });
-      const _authS3 = [{ accessKeyId: 1, secretAccessKey: 2, region: 3, url: 4 }, { accessKeyId: 5, secretAccessKey: 6, region: 7, url: 8 }];
+      const _authS3 = [{ accessKeyId: 'id', secretAccessKey: 'secret', region: 'GRA', url: 'api.s3.test' }, { accessKeyId: 'ID', secretAccessKey: 'SECRET', region: 'DE', url: 'API.S3.test' }];
       _storage.setConfig(_authS3);
       const _config = _storage.getConfig();
       assert.strictEqual(_config.timeout, 5000);
@@ -112,17 +112,28 @@ describe('S3 SDK', function () {
 
     it("should create a new instance", function () {
       const _storage = s3({ accessKeyId: '1234', secretAccessKey: '4567', region: 'gra', url: 'url.gra.s3.ovh.io' });
-      const _storage2 = s3({ accessKeyId: 'abcd', secretAccessKey: 'efgh', region: 'sbg', url: 'url.sbg.s3.ovh.io' });
+      const _storage2 = s3({ accessKeyId: 'abcd', secretAccessKey: 'efgh', region: 'sbg', url: 'url.sbg.s3.ovh.io/' });
+      const _storage3 = s3({ accessKeyId: 'ijkl', secretAccessKey: 'mnop', region: 'de', url: 'http://localhost:80' });
       assert.strictEqual(_storage.getConfig().storages.length, 1);
       assert.strictEqual(_storage2.getConfig().storages.length, 1);
+      
       assert.strictEqual(_storage.getConfig().storages[0].accessKeyId, '1234');
       assert.strictEqual(_storage.getConfig().storages[0].secretAccessKey, '4567');
       assert.strictEqual(_storage.getConfig().storages[0].region, 'gra');
-      assert.strictEqual(_storage.getConfig().storages[0].url, 'url.gra.s3.ovh.io');
+      assert.strictEqual(_storage.getConfig().storages[0].url, 'https://url.gra.s3.ovh.io');
+      assert.strictEqual(_storage.getConfig().storages[0].hostname, 'url.gra.s3.ovh.io');
+      
       assert.strictEqual(_storage2.getConfig().storages[0].accessKeyId, 'abcd');
       assert.strictEqual(_storage2.getConfig().storages[0].secretAccessKey, 'efgh');
       assert.strictEqual(_storage2.getConfig().storages[0].region, 'sbg');
-      assert.strictEqual(_storage2.getConfig().storages[0].url, 'url.sbg.s3.ovh.io');
+      assert.strictEqual(_storage2.getConfig().storages[0].url, 'https://url.sbg.s3.ovh.io');
+      assert.strictEqual(_storage2.getConfig().storages[0].hostname, 'url.sbg.s3.ovh.io');
+
+      assert.strictEqual(_storage3.getConfig().storages[0].accessKeyId, 'ijkl');
+      assert.strictEqual(_storage3.getConfig().storages[0].secretAccessKey, 'mnop');
+      assert.strictEqual(_storage3.getConfig().storages[0].region, 'de');
+      assert.strictEqual(_storage3.getConfig().storages[0].url, 'http://localhost:80');
+      assert.strictEqual(_storage3.getConfig().storages[0].hostname, 'localhost');
     });
 
     it("should set a new timeout value", function() {
