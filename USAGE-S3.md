@@ -3,7 +3,7 @@
 
 ## Highlight
 
-* 🚀 Vanilla JS + Only 2 dependencies [simple-get](https://github.com/feross/simple-get) for HTTP requests and [aws4](https://github.com/mhart/aws4) for signing S3 requests.
+* 🚀 Vanilla JS + Only 2 dependencies [rock-req](https://github.com/carboneio/rock-req) for HTTP requests and [aws4](https://github.com/mhart/aws4) for signing S3 requests.
 * 🌎 Provide one or a list of S3 storages credentials: the SDK will switch storage if something goes wrong (Server/DNS not responding, timeout, error 500, too many redirection, authentication error, and more...). As soon as the main storage is available, the SDK returns to the main storage.
 * ✨ File names and request parameters are automatically encoded.
 * ⚡️ Use [Bucket alias](#bucket-alias) if you have synchronised buckets into multiple regions/datacenters
@@ -47,7 +47,7 @@ const s3storage = storageClient([{
 ### Upload a file
 
 ```js
-const path = require(path);
+const path = require('path');
 
 /** SOLUTION 1: The file content can be passed by giving the file absolute path **/
 s3storage.uploadFile('bucketName', 'file.pdf', path.join(__dirname, 'dir2', 'file.pdf'), (err, resp) => {
@@ -55,7 +55,7 @@ s3storage.uploadFile('bucketName', 'file.pdf', path.join(__dirname, 'dir2', 'fil
     return console.log("Error on upload: ", err.toString());
   }
   /**
-   * Request reponse:
+   * Request response:
    * - resp.body
    * - resp.headers
    * - resp.statusCode
@@ -68,7 +68,7 @@ s3storage.uploadFile('bucketName', 'file.pdf', Buffer.from('file-buffer'), (err,
     return console.log("Error on upload: ", err.toString());
   }
   /**
-   * Request reponse:
+   * Request response:
    * - resp.body
    * - resp.headers
    * - resp.statusCode
@@ -86,7 +86,7 @@ s3storage.uploadFile('bucketName', 'file.pdf', Buffer.from('file-buffer'), {
     return console.log("Error on upload: ", err.toString());
   }
   /**
-   * Request reponse:
+   * Request response:
    * - resp.body
    * - resp.headers
    * - resp.statusCode
@@ -104,7 +104,7 @@ s3storage.downloadFile('bucketName', '2023-invoice.pdf', (err, resp) => {
     return console.log("Error on download: ", err);
   }
   /**
-   * Request reponse:
+   * Request response:
    * - resp.body => downloaded file as Buffer
    * - resp.headers
    * - resp.statusCode
@@ -123,7 +123,7 @@ s3storage.downloadFile('bucketName', '2023-invoice.pdf', { output: createOutputS
     return console.log("Error on download: ", err);
   }
   /**
-   * Request reponse:
+   * Request response:
    * - resp.headers
    * - resp.statusCode
    *
@@ -143,7 +143,7 @@ s3storage.deleteFile('bucketName', 'invoice-2023.pdf', (err, resp) => {
     return console.log("Error on delete: ", err.toString());
   }
   /**
-   * Request reponse:
+   * Request response:
    * - resp.body => empty body
    * - resp.headers
    * - resp.statusCode
@@ -159,7 +159,7 @@ Bulk delete files (Maximum 1000 keys per requests)
 /**
  * Provide a list of filenames as second argument, it can be:
  * - a list of string ["object1.pdf", "object2.docx", "object3.pptx"]
- * - a list of object with `keys` as attribute name [{ "keys": "object1.pdf"}, { "keys": "object2.docx" }, { "keys": "object3.pptx" }]
+ * - a list of objects with `key` as attribute name [{ "key": "object1.pdf"}, { "key": "object2.docx" }, { "key": "object3.pptx" }]
  * - Or a list of objects with `name` as attribute for the filename: [{ "name" : "file1.png" }, { "name": "file2.docx" }]
  * - Or a list of objects with a custom Key for filenames, you must define `fileNameKey` as option (third argument). 
 */
@@ -170,7 +170,7 @@ s3storage.deleteFiles('bucketName', files, (err, resp) => {
     return console.log("Error on deleting files: ", err.toString());
   }
   /**
-   * Request reponse:
+   * Request response:
    * - resp.headers
    * - resp.statusCode
    * - resp.body => body as JSON listing deleted files and errors:
@@ -200,7 +200,7 @@ s3storage.listFiles('bucketName', function(err, resp) {
     return console.log("Error on listing files: ", err.toString());
   }
    /**
-   * Request reponse:
+   * Request response:
    * - resp.headers
    * - resp.statusCode
    * - resp.body => list of files as JSON format:
@@ -227,12 +227,12 @@ const _queries = {
   "max-keys": 100,
   "start-after": "2022-02-invoice-client.pdf"
 }
-s3storage.listFiles('bucketName', { queries: _queries } function(err, resp) {
+s3storage.listFiles('bucketName', { queries: _queries }, function(err, resp) {
   if (err) {
     return console.log("Error on listing files: ", err.toString());
   }
    /**
-   * Request reponse:
+   * Request response:
    * - resp.headers
    * - resp.statusCode
    * - resp.body => list of files as JSON format:
@@ -263,7 +263,7 @@ s3storage.getFileMetadata('bucketName', '2023-invoice.pdf', (err, resp) => {
     return console.log("Error on fetching metadata: ", err.toString());
   }
   /**
-   * Request reponse:
+   * Request response:
    * - resp.body => empty string
    * - resp.headers => all custom metadata and headers
    * - resp.statusCode
@@ -289,7 +289,7 @@ s3storage.setFileMetadata('steeve-test-bucket', 'template.odt', { headers: _head
     return console.log("Error on updating metadata: ", err.toString());
   }
   /**
-   * Request reponse:
+   * Request response:
    * - resp.body
    * - resp.headers
    * - resp.statusCode
@@ -308,7 +308,7 @@ s3storage.headBucket('bucketName', (err, resp) => {
     return console.log("Error head Bucket: ", err.toString());
   }
   /**
-   * Request reponse:
+   * Request response:
    * - resp.body => empty string
    * - resp.headers
    * - resp.statusCode
@@ -326,7 +326,7 @@ storage.listBuckets((err, resp) => {
     return console.log("Error list Buckets: ", err.toString());
   }
   /**
-   * Request reponse:
+   * Request response:
    * - resp.body => { bucket: [ { "name": "bucket1", "creationdate": "2023-02-27T11:46:24.000Z" } ] }
    * - resp.headers
    * - resp.statusCode
@@ -371,7 +371,7 @@ s3storage.downloadFile('invoices', '2023-invoice.pdf', (err, resp) => {
     return console.log("Error on download: ", err);
   }
   /**
-   * Request reponse:
+   * Request response:
    * - resp.body => downloaded file as Buffer
    * - resp.headers
    * - resp.statusCode
@@ -387,7 +387,7 @@ Prototype to get the data as Buffer:
 ```js
 request(method, path, { headers, queries, body }, (err, resp) => {
   /**
-   * Request reponse:
+   * Request response:
    * - resp.body => body as Buffer
    * - resp.headers
    * - resp.statusCode
@@ -404,7 +404,7 @@ function createOutputStream(opts, res) {
 
 request(method, path, { headers, queries, body, output: createOutputStream }, (err, resp) => {
   /**
-   * Request reponse:
+   * Request response:
    * - resp.headers
    * - resp.statusCode
    *

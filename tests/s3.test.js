@@ -231,7 +231,6 @@ describe('S3 SDK', function () {
           'x-trans-id': 'tx606add09487142fa88e67-00641aacf4',
           'x-openstack-request-id': 'tx606add09487142fa88e67-00641aacf4',
           date: 'Wed, 22 Mar 2023 07:23:32 GMT',
-          connection: 'close'
         };
 
         const nockRequest = nock(url1S3)
@@ -264,7 +263,6 @@ describe('S3 SDK', function () {
           'transfer-encoding': 'chunked',
           date: 'Wed, 22 Mar 2023 07:37:22 GMT',
           server: 'AmazonS3',
-          connection: 'close'
         };
 
         const nockRequest = nock(url1S3)
@@ -396,7 +394,6 @@ describe('S3 SDK', function () {
           'x-trans-id': 'txf0b438dfd25b444ba3f60-00641807d7',
           'x-openstack-request-id': 'txf0b438dfd25b444ba3f60-00641807d7',
           date: 'Mon, 20 Mar 2023 07:14:31 GMT',
-          connection: 'close'
         };
 
         const nockRequest = nock(url1S3)
@@ -426,7 +423,6 @@ describe('S3 SDK', function () {
           'x-trans-id': 'txf0b438dfd25b444ba3f60-00641807d7',
           'x-openstack-request-id': 'txf0b438dfd25b444ba3f60-00641807d7',
           date: 'Mon, 20 Mar 2023 07:14:31 GMT',
-          connection: 'close'
         };
 
         const nockRequest = nock(url1S3)
@@ -456,7 +452,6 @@ describe('S3 SDK', function () {
           'x-trans-id': 'txf0b438dfd25b444ba3f60-00641807d7',
           'x-openstack-request-id': 'txf0b438dfd25b444ba3f60-00641807d7',
           date: 'Mon, 20 Mar 2023 07:14:31 GMT',
-          connection: 'close'
         };
 
         const nockRequest = nock(url1S3)
@@ -490,7 +485,6 @@ describe('S3 SDK', function () {
           'x-openstack-request-id': 'tx8fa5f00b19af4756b9ef3-0064184d77',
           date: 'Mon, 20 Mar 2023 12:11:35 GMT',
           'transfer-encoding': 'chunked',
-          connection: 'close'
         };
         const _expectedBody = {
           error: {
@@ -738,7 +732,6 @@ describe('S3 SDK', function () {
           'x-openstack-request-id': 'txfa644d038be848a9938e3-00641850f0',
           date: 'Mon, 20 Mar 2023 12:26:24 GMT',
           'transfer-encoding': 'chunked',
-          connection: 'close'
         };
         const nockRequest = nock(url1S3)
           .defaultReplyHeaders(_header)
@@ -1333,7 +1326,6 @@ describe('S3 SDK', function () {
           'x-openstack-request-id': 'tx33e4496c9d8746ad9cfcb-006418540f',
           date: 'Mon, 20 Mar 2023 12:39:43 GMT',
           'transfer-encoding': 'chunked',
-          connection: 'close'
         };
 
         const nockRequestS1 = nock(url1S3)
@@ -1374,7 +1366,6 @@ describe('S3 SDK', function () {
           'x-openstack-request-id': 'txd14fbe8bc05341c0b548a-00640b2752',
           date: 'Fri, 10 Mar 2023 12:49:22 GMT',
           'transfer-encoding': 'chunked',
-          connection: 'close'
         };
 
         const nockRequestS1 = nock(url1S3)
@@ -1414,7 +1405,6 @@ describe('S3 SDK', function () {
           'x-openstack-request-id': 'txd14fbe8bc05341c0b548a-00640b2752',
           date: 'Fri, 10 Mar 2023 12:49:22 GMT',
           'transfer-encoding': 'chunked',
-          connection: 'close'
         };
 
         const nockRequestS1 = nock(url1S3)
@@ -1454,7 +1444,6 @@ describe('S3 SDK', function () {
           'x-openstack-request-id': 'txd14fbe8bc05341c0b548a-00640b2752',
           date: 'Fri, 10 Mar 2023 12:49:22 GMT',
           'transfer-encoding': 'chunked',
-          connection: 'close'
         };
 
         const nockRequestS1 = nock(url1S3)
@@ -1509,7 +1498,6 @@ describe('S3 SDK', function () {
           'x-trans-id': 'txf010ba580ff0471ba3a0b-0064181698',
           'x-openstack-request-id': 'txf010ba580ff0471ba3a0b-0064181698',
           date: 'Mon, 20 Mar 2023 08:17:29 GMT',
-          connection: 'close'
         };
 
         const nockRequestS1 = nock(url1S3)
@@ -1536,7 +1524,6 @@ describe('S3 SDK', function () {
           'x-trans-id': 'txf010ba580ff0471ba3a0b-0064181698',
           'x-openstack-request-id': 'txf010ba580ff0471ba3a0b-0064181698',
           date: 'Mon, 20 Mar 2023 08:17:29 GMT',
-          connection: 'close'
         };
 
         const nockRequestS1 = nock(url1S3)
@@ -1563,7 +1550,6 @@ describe('S3 SDK', function () {
           'x-openstack-request-id': 'tx424f2a5a6e684da581e77-0064185482',
           date: 'Mon, 20 Mar 2023 12:41:38 GMT',
           'transfer-encoding': 'chunked',
-          connection: 'close'
         };
 
         const nockRequestS1 = nock(url1S3)
@@ -1601,7 +1587,6 @@ describe('S3 SDK', function () {
           'x-trans-id': 'txf010ba580ff0471ba3a0b-0064181698',
           'x-openstack-request-id': 'txf010ba580ff0471ba3a0b-0064181698',
           date: 'Mon, 20 Mar 2023 08:17:29 GMT',
-          connection: 'close'
         };
 
         const nockRequestS1 = nock(url1S3)
@@ -1638,7 +1623,6 @@ describe('S3 SDK', function () {
           'x-trans-id': 'txf010ba580ff0471ba3a0b-0064181698',
           'x-openstack-request-id': 'txf010ba580ff0471ba3a0b-0064181698',
           date: 'Mon, 20 Mar 2023 08:17:29 GMT',
-          connection: 'close'
         };
 
         const nockRequestS1 = nock(url1S3)
@@ -1684,7 +1668,6 @@ describe('S3 SDK', function () {
           'x-openstack-request-id': 'txb40580debedc4ff9b36dc-00641818cb',
           date: 'Mon, 20 Mar 2023 08:26:51 GMT',
           'transfer-encoding': 'chunked',
-          connection: 'close'
         };
 
         const nockRequestS1 = nock(url1S3)
@@ -1729,7 +1712,6 @@ describe('S3 SDK', function () {
           'x-trans-id': 'txb383f29c0dad46f9919b5-00641844ba',
           'x-openstack-request-id': 'txb383f29c0dad46f9919b5-00641844ba',
           date: 'Mon, 20 Mar 2023 11:34:18 GMT',
-          connection: 'close'
         };
 
         const _filesToDelete = [
@@ -1778,7 +1760,6 @@ describe('S3 SDK', function () {
           'x-trans-id': 'txb383f29c0dad46f9919b5-00641844ba',
           'x-openstack-request-id': 'txb383f29c0dad46f9919b5-00641844ba',
           date: 'Mon, 20 Mar 2023 11:34:18 GMT',
-          connection: 'close'
         };
 
         const _filesToDelete = [
@@ -1826,7 +1807,6 @@ describe('S3 SDK', function () {
           'x-trans-id': 'tx3cf216266bf24a888354a-0064184a78',
           'x-openstack-request-id': 'tx3cf216266bf24a888354a-0064184a78',
           date: 'Mon, 20 Mar 2023 11:58:49 GMT',
-          connection: 'close'
         };
 
         const _filesToDelete = [
@@ -1878,7 +1858,6 @@ describe('S3 SDK', function () {
           'x-openstack-request-id': 'tx84736ac6d5544b44ba91a-0064185021',
           date: 'Mon, 20 Mar 2023 12:22:57 GMT',
           'transfer-encoding': 'chunked',
-          connection: 'close'
         };
 
         const _filesToDelete = [
@@ -1932,7 +1911,6 @@ describe('S3 SDK', function () {
           'x-trans-id': 'txe69b17ed1cf04260b9090-0064184b17',
           'x-openstack-request-id': 'txe69b17ed1cf04260b9090-0064184b17',
           date: 'Mon, 20 Mar 2023 12:01:28 GMT',
-          connection: 'close'
         };
 
         const _filesToDelete = [
@@ -2008,7 +1986,6 @@ describe('S3 SDK', function () {
           'x-trans-id': 'txd2aa2b0a02554657b5efe-0064185752',
           'x-openstack-request-id': 'txd2aa2b0a02554657b5efe-0064185752',
           date: 'Mon, 20 Mar 2023 12:53:38 GMT',
-          connection: 'close'
         };
 
         const nockRequestS1 = nock(url1S3)
@@ -2041,7 +2018,6 @@ describe('S3 SDK', function () {
           'x-trans-id': 'txd2aa2b0a02554657b5efe-0064185752',
           'x-openstack-request-id': 'txd2aa2b0a02554657b5efe-0064185752',
           date: 'Mon, 20 Mar 2023 12:53:38 GMT',
-          connection: 'close'
         };
 
         const nockRequestS1 = nock(url1S3)
@@ -2067,7 +2043,6 @@ describe('S3 SDK', function () {
           'x-trans-id': 'tx10b87fee8896442cb93ce-00641855ea',
           'x-openstack-request-id': 'tx10b87fee8896442cb93ce-00641855ea',
           date: 'Mon, 20 Mar 2023 12:47:38 GMT',
-          connection: 'close'
         };
 
         const nockRequestS1 = nock(url1S3)
@@ -2103,7 +2078,6 @@ describe('S3 SDK', function () {
           'x-trans-id': 'txd2aa2b0a02554657b5efe-0064185752',
           'x-openstack-request-id': 'txd2aa2b0a02554657b5efe-0064185752',
           date: 'Mon, 20 Mar 2023 12:53:38 GMT',
-          connection: 'close'
         };
 
         const nockRequestS1 = nock(url1S3)
@@ -2146,7 +2120,6 @@ describe('S3 SDK', function () {
           'x-trans-id': 'txd2aa2b0a02554657b5efe-0064185752',
           'x-openstack-request-id': 'txd2aa2b0a02554657b5efe-0064185752',
           date: 'Mon, 20 Mar 2023 12:53:38 GMT',
-          connection: 'close'
         };
 
         const nockRequestS1 = nock(url1S3)
@@ -2198,7 +2171,6 @@ describe('S3 SDK', function () {
           'x-trans-id': 'tx1cbdc88e9f104c038aa3d-0064185be2',
           'x-openstack-request-id': 'tx1cbdc88e9f104c038aa3d-0064185be2',
           date: 'Mon, 20 Mar 2023 13:13:06 GMT',
-          connection: 'close'
         };
 
         const nockRequestS2 = nock(url1S3, {
@@ -2238,7 +2210,6 @@ describe('S3 SDK', function () {
           'x-trans-id': 'tx1cbdc88e9f104c038aa3d-0064185be2',
           'x-openstack-request-id': 'tx1cbdc88e9f104c038aa3d-0064185be2',
           date: 'Mon, 20 Mar 2023 13:13:06 GMT',
-          connection: 'close'
         };
 
         const nockRequestS2 = nock(url1S3, {
@@ -2279,7 +2250,6 @@ describe('S3 SDK', function () {
           'x-openstack-request-id': 'txb4919778632448bbac785-0064185d71',
           date: 'Mon, 20 Mar 2023 13:19:45 GMT',
           'transfer-encoding': 'chunked',
-          connection: 'close'
         };
 
         const nockRequestS2 = nock(url1S3, {
@@ -2318,7 +2288,6 @@ describe('S3 SDK', function () {
           'x-openstack-request-id': 'txb63fe612d3364257bec19-0064185fcf',
           date: 'Mon, 20 Mar 2023 13:29:51 GMT',
           'transfer-encoding': 'chunked',
-          connection: 'close'
         };
 
         const nockRequestS2 = nock(url1S3, {
@@ -2357,7 +2326,6 @@ describe('S3 SDK', function () {
           'x-openstack-request-id': 'txb63fe612d3364257bec19-0064185fcf',
           date: 'Mon, 20 Mar 2023 13:29:51 GMT',
           'transfer-encoding': 'chunked',
-          connection: 'close'
         };
 
         const nockRequestS2 = nock(url1S3, {
@@ -2407,7 +2375,6 @@ describe('S3 SDK', function () {
           'x-trans-id': 'tx1cbdc88e9f104c038aa3d-0064185be2',
           'x-openstack-request-id': 'tx1cbdc88e9f104c038aa3d-0064185be2',
           date: 'Mon, 20 Mar 2023 13:13:06 GMT',
-          connection: 'close'
         };
 
 
@@ -2464,7 +2431,6 @@ describe('S3 SDK', function () {
           'x-trans-id': 'tx1cbdc88e9f104c038aa3d-0064185be2',
           'x-openstack-request-id': 'tx1cbdc88e9f104c038aa3d-0064185be2',
           date: 'Mon, 20 Mar 2023 13:13:06 GMT',
-          connection: 'close'
         };
 
 
@@ -2517,7 +2483,6 @@ describe('S3 SDK', function () {
           'x-openstack-request-id': 'tx439620795cdd41b08c58c-0064186222',
           date: 'Mon, 20 Mar 2023 13:39:46 GMT',
           'transfer-encoding': 'chunked',
-          connection: 'close'
         };
 
         const nockRequestS1 = nock(url1S3)

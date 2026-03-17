@@ -2,7 +2,7 @@
 
 ## Highlight
 
-* 🚀 Vanilla JS + Only 2 dependencies [simple-get](https://github.com/feross/simple-get) for HTTP requests and [aws4](https://github.com/mhart/aws4) for signing S3 requests.
+* 🚀 Vanilla JS + Only 1 dependency [rock-req](https://github.com/carboneio/rock-req) for HTTP requests.
 * 🌎 Provide one or a list of storages credentials: the SDK will switch storage if something goes wrong (Server/DNS not responding, timeout, error 500, too many redirection, authentication error, and more...). As soon as the main storage is available, the SDK returns to the main storage
 * ✨ If a request fails due to an authentication token expiration, the SDK fetches a new authentication token and retry the initial request with it (Concerns only Swift Storage).
 * 🚩 When initialising the Tiny SDK client, provide only a list of S3 or a list of Swift credentials, switching from one storage system to another is not supported.
@@ -100,7 +100,7 @@ storage.connection((err) => {
 ### Upload a file
 
 ```js
-const path = require(path);
+const path = require('path');
 
 /** SOLUTION 1: The file content can be passed by giving the file absolute path **/
 storage.uploadFile('container', 'filename.jpg', path.join(__dirname, './assets/file.txt'), (err, resp) => {
@@ -183,7 +183,7 @@ storage.downloadFile('containerName', '2023-invoice.pdf', { output: createOutput
     return console.log("Error on download: ", err);
   }
   /**
-   * Request reponse:
+   * Request response:
    * - resp.headers
    * - resp.statusCode
    *
@@ -296,7 +296,7 @@ To create or update custom metadata, use the "X-Object-Meta-name" header, where 
 Checkout the list of [headers availables](https://docs.openstack.org/api-ref/object-store/?expanded=create-or-replace-object-detail,create-or-update-object-metadata-detail#create-or-update-object-metadata).
 
 ```js
-storage.setFileMetadata('templates', 'filename.jpg', { headers: { 'Content-Type': 'image/jpeg', 'X-Object-Meta-LocationOrigin': 'Paris/France', 'X-Delete-At': 1440619048 }} (err, resp) => {
+storage.setFileMetadata('templates', 'filename.jpg', { headers: { 'Content-Type': 'image/jpeg', 'X-Object-Meta-LocationOrigin': 'Paris/France', 'X-Delete-At': 1440619048 }}, (err, resp) => {
   if (err) {
     // handle error
   }
@@ -317,7 +317,7 @@ Bulk delete files (Maximum 10 000 objects per requests).
 /**
  * Provide a list of filenames as second argument, it can be:
  * - a list of string ["object1.pdf", "object2.docx", "object3.pptx"]
- * - a list of object with `keys` as attribute name [{ "keys": "object1.pdf"}, { "keys": "object2.docx" }, { "keys": "object3.pptx" }]
+ * - a list of objects with `key` as attribute name [{ "key": "object1.pdf"}, { "key": "object2.docx" }, { "key": "object3.pptx" }]
  * - Or a list of objects with `name` as attribute for the filename: [{ "name" : "file1.png" }, { "name": "file2.docx" }]
  * - Or a list of objects with a custom Key for filenames, you must define `fileNameKey` as option (third argument). 
 */
@@ -328,7 +328,7 @@ swift.deleteFiles('', filesToDelete, function(err, resp) {
     // handle error
   }
  /**
-   * Request reponse:
+   * Request response:
    * - resp.headers
    * - resp.statusCode
    * - resp.body => body as Object, example: {"Response Status":"200 OK","Response Body":"","Number Deleted":3,"Number Not Found":0,"Errors":[]}
@@ -346,7 +346,7 @@ storage.headBucket('templates', (err, resp) => {
     // handle error
   }
    /**
-   * Request reponse:
+   * Request response:
    * - resp.headers
    * - resp.statusCode
    * - resp.body
@@ -364,7 +364,7 @@ storage.listBuckets((err, resp) => {
     // handle error
   }
   /**
-   * Request reponse:
+   * Request response:
    * - resp.headers
    * - resp.statusCode
    * - resp.body > The response body returns a list of containers as an Array, example: 
@@ -386,7 +386,7 @@ storage.listBuckets((err, resp) => {
 The `request` function can be used to request the object storage with custom options.
 Prototype to get the data as Buffer:
 ```js
-request(method, path, { headers, queries, body }, (err, body, headers) => {}).
+request(method, path, { headers, queries, body }, (err, resp) => {}).
 ```
 Prototype to get the data as Stream
 Set the option `output` with a function returning the output Stream.
@@ -398,7 +398,7 @@ function createOutputStream(opts, res) {
   return writer
 }
 
-request(method, path, { headers, queries, body, output: createOutputStream }, (err) => {})`.
+request(method, path, { headers, queries, body, output: createOutputStream }, (err) => {})
 ```
 
 The base URL requests by default the account, passing an empty string will request the account details. For container requests, pass the container name, such as: `/{container}`. For file requests, pass the container and the file, such as: `/{container}/{filename}`. Object Storage Swift API specification: https://docs.openstack.org/api-ref/object-store/
@@ -445,7 +445,7 @@ storage.setTimeout(30000); // 30 seconds
 To simplify requests to custom named containers into different SWIFT providers, it is possible to create aliases by providing a `buckets` object on credentials. When calling a function, define the bucket alias as first argument, it will request the current active storage automatically.
 
 ```js
-const storageClient = require('')
+const storageClient = require('tiny-storage-client')
 
 const swift = storageClient([
   /** SWIFT Storage 1 **/
@@ -481,7 +481,7 @@ swift.downloadFile('invoices', '2023-invoice.pdf', (err, resp) => {
     return console.log("Error on download: ", err);
   }
   /**
-   * Request reponse:
+   * Request response:
    * - resp.body => downloaded file as Buffer
    * - resp.headers
    * - resp.statusCode

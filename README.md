@@ -15,11 +15,11 @@
 * 👉 **Convert XML/JSON responses to JS** - XML/JSON responses are automatically converted into `Objects`/`Arrays` (Concerns only: `listFiles`, `listBuckets` and `Errors`).
 * 🚩 **Mixing S3 and Swift credentials is not supported** - When initialising the Tiny SDK client, provide only a list of S3 or a list of Swift credentials, switching from one storage system to another is not supported.
 
-## Getting Start
+## Getting Started
 
 Install and setup in less than 2 minutes:
 - [AWS S3 API](./USAGE-S3.md)
-- [Open Stack Swift Storage API](./USAGE-SWIFT.md)
+- [OpenStack Swift Storage API](./USAGE-SWIFT.md)
 
 ## Supported Methods
 
@@ -41,7 +41,7 @@ Install and setup in less than 2 minutes:
 
 ## S3 Example
 
-The following exemple is an initialisation of the SDK client with a list of S3 credentials and a request to download a file.
+The following example is an initialisation of the SDK client with a list of S3 credentials and a request to download a file.
 If something goes wrong when downloading the file, the SDK will switch storage and retry to download with the second credentials.
 As soon as the first storage is available, the SDK returns to the main storage
 
@@ -66,7 +66,7 @@ s3storage.downloadFile('bucketName', 'filename.pdf', (err, resp) => {
     return console.log("Error on download: ", err);
   }
   /**
-   * Request reponse:
+   * Request response:
    * - resp.body => downloaded file as Buffer
    * - resp.headers
    * - resp.statusCode
@@ -100,7 +100,7 @@ Give a ⭐️ if this project helped you!
 
 # Supporters
 
-This packaged in maintained by Carbone:
+This package is maintained by Carbone:
 
 <p>
   <a href="https://carbone.io" target="_blank" alt="Supporter Carbone.io - Automate the generation of documents with a templating and nocode service">

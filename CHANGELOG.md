@@ -1,3 +1,7 @@
+### v3.4.1
+- Updated dev dependencies: `mocha` to `11.7.5`, `eslint` to `10.0.3`
+- Updated dependency: `rock-req` to `5.2.1`
+
 ### v3.4.0
 - Added support for Localhost Minio as S3 storage: It is possible to define the URL "http://localhost:80" when entering S3 credentials. While trailing slashes at the end of the URL are permitted, their use is not recommended.
 - Updade dev dependencies
