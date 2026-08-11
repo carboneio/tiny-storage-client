@@ -4,26 +4,28 @@
 ## Highlight
 
 * 🚀 Vanilla JS + Only 2 dependencies [rock-req](https://github.com/carboneio/rock-req) for HTTP requests and [aws4](https://github.com/mhart/aws4) for signing S3 requests.
-* 🌎 Provide one or a list of S3 storages credentials: the SDK will switch storage if something goes wrong (Server/DNS not responding, timeout, error 500, too many redirection, authentication error, and more...). As soon as the main storage is available, the SDK returns to the main storage.
+* 🌎 Provide one or a list of S3 storages credentials: the SDK will switch storage if something goes wrong (Server/DNS not responding, timeout, error 500, too many redirects, authentication error, and more...). As soon as the main storage is available, the SDK returns to the main storage.
 * ✨ File names and request parameters are automatically encoded.
 * ⚡️ Use [Bucket alias](#bucket-alias) if you have synchronised buckets into multiple regions/datacenters
 * 👉 XML responses from S3 are automatically converted as Javascript Objects (for `ListObjects`, `deleteFiles` and any `Errors`).
 * 🚩 When initialising the Tiny SDK client, provide only a list of S3 or a list of Swift credentials, switching from one storage system to another is not supported.
-* ✅ Production battle-tested against hundreds of GBs of file uploads & downloads
+* ✅ Production battle-tested against hundreds of TBs of file uploads & downloads
 
 ## Install
 
 ```bash
-$ npm install --save tiny-storage-client
+$ npm install tiny-storage-client
 // or
 $ yarn add tiny-storage-client
 ```
+
+Requires **Node.js 20 or higher**.
 
 ## API Usage
 
 ### Setup
 
-Initialise the SDK with one or multiple storage, if something goes wrong (Error 500 / Timeout), the next region/provider will take over automatically. If any storage is available, an error message is returned `Error: All S3 storages are not available`.
+Initialise the SDK with one or multiple storage, if something goes wrong (Error 500 / Timeout), the next region/provider will take over automatically. If no storage is available, an error message is returned `Error: All S3 storages are not available`.
 
 On the following example, the SDK is initialised with credentials of 2 cloud providers: a OVHCloud S3 storage and a AWS S3 storage.
 
@@ -75,7 +77,7 @@ s3storage.uploadFile('bucketName', 'file.pdf', Buffer.from('file-buffer'), (err,
    */
 })
 
-/** SOLUTION 3: the function accepts a optionnal fourth argument `option` including query parameters and headers. List of query parameters and headers **/
+/** SOLUTION 3: the function accepts an optional fourth argument `option` including query parameters and headers. List of query parameters and headers **/
 s3storage.uploadFile('bucketName', 'file.pdf', Buffer.from('file-buffer'), {
   headers: {
     "x-amz-meta-name": "invoice-2023",
@@ -153,7 +155,10 @@ s3storage.deleteFile('bucketName', 'invoice-2023.pdf', (err, resp) => {
 
 ### Delete files
 
-Bulk delete files (Maximum 1000 keys per requests)
+Bulk delete files (Maximum 1000 keys per request).
+
+The list of files must be an `Array`, and must not exceed 1000 entries, otherwise an error is returned on the callback:
+`Deleting files: the list of files must be an Array` / `Deleting files: 1000 files maximum per request`.
 
 ```js
 /**
@@ -321,7 +326,7 @@ s3storage.headBucket('bucketName', (err, resp) => {
 Returns a list of all buckets owned by the authenticated sender of the request. To use this operation, you must have the s3:ListAllMyBuckets permission.
 
 ```js
-storage.listBuckets((err, resp) => {
+s3storage.listBuckets((err, resp) => {
   if (err) {
     return console.log("Error list Buckets: ", err.toString());
   }
@@ -341,7 +346,8 @@ To simplify requests to custom named bucket into different S3 providers, it is p
 ```js
 const storageClient = require('tiny-storage-client');
 
-const s3storage = storageClient({
+/** The credentials of every storage must be passed as a single Array */
+const s3storage = storageClient([{
   accessKeyId    : 'accessKeyId',
   secretAccessKey: 'secretAccessKey',
   url            : 's3.gra.io.cloud.ovh.net',
@@ -360,7 +366,7 @@ const s3storage = storageClient({
     invoices : "invoices-aws-west-3",
     www      : "www-aws-west-3"
   }
-})
+}])
 
 /**
  * On the following example, "downloadFile" will request the main storage "invoices-ovh-gra"
@@ -385,14 +391,14 @@ s3storage.downloadFile('invoices', '2023-invoice.pdf', (err, resp) => {
 The `request` function can be used to request the object storage with custom options.
 Prototype to get the data as Buffer:
 ```js
-request(method, path, { headers, queries, body }, (err, resp) => {
+s3storage.request(method, path, { headers, queries, body }, (err, resp) => {
   /**
    * Request response:
    * - resp.body => body as Buffer
    * - resp.headers
    * - resp.statusCode
    */
-}).
+})
 ```
 Prototype to get the data as Stream, set the option `output` with a function returning the output Stream.
 ```js
@@ -402,7 +408,7 @@ function createOutputStream(opts, res) {
   return writer
 }
 
-request(method, path, { headers, queries, body, output: createOutputStream }, (err, resp) => {
+s3storage.request(method, path, { headers, queries, body, output: createOutputStream }, (err, resp) => {
   /**
    * Request response:
    * - resp.headers
@@ -410,9 +416,9 @@ request(method, path, { headers, queries, body, output: createOutputStream }, (e
    *
    * When the callback is called, the file created and the stream is closed, meaning you don't have to pipe yourself!.
    */
-})`.
+})
 ```
-For container requests, pass the container name as `path`, such as: `/{container}`. For object requests, pass the container and the object name, such as: `/{container}/{object}`.
+For bucket requests, pass the bucket name as `path`, such as: `/{bucket}`. For object requests, pass the bucket and the object name, such as: `/{bucket}/{object}`.
 
 ### Logs
 

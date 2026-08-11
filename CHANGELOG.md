@@ -4,6 +4,7 @@
 - **S3**: `deleteFiles` returns an error on the callback when more than 1000 files are provided, instead of letting S3 reply a `MalformedXML` error.
 - **S3**: exposed the `request` method, it was already documented in `USAGE-S3.md` but missing from the returned client.
 - Note: `uploadFile` accepts a Buffer, a file path, or a function returning a ReadStream on Swift. On S3, streams are not supported (AWS4 cannot sign a stream), the file is read in memory before being sent.
+- Documentation: fixed the "Bucket Alias" example of `USAGE-S3.md`, the credentials were passed as two arguments instead of an Array so the second storage was silently ignored. Documented the Swift `interface` option, and corrected the `request` examples of both usage guides.
 - Fixed `xmlToJson`: a decimal value was truncated to its integer part, `<Size>1.75</Size>` returned `1` instead of `1.75`. Values are now converted with `Number` instead of `parseInt`, which also fixes the exponent notation (`1e3` returned `1`) and the leading dot (`.5` returned `NaN`). Integers, hexadecimal strings and quoted ETags are unchanged.
 - Fixed crashes: the SDK threw synchronously instead of calling back with an error, so the exception could not be caught from the callback. Now returning an error on the callback when:
   - `deleteFiles` receives something else than an Array of files (S3 + Swift)

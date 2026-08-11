@@ -3,10 +3,11 @@
 ## Highlight
 
 * 🚀 Vanilla JS + Only 1 dependency [rock-req](https://github.com/carboneio/rock-req) for HTTP requests.
-* 🌎 Provide one or a list of storages credentials: the SDK will switch storage if something goes wrong (Server/DNS not responding, timeout, error 500, too many redirection, authentication error, and more...). As soon as the main storage is available, the SDK returns to the main storage
-* ✨ If a request fails due to an authentication token expiration, the SDK fetches a new authentication token and retry the initial request with it (Concerns only Swift Storage).
+* 🌎 Provide one or a list of storages credentials: the SDK will switch storage if something goes wrong (Server/DNS not responding, timeout, error 500, too many redirects, authentication error, and more...). As soon as the main storage is available, the SDK returns to the main storage
+* ✨ If a request fails due to an authentication token expiration, the SDK fetches a new authentication token and retries the initial request with it.
+* 🔒 Object names and request parameters are automatically encoded, as required by the [Swift API](https://docs.openstack.org/swift/latest/api/object_api_v1_overview.html). The `/` separators are kept as-is, so pseudo-folders such as `invoices/2024/client.pdf` keep working.
 * 🚩 When initialising the Tiny SDK client, provide only a list of S3 or a list of Swift credentials, switching from one storage system to another is not supported.
-* ✅ Production battle-tested against hundreds of GBs of file uploads & downloads
+* ✅ Production battle-tested against hundreds of TBs of file uploads & downloads
 
 ## Install
 
@@ -63,15 +64,18 @@ Learn more [on the OpenStack documentation](https://docs.openstack.org/swift/lat
 ### 2. Install the package with your package manager:
 
 ```bash
-$ npm install --save tiny-storage-client
+$ npm install tiny-storage-client
 // or
 $ yarn add tiny-storage-client
 ```
+
+Requires **Node.js 20 or higher**.
+
 ## API Usage
 
 ### Connection
 
-Initialise the SDK with one or multiple storage, if something goes wrong, the next region will take over automatically. If any storage is available, an error message is returned `Error: Object Storages are not available`.
+Initialise the SDK with one or multiple storage, if something goes wrong, the next region will take over automatically. If no storage is available, an error message is returned `Error: Object Storages are not available`.
 
 ```js
 const storageClient = require('tiny-storage-client');
@@ -81,7 +85,8 @@ let storage = storageClient([{
   username   : 'username-1',                    // REQUIRED
   password   : 'password-1',                    // REQUIRED
   region     : 'region-1',                      // REQUIRED
-  tenantName : 'tenantName-1'                   // OPTIONAL
+  tenantName : 'tenantName-1',                  // OPTIONAL
+  interface  : 'public'                         // OPTIONAL: 'public', 'internal' or 'admin'
 },
 {
   authUrl    : 'https://auth.cloud.ovh.net/v3',
@@ -97,6 +102,13 @@ storage.connection((err) => {
   // Success, connected!
 })
 ```
+
+`connection` must be called once before any other method: it fetches the auth token and resolves the
+endpoint of the region. The token is then renewed automatically when it expires.
+
+The optional `interface` selects which endpoint of the Swift catalog is used for the region. When it is
+not set, every interface of the region matches and the first one returned by the server is used, which
+may not be the one you expect if the catalog exposes several.
 ### Upload a file
 
 ```js
@@ -141,7 +153,7 @@ storage.uploadFile('container', 'filename.jpg', () => fs.createReadStream(path.j
    **/
 });
 
-/** SOLUTION 4: the function accepts a optionnal fourth argument `option` including query parameters and headers. List of query parameters and headers: https://docs.openstack.org/api-ref/object-store/?expanded=create-or-replace-object-detail#create-or-replace-object **/
+/** SOLUTION 4: the function accepts an optional fourth argument `option` including query parameters and headers. List of query parameters and headers: https://docs.openstack.org/api-ref/object-store/?expanded=create-or-replace-object-detail#create-or-replace-object **/
 storage.uploadFile('container', 'filename.jpg', Buffer.from("File content"), { queries: { temp_url_expires: '1440619048' }, headers: { 'X-Object-Meta-LocationOrigin': 'Paris/France' }}, (err, resp) => {
   if (err) {
     // handle error
@@ -386,7 +398,7 @@ storage.listBuckets((err, resp) => {
 The `request` function can be used to request the object storage with custom options.
 Prototype to get the data as Buffer:
 ```js
-request(method, path, { headers, queries, body }, (err, resp) => {}).
+storage.request(method, path, { headers, queries, body }, (err, resp) => {})
 ```
 Prototype to get the data as Stream
 Set the option `output` with a function returning the output Stream.
@@ -398,7 +410,7 @@ function createOutputStream(opts, res) {
   return writer
 }
 
-request(method, path, { headers, queries, body, output: createOutputStream }, (err) => {})
+storage.request(method, path, { headers, queries, body, output: createOutputStream }, (err) => {})
 ```
 
 The base URL requests by default the account, passing an empty string will request the account details. For container requests, pass the container name, such as: `/{container}`. For file requests, pass the container and the file, such as: `/{container}/{filename}`. Object Storage Swift API specification: https://docs.openstack.org/api-ref/object-store/
