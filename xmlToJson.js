@@ -90,7 +90,9 @@ function xmlToJson (xml, options) {
  */
 const getValue = (str) => {
   if (!isNaN(str) && !isNaN(parseFloat(str))) {
-    return parseInt(str);
+    /** `Number` and not `parseInt`, which would drop the decimal part of "1.75". */
+    /** It is also the conversion used by the `isNaN(str)` guard above. */
+    return Number(str);
   } else if (str.toLowerCase() === "true") {
     return true;
   } else if (str.toLowerCase() === "false") {

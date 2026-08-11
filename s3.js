@@ -71,6 +71,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
+    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
+    options = options ?? {};
     options.alias = bucket;
     return request('GET', `/${bucket}/${encodeURIComponent(filename)}`, options, callback);
   }
@@ -83,6 +85,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
+    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
+    options = options ?? {};
     options.alias = bucket;
     const _uploadFileRequest = function (bucket, filename, objectBuffer, options, callback) {
       options.body = objectBuffer;
@@ -115,6 +119,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
+    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
+    options = options ?? {};
     options.alias = bucket;
     return request('DELETE', `/${bucket}/${encodeURIComponent(filename)}`, options, callback);
   }
@@ -133,6 +139,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
+    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
+    options = options ?? {};
     options.defaultQueries = 'list-type=2';
     options.alias = bucket;
     return request('GET', `/${bucket}`, options, (err, resp) => {
@@ -156,6 +164,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
+    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
+    options = options ?? {};
     options.alias = bucket;
     return request('HEAD', `/${bucket}/${encodeURIComponent(filename)}`, options, callback);
   }
@@ -172,6 +182,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
+    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
+    options = options ?? {};
     options.alias = bucket;
     return request('HEAD', `/${bucket}`, options, callback);
   }
@@ -185,6 +197,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
+    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
+    options = options ?? {};
     return request('GET', `/`, options, (err, resp) => {
       if (err) {
         return callback(err);
@@ -212,6 +226,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
+    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
+    options = options ?? {};
 
     options.alias = bucket;
     options["headers"] = {
@@ -250,7 +266,13 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
+    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
+    options = options ?? {};
     options.alias = bucket;
+
+    if (Array.isArray(files) === false) {
+      return callback(new Error('Deleting files: the list of files must be an Array'));
+    }
 
     let _body = '<Delete>';
     for (let i = 0; i < files.length; i++) {
@@ -295,7 +317,18 @@ module.exports = (config) => {
    */
   function request (method, path, options, callback) {
 
+    options = options ?? {};
+
     if (!options?.try) { options.try = 0; }
+
+    /** A "requestStorageIndex" pointing to nothing would leave the storage undefined when signing the request */
+    if (options?.requestStorageIndex !== undefined
+      && (Number.isInteger(options.requestStorageIndex) === false
+        || options.requestStorageIndex < 0
+        || options.requestStorageIndex >= _config.storages.length)) {
+      log(`S3 Storage | The requested storage index "${options.requestStorageIndex}" does not exist`, 'error');
+      return callback(new Error(`S3 storage index "${options.requestStorageIndex}" does not exist`));
+    }
 
     if (_config.activeStorage >= _config.storages.length || options.try >= _config.storages.length) {
       /** Reset the index of the main storage if any storage are available */
@@ -338,21 +371,23 @@ module.exports = (config) => {
     }
 
     const _urlParams = getUrlParameters(options?.queries ?? '', options?.defaultQueries ?? '');
+    const _isStreamOutput = isFnStream(options?.output);
+    const _pathWithParams = `${_path}${_urlParams ?? ''}`;
     const _requestParams = aws4.sign({
       method: method,
-      url: `${_activeStorage.url}${_path}${_urlParams ?? ''}`,
+      url: `${_activeStorage.url}${_pathWithParams}`,
       ...(options?.body ? { body: options?.body } : {}),
       headers: {
         ...(options?.headers ? options?.headers : {})
       },
       timeout: _config.timeout,
       /** Rock-req Options */
-      output: isFnStream(options?.output) ? options?.output : null,
+      output: _isStreamOutput ? options?.output : null,
       ...(options?.requestOptions ? options?.requestOptions : {}),
       /** REQUIRED FOR AWS4 SIGNATURE */
       service: 's3',
       hostname: _activeStorage.hostname,
-      path: `${_path}${_urlParams ?? ''}`,
+      path: _pathWithParams,
       region: _activeStorage.region
     }, {
       accessKeyId: _activeStorage.accessKeyId,
@@ -372,12 +407,12 @@ module.exports = (config) => {
         return callback(err, res);
       }
       /** If the response is an error as XML and not a stream, the error is parsed as JSON */
-      if (res.statusCode >= 400 && res?.headers?.['content-type'] === 'application/xml' && isFnStream(options?.output) === false) {
+      if (res.statusCode >= 400 && res?.headers?.['content-type'] === 'application/xml' && _isStreamOutput === false) {
         body = xmlToJson(body?.toString() ?? '');
       }
-      return isFnStream(options?.output) === true ? callback(null, res) : callback(null, { headers : res.headers, statusCode: res.statusCode, body : body });
+      return _isStreamOutput === true ? callback(null, res) : callback(null, { headers : res.headers, statusCode: res.statusCode, body : body });
     };
-    return isFnStream(options?.output) === true ? rock(_requestParams, _requestCallback) : rock.concat(_requestParams, _requestCallback);
+    return _isStreamOutput === true ? rock(_requestParams, _requestCallback) : rock.concat(_requestParams, _requestCallback);
   }
 
   /**
@@ -400,7 +435,7 @@ module.exports = (config) => {
         _str += element;
       }
     }
-    return Buffer.from(_str).length;
+    return Buffer.byteLength(_str);
   }
 
   /** ========= PRIVATE FUNCTIONS ========== */
@@ -412,7 +447,8 @@ module.exports = (config) => {
    */
   function getMD5 (data) {
     try {
-      return crypto.createHash('md5').update(typeof data === 'string' ? Buffer.from(data) : data ).digest('base64');
+      /** `update` accepts a string directly (utf8), converting it to a Buffer first only copies it twice. */
+      return crypto.createHash('md5').update(data).digest('base64');
     } catch(err) {
       log(`S3 Storage | getMD5: ${err.toString()}`, "error");
       return '';
@@ -439,6 +475,7 @@ module.exports = (config) => {
     listBuckets,
     getFileMetadata,
     setFileMetadata,
+    request,
     setTimeout,
     getConfig,
     setConfig,

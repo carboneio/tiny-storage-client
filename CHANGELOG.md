@@ -1,3 +1,16 @@
+### v3.5.0
+- **S3**: exposed the `request` method, it was already documented in `USAGE-S3.md` but missing from the returned client.
+- Fixed `xmlToJson`: a decimal value was truncated to its integer part, `<Size>1.75</Size>` returned `1` instead of `1.75`. Values are now converted with `Number` instead of `parseInt`, which also fixes the exponent notation (`1e3` returned `1`) and the leading dot (`.5` returned `NaN`). Integers, hexadecimal strings and quoted ETags are unchanged.
+- Fixed crashes: the SDK threw synchronously instead of calling back with an error, so the exception could not be caught from the callback. Now returning an error on the callback when:
+  - `deleteFiles` receives something else than an Array of files (S3 + Swift)
+  - a request is made with a `requestStorageIndex` pointing to a storage that does not exist (S3)
+  - `null` is explicitly passed as the `options` argument of any method (S3 + Swift)
+  - a Swift bulk-delete body is not a String, or the region is logged while all the storages are exhausted
+- Performance: removed two useless Buffer allocations (`getMD5` and `getMetadataTotalBytes`) and hoisted values computed several times per request.
+- Updated dev dependencies: `nock` to `14.0.17`, `eslint` to `10.8.1`, `mocha` to `11.8.0`
+- Fixed the test suite for `nock@14`, which now streams exactly the `content-length` declared by a mock, and no longer returns a body for `HEAD` responses
+- Added tests for `xmlToJson`: indented XML, tag attributes, boolean case, empty values, negative numbers, `forceArray` variants and numeric coercion
+
 ### v3.4.1
 - Updated dev dependencies: `mocha` to `11.7.5`, `eslint` to `10.0.3`
 - Updated dependency: `rock-req` to `5.2.1`

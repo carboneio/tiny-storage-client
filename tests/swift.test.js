@@ -6,6 +6,7 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 var stream = require('stream');
+const { syncContentLength } = require('./utils/nockHelper.js');
 
 
 const authURL   = 'https://auth.cloud.ovh.net/v3';
@@ -484,6 +485,14 @@ describe('Ovh Object Storage Swift', function () {
   });
 
   describe('deleteFiles', function() {
+    it('should return an error on the callback if the list of files is not an Array', function(done){
+      storage.deleteFiles('container1', undefined, (err, resp) => {
+        assert.strictEqual(err.message, 'Deleting files: the list of files must be an Array');
+        assert.strictEqual(resp, undefined);
+        done();
+      });
+    });
+
     it('should deletes files', function(done){
       const _filesToDelete = [{ 'filenameCustom1234': 'contract-2024.pdf' }, '1685696359848.jpg', { key: 'invoice.docx' }, { name: 'test file |1234.odt' }];
       const _headers = {
@@ -792,7 +801,7 @@ describe('Ovh Object Storage Swift', function () {
         }
       ];
       const firstNock = nock(publicUrlGRA)
-        .defaultReplyHeaders(_headers)
+        .defaultReplyHeaders(syncContentLength(_headers, JSON.stringify(_body)))
         .intercept("/", "GET")
         .reply(200, JSON.stringify(_body));
 
@@ -846,7 +855,7 @@ describe('Ovh Object Storage Swift', function () {
       };
 
       const firstNock = nock(publicUrlGRA)
-        .defaultReplyHeaders(_headers)
+        .defaultReplyHeaders(syncContentLength(_headers, _expectedBody))
         .intercept("/", "GET")
         .reply(200, _expectedBody);
 
@@ -1691,11 +1700,13 @@ describe('Ovh Object Storage Swift', function () {
 
   describe('downloadFile', function () {
 
+    /** Body replied by the `downloadFile` mocks below, used to declare a correct `content-length` */
+    const downloadedFile = fs.readFileSync(path.join(__dirname, 'assets', 'file.txt'));
+
     describe('SINGLE STORAGE', function () {
       it('should download file and return the header', function (done) {
         const firstNock = nock(publicUrlGRA)
-          .defaultReplyHeaders({
-            'content-length': '1492',
+          .defaultReplyHeaders(syncContentLength({
             'accept-ranges': 'bytes',
             'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
             'content-type': 'application/json',
@@ -1703,7 +1714,7 @@ describe('Ovh Object Storage Swift', function () {
             'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
             date: 'Wed, 03 Nov 2021 14:28:48 GMT',
             'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
-          })
+          }, downloadedFile))
           .get('/templates/test.odt')
           .reply(200, () => {
             return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
@@ -1724,8 +1735,7 @@ describe('Ovh Object Storage Swift', function () {
 
       it('should download file (ALIAS)', function (done) {
         const firstNock = nock(publicUrlGRA)
-          .defaultReplyHeaders({
-            'content-length': '1492',
+          .defaultReplyHeaders(syncContentLength({
             'accept-ranges': 'bytes',
             'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
             'content-type': 'application/json',
@@ -1733,7 +1743,7 @@ describe('Ovh Object Storage Swift', function () {
             'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
             date: 'Wed, 03 Nov 2021 14:28:48 GMT',
             'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
-          })
+          }, downloadedFile))
           .get('/invoices-gra-1234/test.odt')
           .reply(200, () => {
             return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
@@ -1754,8 +1764,7 @@ describe('Ovh Object Storage Swift', function () {
 
       it('should reconnect automatically to object storage and retry', function (done) {
         const firstNock = nock(publicUrlGRA)
-          .defaultReplyHeaders({
-            'content-length': '1492',
+          .defaultReplyHeaders(syncContentLength({
             'accept-ranges': 'bytes',
             'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
             'content-type': 'application/json',
@@ -1763,9 +1772,10 @@ describe('Ovh Object Storage Swift', function () {
             'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
             date: 'Wed, 03 Nov 2021 14:28:48 GMT',
             'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
-          })
+          }, downloadedFile))
           .get('/templates/test.odt')
-          .reply(401, 'Unauthorized')
+          /** The 401 body is shorter than the default `content-length`, it needs its own */
+          .reply(401, 'Unauthorized', { 'content-length': String(Buffer.byteLength('Unauthorized')) })
           .get('/templates/test.odt')
           .reply(200, () => {
             return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
@@ -1877,8 +1887,7 @@ describe('Ovh Object Storage Swift', function () {
 
         const thirdNock = nock(publicUrlSBG)
           /** 4 */
-          .defaultReplyHeaders({
-            'content-length': '1492',
+          .defaultReplyHeaders(syncContentLength({
             'accept-ranges': 'bytes',
             'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
             'content-type': 'application/json',
@@ -1886,7 +1895,7 @@ describe('Ovh Object Storage Swift', function () {
             'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
             date: 'Wed, 03 Nov 2021 14:28:48 GMT',
             'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
-          })
+          }, downloadedFile))
           .get('/templates/test.odt')
           .reply(200, () => {
             return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
@@ -1922,8 +1931,7 @@ describe('Ovh Object Storage Swift', function () {
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
         const thirdNock = nock(publicUrlSBG)
-          .defaultReplyHeaders({
-            'content-length': '1492',
+          .defaultReplyHeaders(syncContentLength({
             'accept-ranges': 'bytes',
             'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
             'content-type': 'application/json',
@@ -1931,7 +1939,7 @@ describe('Ovh Object Storage Swift', function () {
             'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
             date: 'Wed, 03 Nov 2021 14:28:48 GMT',
             'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
-          })
+          }, downloadedFile))
           .get('/templates/test2.odt')
           .reply(200, () => {
             return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
@@ -1965,8 +1973,7 @@ describe('Ovh Object Storage Swift', function () {
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
         const thirdNock = nock(publicUrlSBG)
-          .defaultReplyHeaders({
-            'content-length': '1492',
+          .defaultReplyHeaders(syncContentLength({
             'accept-ranges': 'bytes',
             'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
             'content-type': 'application/json',
@@ -1974,7 +1981,7 @@ describe('Ovh Object Storage Swift', function () {
             'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
             date: 'Wed, 03 Nov 2021 14:28:48 GMT',
             'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
-          })
+          }, downloadedFile))
           .get('/templates/test.odt')
           .reply(200, () => {
             return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
@@ -2007,8 +2014,7 @@ describe('Ovh Object Storage Swift', function () {
           .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
         const thirdNock = nock(publicUrlSBG)
-          .defaultReplyHeaders({
-            'content-length': '1492',
+          .defaultReplyHeaders(syncContentLength({
             'accept-ranges': 'bytes',
             'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
             'content-type': 'application/json',
@@ -2016,7 +2022,7 @@ describe('Ovh Object Storage Swift', function () {
             'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
             date: 'Wed, 03 Nov 2021 14:28:48 GMT',
             'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
-          })
+          }, downloadedFile))
           .get('/templates/test.odt')
           .reply(200, () => {
             return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
@@ -2071,8 +2077,7 @@ describe('Ovh Object Storage Swift', function () {
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
           const thirdNock = nock(publicUrlSBG)
-            .defaultReplyHeaders({
-              'content-length': '1492',
+            .defaultReplyHeaders(syncContentLength({
               'accept-ranges': 'bytes',
               'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
               'content-type': 'application/json',
@@ -2080,7 +2085,7 @@ describe('Ovh Object Storage Swift', function () {
               'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
               date: 'Wed, 03 Nov 2021 14:28:48 GMT',
               'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
-            })
+            }, downloadedFile))
             .get('/templates/test.odt')
             .reply(200, () => {
               return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
@@ -2137,8 +2142,7 @@ describe('Ovh Object Storage Swift', function () {
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
           const thirdNock = nock(publicUrlSBG)
-            .defaultReplyHeaders({
-              'content-length': '1492',
+            .defaultReplyHeaders(syncContentLength({
               'accept-ranges': 'bytes',
               'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
               'content-type': 'application/json',
@@ -2146,7 +2150,7 @@ describe('Ovh Object Storage Swift', function () {
               'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
               date: 'Wed, 03 Nov 2021 14:28:48 GMT',
               'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
-            })
+            }, downloadedFile))
             .get('/templates/test.odt')
             .reply(200, () => {
               return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
@@ -2200,8 +2204,7 @@ describe('Ovh Object Storage Swift', function () {
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
           const thirdNock = nock(publicUrlSBG)
-            .defaultReplyHeaders({
-              'content-length': '1492',
+            .defaultReplyHeaders(syncContentLength({
               'accept-ranges': 'bytes',
               'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
               'content-type': 'application/json',
@@ -2209,7 +2212,7 @@ describe('Ovh Object Storage Swift', function () {
               'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
               date: 'Wed, 03 Nov 2021 14:28:48 GMT',
               'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
-            })
+            }, downloadedFile))
             .get('/templates/test.odt')
             .reply(200, () => {
               return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
@@ -2263,8 +2266,7 @@ describe('Ovh Object Storage Swift', function () {
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
           const thirdNock = nock(publicUrlSBG)
-            .defaultReplyHeaders({
-              'content-length': '1492',
+            .defaultReplyHeaders(syncContentLength({
               'accept-ranges': 'bytes',
               'last-modified': 'Wed, 03 Nov 2021 13:02:39 GMT',
               'content-type': 'application/json',
@@ -2272,7 +2274,7 @@ describe('Ovh Object Storage Swift', function () {
               'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
               date: 'Wed, 03 Nov 2021 14:28:48 GMT',
               'x-iplb-request-id': '25A66014:1D97_3626E64B:01BB_61829C9E_3C28BD:960D'
-            })
+            }, downloadedFile))
             .get('/templates/test.odt')
             .reply(200, () => {
               return fs.createReadStream(path.join(__dirname, 'assets', 'file.txt'));
@@ -3430,7 +3432,8 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(resp.statusCode, 200);
-          assert.strictEqual(resp.body.toString(), 'OK');
+          /** A HEAD response never carries a body, the metadata is read from the headers */
+          assert.strictEqual(resp.body.toString(), '');
           assert.strictEqual(resp.headers['etag'].length > 0, true);
           assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
           assert.strictEqual(resp.headers['content-length'].length > 0, true);
@@ -3458,7 +3461,8 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(err, null);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(resp.statusCode, 200);
-          assert.strictEqual(resp.body.toString(), 'OK');
+          /** A HEAD response never carries a body, the metadata is read from the headers */
+          assert.strictEqual(resp.body.toString(), '');
           assert.strictEqual(resp.headers['etag'].length > 0, true);
           assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
           assert.strictEqual(resp.headers['content-length'].length > 0, true);
@@ -3493,7 +3497,8 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(resp.statusCode, 200);
-          assert.strictEqual(resp.body.toString(), 'OK');
+          /** A HEAD response never carries a body, the metadata is read from the headers */
+          assert.strictEqual(resp.body.toString(), '');
           assert.strictEqual(resp.headers['etag'].length > 0, true);
           assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
           assert.strictEqual(resp.headers['content-length'].length > 0, true);
@@ -4699,12 +4704,11 @@ describe('Ovh Object Storage Swift', function () {
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
           .matchHeader('Content-Type', 'image/jpeg')
           .matchHeader('X-Delete-At', 1440619048)
-          .defaultReplyHeaders({
-            'content-length': '0',
+          .defaultReplyHeaders(syncContentLength({
             'date': 'Wed, 03 Nov 2021 14:28:48 GMT',
             'x-trans-id': 'tx37ea34dcd1ed48ca9bc7d-0052d84b6f',
             'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
-          })
+          }, 'OK'))
           .intercept("/templates/test.odt", "COPY")
           .reply(200,"OK");
 
@@ -4713,7 +4717,7 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(resp.headers['x-trans-id'].length > 0, true);
           assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
-          assert.strictEqual(resp.headers['content-length'] === '0', true);
+          assert.strictEqual(resp.headers['content-length'], String(Buffer.byteLength('OK')));
           assert.strictEqual(resp.headers['date'].length > 0, true);
           assert.strictEqual(resp.body.toString(), "OK");
           assert.strictEqual(resp.statusCode, 200);
@@ -4739,12 +4743,11 @@ describe('Ovh Object Storage Swift', function () {
         const firstNock = nock(publicUrlGRA)
           .matchHeader('Content-Type', 'text/plain')
           .matchHeader('Accept', 'application/json')
-          .defaultReplyHeaders({
-            'content-length': '0',
+          .defaultReplyHeaders(syncContentLength({
             'date': 'Wed, 03 Nov 2021 14:28:48 GMT',
             'x-trans-id': 'tx37ea34dcd1ed48ca9bc7d-0052d84b6f',
             'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
-          })
+          }, JSON.stringify(_expectedResponse)))
           .post("/templates?bulk-delete")
           .reply(201, (_uri, requestBody) => {
             assert.strictEqual(requestBody, _expectedBody);
@@ -4756,7 +4759,7 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(resp.headers['x-trans-id'].length > 0, true);
           assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
-          assert.strictEqual(resp.headers['content-length'] === '0', true);
+          assert.strictEqual(resp.headers['content-length'], String(Buffer.byteLength(JSON.stringify(_expectedResponse))));
           assert.strictEqual(resp.headers['date'].length > 0, true);
           assert.strictEqual(resp.body.toString(), JSON.stringify(_expectedResponse));
           assert.strictEqual(resp.statusCode, 201);
@@ -4770,14 +4773,14 @@ describe('Ovh Object Storage Swift', function () {
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
           .matchHeader('Content-Type', 'image/jpeg')
           .matchHeader('X-Delete-At', 1440619048)
-          .defaultReplyHeaders({
-            'content-length': '0',
+          .defaultReplyHeaders(syncContentLength({
             'date': 'Wed, 03 Nov 2021 14:28:48 GMT',
             'x-trans-id': 'tx37ea34dcd1ed48ca9bc7d-0052d84b6f',
             'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
-          })
+          }, 'OK'))
           .intercept("/templates/test.odt", "COPY")
-          .reply(401, 'Unauthorized')
+          /** The 401 body differs from the default `content-length`, it needs its own */
+          .reply(401, 'Unauthorized', { 'content-length': String(Buffer.byteLength('Unauthorized')) })
           .intercept("/templates/test.odt", "COPY")
           .reply(200, 'OK');
 
@@ -4792,7 +4795,7 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(resp.headers['x-trans-id'].length > 0, true);
           assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
-          assert.strictEqual(resp.headers['content-length'] === '0', true);
+          assert.strictEqual(resp.headers['content-length'], String(Buffer.byteLength('OK')));
           assert.strictEqual(resp.headers['date'].length > 0, true);
           assert.strictEqual(resp.body.toString(), "OK");
           done();
@@ -4907,12 +4910,11 @@ describe('Ovh Object Storage Swift', function () {
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
           .matchHeader('Content-Type', 'image/jpeg')
           .matchHeader('X-Delete-At', 1440619048)
-          .defaultReplyHeaders({
-            'content-length': '0',
+          .defaultReplyHeaders(syncContentLength({
             'date': 'Wed, 03 Nov 2021 14:28:48 GMT',
             'x-trans-id': 'tx37ea34dcd1ed48ca9bc7d-0052d84b6f',
             'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
-          })
+          }, 'OK'))
           /** 4 */
           .intercept("/templates/test.odt", "COPY")
           .reply(201, 'OK');
@@ -4924,7 +4926,7 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
           assert.strictEqual(resp.headers['x-trans-id'].length > 0, true);
           assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
-          assert.strictEqual(resp.headers['content-length'] === '0', true);
+          assert.strictEqual(resp.headers['content-length'], String(Buffer.byteLength('OK')));
           assert.strictEqual(resp.headers['date'].length > 0, true);
           assert.strictEqual(resp.body.toString(), "OK");
           assert.strictEqual(resp.statusCode, 201);
@@ -4949,12 +4951,11 @@ describe('Ovh Object Storage Swift', function () {
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
           .matchHeader('Content-Type', 'image/jpeg')
           .matchHeader('X-Delete-At', 1440619048)
-          .defaultReplyHeaders({
-            'content-length': '0',
+          .defaultReplyHeaders(syncContentLength({
             'date': 'Wed, 03 Nov 2021 14:28:48 GMT',
             'x-trans-id': 'tx37ea34dcd1ed48ca9bc7d-0052d84b6f',
             'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
-          })
+          }, 'OK'))
           .intercept("/templates/test.odt", "COPY")
           .reply(201, 'OK');
 
@@ -4965,7 +4966,7 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
           assert.strictEqual(resp.headers['x-trans-id'].length > 0, true);
           assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
-          assert.strictEqual(resp.headers['content-length'] === '0', true);
+          assert.strictEqual(resp.headers['content-length'], String(Buffer.byteLength('OK')));
           assert.strictEqual(resp.headers['date'].length > 0, true);
           assert.strictEqual(resp.body.toString(), "OK");
           assert.strictEqual(resp.statusCode, 201);
@@ -4993,12 +4994,11 @@ describe('Ovh Object Storage Swift', function () {
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
           .matchHeader('Content-Type', 'image/jpeg')
           .matchHeader('X-Delete-At', 1440619048)
-          .defaultReplyHeaders({
-            'content-length': '0',
+          .defaultReplyHeaders(syncContentLength({
             'date': 'Wed, 03 Nov 2021 14:28:48 GMT',
             'x-trans-id': 'tx37ea34dcd1ed48ca9bc7d-0052d84b6f',
             'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
-          })
+          }, 'OK'))
           .intercept("/templates/test.odt", "COPY")
           .reply(201, 'OK');
 
@@ -5009,7 +5009,7 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
           assert.strictEqual(resp.headers['x-trans-id'].length > 0, true);
           assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
-          assert.strictEqual(resp.headers['content-length'] === '0', true);
+          assert.strictEqual(resp.headers['content-length'], String(Buffer.byteLength('OK')));
           assert.strictEqual(resp.headers['date'].length > 0, true);
           assert.strictEqual(resp.body.toString(), "OK");
           assert.strictEqual(resp.statusCode, 201);
@@ -5035,12 +5035,11 @@ describe('Ovh Object Storage Swift', function () {
           .matchHeader('x-object-meta-locationorigin', 'Paris/France')
           .matchHeader('Content-Type', 'image/jpeg')
           .matchHeader('X-Delete-At', 1440619048)
-          .defaultReplyHeaders({
-            'content-length': '0',
+          .defaultReplyHeaders(syncContentLength({
             'date': 'Wed, 03 Nov 2021 14:28:48 GMT',
             'x-trans-id': 'tx37ea34dcd1ed48ca9bc7d-0052d84b6f',
             'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
-          })
+          }, 'OK'))
           .intercept("/templates/test.odt", "COPY")
           .reply(200, 'OK');
 
@@ -5052,7 +5051,7 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
           assert.strictEqual(resp.headers['x-trans-id'].length > 0, true);
           assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
-          assert.strictEqual(resp.headers['content-length'] === '0', true);
+          assert.strictEqual(resp.headers['content-length'], String(Buffer.byteLength('OK')));
           assert.strictEqual(resp.headers['date'].length > 0, true);
           assert.strictEqual(resp.body.toString(), "OK");
           assert.strictEqual(resp.statusCode, 200);
@@ -5099,12 +5098,11 @@ describe('Ovh Object Storage Swift', function () {
             .matchHeader('x-object-meta-locationorigin', 'Paris/France')
             .matchHeader('Content-Type', 'image/jpeg')
             .matchHeader('X-Delete-At', 1440619048)
-            .defaultReplyHeaders({
-              'content-length': '0',
+            .defaultReplyHeaders(syncContentLength({
               'date': 'Wed, 03 Nov 2021 14:28:48 GMT',
               'x-trans-id': 'tx37ea34dcd1ed48ca9bc7d-0052d84b6f',
               'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
-            })
+            }, 'OK'))
             .intercept("/templates/test.odt", "COPY")
             .reply(200, 'OK')
             .intercept("/templates/test.odt", "COPY")
@@ -5118,13 +5116,13 @@ describe('Ovh Object Storage Swift', function () {
             assert.strictEqual(results.length, 2);
             assert.strictEqual(results[0]['headers']['x-trans-id'].length > 0, true);
             assert.strictEqual(results[0]['headers']['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(results[0]['headers']['content-length'] === '0', true);
+            assert.strictEqual(results[0]['headers']['content-length'], String(Buffer.byteLength('OK')));
             assert.strictEqual(results[0]['headers']['date'].length > 0, true);
             assert.strictEqual(results[0]['body'].toString(), 'OK');
             assert.strictEqual(results[0]['statusCode'], 200);
             assert.strictEqual(results[1]['headers']['x-trans-id'].length > 0, true);
             assert.strictEqual(results[1]['headers']['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(results[1]['headers']['content-length'] === '0', true);
+            assert.strictEqual(results[1]['headers']['content-length'], String(Buffer.byteLength('OK')));
             assert.strictEqual(results[1]['headers']['date'].length > 0, true);
             assert.strictEqual(results[1]['body'].toString(), 'OK');
             assert.strictEqual(results[1]['statusCode'], 200);
@@ -5170,12 +5168,11 @@ describe('Ovh Object Storage Swift', function () {
             .matchHeader('x-object-meta-locationorigin', 'Paris/France')
             .matchHeader('Content-Type', 'image/jpeg')
             .matchHeader('X-Delete-At', 1440619048)
-            .defaultReplyHeaders({
-              'content-length': '0',
+            .defaultReplyHeaders(syncContentLength({
               'date': 'Wed, 03 Nov 2021 14:28:48 GMT',
               'x-trans-id': 'tx37ea34dcd1ed48ca9bc7d-0052d84b6f',
               'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
-            })
+            }, 'OK'))
             .intercept("/templates/test.odt", "COPY")
             .reply(200, 'OK')
             .intercept("/templates/test.odt", "COPY")
@@ -5194,19 +5191,19 @@ describe('Ovh Object Storage Swift', function () {
             assert.strictEqual(results.length, 3);
             assert.strictEqual(results[0]['headers']['x-trans-id'].length > 0, true);
             assert.strictEqual(results[0]['headers']['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(results[0]['headers']['content-length'] === '0', true);
+            assert.strictEqual(results[0]['headers']['content-length'], String(Buffer.byteLength('OK')));
             assert.strictEqual(results[0]['headers']['date'].length > 0, true);
             assert.strictEqual(results[0]['body'].toString(), 'OK');
             assert.strictEqual(results[0]['statusCode'], 200);
             assert.strictEqual(results[1]['headers']['x-trans-id'].length > 0, true);
             assert.strictEqual(results[1]['headers']['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(results[1]['headers']['content-length'] === '0', true);
+            assert.strictEqual(results[1]['headers']['content-length'], String(Buffer.byteLength('OK')));
             assert.strictEqual(results[1]['headers']['date'].length > 0, true);
             assert.strictEqual(results[1]['body'].toString(), 'OK');
             assert.strictEqual(results[1]['statusCode'], 200);
             assert.strictEqual(results[2]['headers']['x-trans-id'].length > 0, true);
             assert.strictEqual(results[2]['headers']['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(results[2]['headers']['content-length'] === '0', true);
+            assert.strictEqual(results[2]['headers']['content-length'], String(Buffer.byteLength('OK')));
             assert.strictEqual(results[2]['headers']['date'].length > 0, true);
             assert.strictEqual(results[2]['body'].toString(), 'OK');
             assert.strictEqual(results[2]['statusCode'], 200);
@@ -5215,7 +5212,7 @@ describe('Ovh Object Storage Swift', function () {
             const _result3 = await copyRequestPromise();
             assert.strictEqual(_result3['headers']['x-trans-id'].length > 0, true);
             assert.strictEqual(_result3['headers']['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(_result3['headers']['content-length'] === '0', true);
+            assert.strictEqual(_result3['headers']['content-length'], String(Buffer.byteLength('OK')));
             assert.strictEqual(_result3['headers']['date'].length > 0, true);
             assert.strictEqual(_result3['body'].toString(), 'OK');
             assert.strictEqual(_result3['statusCode'], 200);
@@ -5252,12 +5249,11 @@ describe('Ovh Object Storage Swift', function () {
             .matchHeader('x-object-meta-locationorigin', 'Paris/France')
             .matchHeader('Content-Type', 'image/jpeg')
             .matchHeader('X-Delete-At', 1440619048)
-            .defaultReplyHeaders({
-              'content-length': '0',
+            .defaultReplyHeaders(syncContentLength({
               'date': 'Wed, 03 Nov 2021 14:28:48 GMT',
               'x-trans-id': 'tx37ea34dcd1ed48ca9bc7d-0052d84b6f',
               'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
-            })
+            }, 'OK'))
             .intercept("/templates/test.odt", "COPY")
             .reply(200, 'OK')
             .intercept("/templates/test.odt", "COPY")
@@ -5272,13 +5268,13 @@ describe('Ovh Object Storage Swift', function () {
             assert.strictEqual(results.length, 2);
             assert.strictEqual(results[0]['headers']['x-trans-id'].length > 0, true);
             assert.strictEqual(results[0]['headers']['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(results[0]['headers']['content-length'] === '0', true);
+            assert.strictEqual(results[0]['headers']['content-length'], String(Buffer.byteLength('OK')));
             assert.strictEqual(results[0]['headers']['date'].length > 0, true);
             assert.strictEqual(results[0]['body'].toString(), 'OK');
             assert.strictEqual(results[0]['statusCode'], 200);
             assert.strictEqual(results[1]['headers']['x-trans-id'].length > 0, true);
             assert.strictEqual(results[1]['headers']['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(results[1]['headers']['content-length'] === '0', true);
+            assert.strictEqual(results[1]['headers']['content-length'], String(Buffer.byteLength('OK')));
             assert.strictEqual(results[1]['headers']['date'].length > 0, true);
             assert.strictEqual(results[1]['body'].toString(), 'OK');
             assert.strictEqual(results[1]['statusCode'], 200);
@@ -5315,12 +5311,11 @@ describe('Ovh Object Storage Swift', function () {
             .matchHeader('x-object-meta-locationorigin', 'Paris/France')
             .matchHeader('Content-Type', 'image/jpeg')
             .matchHeader('X-Delete-At', 1440619048)
-            .defaultReplyHeaders({
-              'content-length': '0',
+            .defaultReplyHeaders(syncContentLength({
               'date': 'Wed, 03 Nov 2021 14:28:48 GMT',
               'x-trans-id': 'tx37ea34dcd1ed48ca9bc7d-0052d84b6f',
               'x-openstack-request-id': 'tx136c028c478a4b40a7014-0061829c9f',
-            })
+            }, 'OK'))
             .intercept("/templates/test.odt", "COPY")
             .reply(200, 'OK')
             .intercept("/templates/test.odt", "COPY")
@@ -5334,13 +5329,13 @@ describe('Ovh Object Storage Swift', function () {
             assert.strictEqual(results.length, 2);
             assert.strictEqual(results[0]['headers']['x-trans-id'].length > 0, true);
             assert.strictEqual(results[0]['headers']['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(results[0]['headers']['content-length'] === '0', true);
+            assert.strictEqual(results[0]['headers']['content-length'], String(Buffer.byteLength('OK')));
             assert.strictEqual(results[0]['headers']['date'].length > 0, true);
             assert.strictEqual(results[0]['body'].toString(), 'OK');
             assert.strictEqual(results[0]['statusCode'], 200);
             assert.strictEqual(results[1]['headers']['x-trans-id'].length > 0, true);
             assert.strictEqual(results[1]['headers']['x-openstack-request-id'].length > 0, true);
-            assert.strictEqual(results[1]['headers']['content-length'] === '0', true);
+            assert.strictEqual(results[1]['headers']['content-length'], String(Buffer.byteLength('OK')));
             assert.strictEqual(results[1]['headers']['date'].length > 0, true);
             assert.strictEqual(results[1]['body'].toString(), 'OK');
             assert.strictEqual(results[1]['statusCode'], 200);
@@ -5827,7 +5822,12 @@ describe('Ovh Object Storage Swift', function () {
 
     describe('getRockReqDefaults', function() {
       it("should get rock-req default values", function(done) {
-        assert.strictEqual(storage.getRockReqDefaults().retryDelay, 200);
+        const _defaults = storage.getRockReqDefaults();
+        /** The getter must expose rock-req's live defaults object (the one `setRockReqDefaults` mutates), */
+        /** not a copy. The values themselves are owned by rock-req, so they are not asserted by value. */
+        assert.strictEqual(_defaults, _rock.defaults);
+        assert.strictEqual(typeof _defaults.retryDelay, 'number');
+        assert.strictEqual(typeof _defaults.maxRedirects, 'number');
         done();
       });
     });

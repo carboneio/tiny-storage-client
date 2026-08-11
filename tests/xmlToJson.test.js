@@ -251,6 +251,87 @@ describe('xmlToJson', function () {
     _assert(_json, _expected);
   });
 
+  it('should parse an indented XML (real responses are pretty-printed)', function () {
+    const _xml =
+      '\n' +
+      '  <Name>www</Name>\n' +
+      '  <Prefix/>\n' +
+      '  <IsTruncated>false</IsTruncated>\n' +
+      '  <Contents>\n' +
+      '    <Key>template.odt</Key>\n' +
+      '    <Size>11822</Size>\n' +
+      '  </Contents>\n' +
+      '  <Contents>\n' +
+      '    <Key>template.docx</Key>\n' +
+      '    <Size>85000</Size>\n' +
+      '  </Contents>\n';
+
+    const _expected = {
+      name: 'www',
+      istruncated: false,
+      contents: [
+        { key: 'template.odt',  size: 11822 },
+        { key: 'template.docx', size: 85000 },
+      ],
+    };
+
+    _assert(xmlToJson(_xml, { forceArray: ['contents'] }), _expected);
+  });
+
+  it('should ignore the attributes of a tag', function () {
+    const _xml = '<Bucket id="12" class="a b"><Name>Eric</Name></Bucket>';
+
+    _assert(xmlToJson(_xml), { bucket: { name: 'Eric' } });
+  });
+
+  it('should convert booleans whatever the case', function () {
+    const _xml = '<A>true</A><B>TRUE</B><C>False</C><D>fAlSe</D>';
+
+    _assert(xmlToJson(_xml), { a: true, b: true, c: false, d: false });
+  });
+
+  it('should return an empty string if the tag has no value', function () {
+    _assert(xmlToJson('<Name></Name><Color>Blue</Color>'), { name: '', color: 'Blue' });
+  });
+
+  it('should parse negative numbers', function () {
+    _assert(xmlToJson('<Size>-42</Size>'), { size: -42 });
+  });
+
+  it('should force several elements to be arrays, and leave the others untouched (options: forceArray)', function () {
+    const _xml = '<Deleted><Key>a.odt</Key></Deleted><Error><Key>b.odt</Key></Error><Bucket><Name>www</Name></Bucket>';
+
+    const _expected = {
+      deleted: [ { key: 'a.odt' } ],
+      error: [ { key: 'b.odt' } ],
+      bucket: { name: 'www' },
+    };
+
+    _assert(xmlToJson(_xml, { forceArray: ['deleted', 'error'] }), _expected);
+  });
+
+  it('should not force anything if the "forceArray" names do not match', function () {
+    _assert(xmlToJson('<Bucket><Name>www</Name></Bucket>', { forceArray: ['nothing'] }), { bucket: { name: 'www' } });
+  });
+
+  it('should keep the decimal part of a float', function () {
+    _assert(xmlToJson('<V>1.75</V>'), { v: 1.75 });
+    _assert(xmlToJson('<V>-0.5</V>'), { v: -0.5 });
+    _assert(xmlToJson('<V>.5</V>'), { v: 0.5 });
+    _assert(xmlToJson('<V>1e3</V>'), { v: 1000 });
+  });
+
+  /**
+   * `getValue` coerces every numeric-looking value. The cases below are the current
+   * behaviour, kept under test so any change to the coercion is intentional and visible.
+   */
+  it('should coerce the other numeric-looking values (current behaviour)', function () {
+    _assert(xmlToJson('<V>0123</V>'), { v: 123 });         /** a leading-zero id loses its zeros */
+    _assert(xmlToJson('<V>0x10</V>'), { v: 16 });          /** an hexadecimal string is converted */
+    _assert(xmlToJson('<V> 42 </V>'), { v: 42 });          /** surrounding spaces are ignored */
+    _assert(xmlToJson('<V>12345678901234567890</V>'), { v: 12345678901234567000 }); /** beyond 2^53 the precision is lost */
+  });
+
   it('should return the Error response from S3 as JSON', function () {
     const _xml =
       '<?xml version="1.0" encoding="UTF-8"?>' +

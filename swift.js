@@ -127,6 +127,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
+    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
+    options = options ?? {};
     options.alias = container;
     return request('GET', `/${container}`, options, (err, resp) => {
       if (err) {
@@ -158,6 +160,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
+    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
+    options = options ?? {};
     options.alias = container;
     /** Is File Path */
     if (Buffer.isBuffer(localPathOrBuffer) === false && isFnStream(localPathOrBuffer) === false) {
@@ -188,6 +192,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
+    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
+    options = options ?? {};
     options.alias = container;
     return request('GET', `/${container}/${filename}`, options, callback);
   }
@@ -206,6 +212,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
+    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
+    options = options ?? {};
     options.alias = container;
     return request('DELETE', `/${container}/${filename}`, options, callback);
   }
@@ -224,6 +232,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
+    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
+    options = options ?? {};
     options.alias = container;
     return request('HEAD', `/${container}/${filename}`, options, callback);
    }
@@ -246,6 +256,11 @@ module.exports = (config) => {
     if (!callback) {
       callback = options;
       options = {};
+    }
+    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
+    options = options ?? {};
+    if (Array.isArray(objects) === false) {
+      return callback(new Error('Deleting files: the list of files must be an Array'));
     }
     let _filesAsText = '';
     for (let i = 0; i < objects.length; i++) {
@@ -289,6 +304,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
+    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
+    options = options ?? {};
     options.alias = container;
     return request('HEAD', `/${container}`, options, callback);
   }
@@ -305,6 +322,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
+    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
+    options = options ?? {};
     return request('GET', `/`, options, (err, resp) => {
       if (err) {
         return callback(err);
@@ -337,6 +356,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
+    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
+    options = options ?? {};
     options.alias = container;
     return request('POST', `/${container}/${filename}`, options, callback);
   }
@@ -374,11 +395,13 @@ module.exports = (config) => {
     const _activeBucket = _config.storages[_config.activeStorage]?.buckets?.[options?.alias] ?? options?.alias;
     if (_activeBucket !== options?.alias) {
       _path = _path.replace(options?.alias, _activeBucket);
-      if (_urlParams.includes('bulk-delete') === true) {
+      /** The bulk-delete body lists the container of every file, only a String body can be remapped */
+      if (_urlParams.includes('bulk-delete') === true && typeof _body === 'string') {
         _body = _body.replaceAll(options?.alias, _activeBucket);
       }
     }
 
+    const _isStreamOutput = isFnStream(options?.output);
     const _requestOptions = {
       url     : `${_config.endpoints.url}${_path}${_urlParams}`,
       method  : method,
@@ -388,17 +411,17 @@ module.exports = (config) => {
         ...(options?.headers ? options?.headers : {})
       },
       timeout: _config.timeout,
-      output: isFnStream(options?.output) ? options?.output : null, /** Handle Streams */
+      output: _isStreamOutput ? options?.output : null, /** Handle Streams */
       ...(_body ? { body: _body } : {}),
     };
 
     const _requestCallback = function (err, res, body) {
       /** Catch error and retry */
       if ((err || res?.statusCode >= 500)) {
-        log(`SWIFT Storage | Index "${_config.activeStorage}" region "${_config.storages[_config.activeStorage].region}" | ${res?.statusCode ?? err?.toString()}`, 'error');
+        log(`SWIFT Storage | Index "${_config.activeStorage}" region "${_config.storages[_config.activeStorage]?.region}" | ${res?.statusCode ?? err?.toString()}`, 'error');
         activateFallbackStorage(arrayArguments[arrayArguments.length - 1].originStorage);
       } else if (res?.statusCode === 401) {
-        log(`SWIFT Storage | Index "${_config.activeStorage}" region "${_config.storages[_config.activeStorage].region}" try reconnect...`, 'info');
+        log(`SWIFT Storage | Index "${_config.activeStorage}" region "${_config.storages[_config.activeStorage]?.region}" try reconnect...`, 'info');
       }
 
       /** If something went wrong: connect again and request again */
@@ -414,9 +437,9 @@ module.exports = (config) => {
           arrayArguments[arrayArguments.length - 1].originStorage
         );
       }
-      return isFnStream(options?.output) === true ? callback(null, res) : callback(null, { headers : res.headers, statusCode: res.statusCode, body : body });
+      return _isStreamOutput === true ? callback(null, res) : callback(null, { headers : res.headers, statusCode: res.statusCode, body : body });
     };
-    return isFnStream(options?.output) === true ? rock(_requestOptions, _requestCallback) : rock.concat(_requestOptions, _requestCallback);
+    return _isStreamOutput === true ? rock(_requestOptions, _requestCallback) : rock.concat(_requestOptions, _requestCallback);
   }
 
   /**
