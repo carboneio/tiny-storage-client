@@ -1,5 +1,9 @@
 ### v3.5.0
+- **Node 20 is now the minimum version** (`engines: { node: ">=20" }`). Tested on Node 20, 22, 24 and 26.
+- **Swift**: object names are now URL encoded, as required by the [Swift API](https://docs.openstack.org/swift/latest/api/object_api_v1_overview.html). A name containing a `#` or a `?` used to be truncated and another object than the requested one was reached, `deleteFile('container', 'report#1.pdf')` deleted `report`. The `/` separators are untouched, Swift pseudo-folders keep working.
+- **S3**: `deleteFiles` returns an error on the callback when more than 1000 files are provided, instead of letting S3 reply a `MalformedXML` error.
 - **S3**: exposed the `request` method, it was already documented in `USAGE-S3.md` but missing from the returned client.
+- Note: `uploadFile` accepts a Buffer, a file path, or a function returning a ReadStream on Swift. On S3, streams are not supported (AWS4 cannot sign a stream), the file is read in memory before being sent.
 - Fixed `xmlToJson`: a decimal value was truncated to its integer part, `<Size>1.75</Size>` returned `1` instead of `1.75`. Values are now converted with `Number` instead of `parseInt`, which also fixes the exponent notation (`1e3` returned `1`) and the leading dot (`.5` returned `NaN`). Integers, hexadecimal strings and quoted ETags are unchanged.
 - Fixed crashes: the SDK threw synchronously instead of calling back with an error, so the exception could not be caught from the callback. Now returning an error on the callback when:
   - `deleteFiles` receives something else than an Array of files (S3 + Swift)

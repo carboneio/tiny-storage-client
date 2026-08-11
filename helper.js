@@ -26,7 +26,23 @@
     return _queries ? '?' + _queries : '';
   }
 
+  /**
+   * UTF-8 + URL-encode an object name, as required by the Swift API:
+   * "You must UTF-8-encode and then URL-encode container and object names before you call the API binding."
+   * @doc https://docs.openstack.org/swift/latest/api/object_api_v1_overview.html
+   *
+   * The "/" separators are kept as-is: a "/" is a valid character of an object name and is used by
+   * Swift as a pseudo-hierarchy, encoding it as "%2F" would change the object being requested.
+   *
+   * @param {String} name object name
+   * @returns {String} the object name, safe to inject into a URL path
+   */
+  function encodeObjectName (name) {
+    return String(name).split('/').map(_segment => encodeURIComponent(_segment)).join('/');
+  }
+
   module.exports = {
     getUrlParameters,
+    encodeObjectName,
     isFnStream: o => o instanceof Function
   }

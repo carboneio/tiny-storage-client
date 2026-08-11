@@ -1,6 +1,6 @@
 const rock = require('rock-req');
 const fs = require('fs');
-const { getUrlParameters, isFnStream } = require('./helper.js');
+const { getUrlParameters, isFnStream, encodeObjectName } = require('./helper.js');
 
 /**
  *
@@ -170,12 +170,12 @@ module.exports = (config) => {
           return callback(err);
         }
         options.body = objectBuffer;
-        return request('PUT', `/${container}/${filename}`, options, callback);
+        return request('PUT', `/${container}/${encodeObjectName(filename)}`, options, callback);
       });
     } 
     /** Is a Buffer or a Function returning a ReadStream */
     options.body = localPathOrBuffer;
-    return request('PUT', `/${container}/${filename}`, options, callback);
+    return request('PUT', `/${container}/${encodeObjectName(filename)}`, options, callback);
   }
 
   /**
@@ -195,7 +195,7 @@ module.exports = (config) => {
     /** An explicit `null`/`undefined` passed as options must not crash the setters below */
     options = options ?? {};
     options.alias = container;
-    return request('GET', `/${container}/${filename}`, options, callback);
+    return request('GET', `/${container}/${encodeObjectName(filename)}`, options, callback);
   }
 
   /**
@@ -215,7 +215,7 @@ module.exports = (config) => {
     /** An explicit `null`/`undefined` passed as options must not crash the setters below */
     options = options ?? {};
     options.alias = container;
-    return request('DELETE', `/${container}/${filename}`, options, callback);
+    return request('DELETE', `/${container}/${encodeObjectName(filename)}`, options, callback);
   }
 
   /**
@@ -235,7 +235,7 @@ module.exports = (config) => {
     /** An explicit `null`/`undefined` passed as options must not crash the setters below */
     options = options ?? {};
     options.alias = container;
-    return request('HEAD', `/${container}/${filename}`, options, callback);
+    return request('HEAD', `/${container}/${encodeObjectName(filename)}`, options, callback);
    }
 
 
@@ -359,7 +359,7 @@ module.exports = (config) => {
     /** An explicit `null`/`undefined` passed as options must not crash the setters below */
     options = options ?? {};
     options.alias = container;
-    return request('POST', `/${container}/${filename}`, options, callback);
+    return request('POST', `/${container}/${encodeObjectName(filename)}`, options, callback);
   }
 
    /**

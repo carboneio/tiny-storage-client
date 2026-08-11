@@ -1,0 +1,31 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    name: Node ${{ matrix.node-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      # Every version of the range declared in the "engines" field of package.json,
+      # up to the current release. Node 26 is the version used to publish on npm.
+      matrix:
+        node-version: [20.x, 22.x, 24.x, 26.x]
+    env:
+      CI: true
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm test

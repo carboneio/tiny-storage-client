@@ -25,7 +25,7 @@
     "Vanillajs"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "author": "Steevepay",
   "homepage": "https://github.com/carboneio/tiny-storage-client",

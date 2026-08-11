@@ -1752,6 +1752,15 @@ describe('S3 SDK', function () {
         });
       });
 
+      it('should return an error on the callback if more than 1000 files are provided', function(done) {
+        const _files = new Array(1001).fill('file.txt');
+        storage.deleteFiles('www', _files, (err, resp) => {
+          assert.strictEqual(err.message, 'Deleting files: 1000 files maximum per request');
+          assert.strictEqual(resp, undefined);
+          done();
+        });
+      });
+
       it('should sign the body with the "Content-MD5" header (base64-encoded MD5 digest)', function(done) {
         const _expectedBody = '<Delete><Object><Key>file.txt</Key></Object><Quiet>false</Quiet></Delete>';
         const _expectedMD5  = crypto.createHash('md5').update(_expectedBody).digest('base64');

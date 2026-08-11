@@ -2948,6 +2948,52 @@ describe('Ovh Object Storage Swift', function () {
   describe('deleteFile', function () {
     describe('SINGLE STORAGE', function () {
 
+      /**
+       * The Swift API requires object names to be UTF-8 then URL encoded:
+       * https://docs.openstack.org/swift/latest/api/object_api_v1_overview.html
+       * Without it a "#" truncates the path and a "?" starts the query string,
+       * so another object than the requested one is deleted.
+       */
+      it('should URL encode the object name', function (done) {
+        const firstNock = nock(publicUrlGRA)
+          .delete('/templates/report%231.pdf')
+          .reply(201, '');
+
+        storage.deleteFile('templates', 'report#1.pdf', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 201);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should URL encode a query character, a space and a non-ASCII character of the object name', function (done) {
+        const firstNock = nock(publicUrlGRA)
+          .delete('/templates/a%3Fb%20caf%C3%A9.pdf')
+          .reply(201, '');
+
+        storage.deleteFile('templates', 'a?b café.pdf', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 201);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      /** A "/" is a valid character of an object name, Swift uses it as a pseudo-hierarchy: it must stay as-is */
+      it('should NOT encode the "/" separators of an object name', function (done) {
+        const firstNock = nock(publicUrlGRA)
+          .delete('/templates/photos/2024/cat.jpg')
+          .reply(201, '');
+
+        storage.deleteFile('templates', 'photos/2024/cat.jpg', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 201);
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
       it('should delete a file', function (done) {
         const firstNock = nock(publicUrlGRA)
           .delete('/templates/test.odt')

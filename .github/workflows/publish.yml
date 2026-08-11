@@ -1,0 +1,49 @@
+name: Publish
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: # Allow manual runs from the GitHub Actions UI
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: true
+    permissions:
+      id-token: write # Required for npm provenance (Trusted Publisher)
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          # Node >= 24 is required: npm must be >= 11.5.1 to publish with a Trusted Publisher (OIDC).
+          # Node 22 ships npm 10.x and cannot.
+          node-version: 26
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci
+
+      - run: npm test
+
+      # A tag that does not match the version of package.json would publish under the
+      # wrong number, and npm never allows a version to be reused.
+      - name: Check the tag matches the version of package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG_VERSION=${GITHUB_REF#refs/tags/v}
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          echo "tag: $TAG_VERSION | package.json: $PKG_VERSION"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag \"$TAG_VERSION\" does not match the version \"$PKG_VERSION\" of package.json"
+            exit 1
+          fi
+
+      # Publish to npm using Trusted Publisher (OIDC — no NPM_TOKEN secret needed)
+      - name: Publish to npm
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: npm publish --provenance

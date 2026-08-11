@@ -273,6 +273,10 @@ module.exports = (config) => {
     if (Array.isArray(files) === false) {
       return callback(new Error('Deleting files: the list of files must be an Array'));
     }
+    /** S3 rejects a DeleteObjects request of more than 1000 objects with a "MalformedXML" error */
+    if (files.length > 1000) {
+      return callback(new Error('Deleting files: 1000 files maximum per request'));
+    }
 
     let _body = '<Delete>';
     for (let i = 0; i < files.length; i++) {
