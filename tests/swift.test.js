@@ -88,6 +88,12 @@ describe('Ovh Object Storage Swift', function () {
     });
   });
 
+  /** A test failing mid-flight (e.g. a timeout) must not leave its unconsumed
+   *  interceptors behind, otherwise they hijack the requests of the next tests */
+  afterEach(function () {
+    nock.cleanAll();
+  });
+
   describe('New instance', function() {
     it('should create 2 new instances', function () {
       const _swift1 = storageSDK({
@@ -2832,14 +2838,14 @@ describe('Ovh Object Storage Swift', function () {
 
         it('should request the object storage in parallel and fallback to SBG if the main storage timeout', function (done) {
           const _expectedFileContent = fs.readFileSync(path.join(__dirname, './assets/file.txt'));
-          storage.setTimeout(10);
+          storage.setTimeout(200);
 
           const firstNock = nock(publicUrlGRA)
             .put('/templates/test.odt')
-            .delayConnection(100)
+            .delayConnection(500)
             .reply(200)
             .put('/templates/test.odt')
-            .delayConnection(100)
+            .delayConnection(500)
             .reply(200);
 
           const secondNock = nock(authURL)
@@ -5757,14 +5763,14 @@ describe('Ovh Object Storage Swift', function () {
         });
 
         it('should request the object storage in parallel and fallback to SBG if the main storage timeout', function (done) {
-          storage.setTimeout(10);
+          storage.setTimeout(200);
 
           const firstNock = nock(publicUrlGRA)
             .intercept('/templates/file.txt', "GET")
-            .delayConnection(100)
+            .delayConnection(500)
             .reply(200)
             .intercept('/templates/file.txt', "GET")
-            .delayConnection(100)
+            .delayConnection(500)
             .reply(200);
 
           const secondNock = nock(authURL)
