@@ -2,7 +2,9 @@
  * Convert XML to JSON, supports only 1 object depth such as: "{ child: [], child2: {} }".
  *
  * @param {String} xml
- * @param {Object} options (Optional) accepts "forceArray" a list of strings, define if "child" of one element must be lists
+ * @param {Object} options (Optional) accepts:
+ *  - "forceArray" a list of strings, define if "child" of one element must be lists
+ *  - "forceString" a list of strings, the values of these elements are always strings, never converted to numbers or booleans
  * @returns {Object} XML as JSON
  */
 function xmlToJson (xml, options) {
@@ -58,7 +60,7 @@ function xmlToJson (xml, options) {
         childName = null;
       } /** When we reach the end of a tag <color>red</color>, the value is assign to the child or root object */
       else if (_tagFull[0] === '/') {
-        const _value = getValue(xml.slice(_previousLastIndex, _tagParsed.index));
+        const _value = getValue(xml.slice(_previousLastIndex, _tagParsed.index), _tag, options);
         if (child) {
           if (child?.constructor === Array) {
             /** Tag already exist, we must create a new element on the list */
@@ -86,9 +88,19 @@ function xmlToJson (xml, options) {
 /**
  * Function to convert string to corresponding types
  * @param {String} str value
+ * @param {String} tag lower case name of the element
+ * @param {Object} options xmlToJson options
  * @returns {String|Boolean|Number}
  */
-const getValue = (str) => {
+const getValue = (str, tag, options) => {
+  str = decodeXmlEntities(str);
+  if (options?.forceString?.includes(tag) === true) {
+    return str;
+  }
+  /** An ETag is a hash: made only of digits, or such as "123e45...", it must not be read as a number */
+  if (tag === 'etag') {
+    return removeDoubleQuotes(str);
+  }
   if (!isNaN(str) && !isNaN(parseFloat(str))) {
     /** `Number` and not `parseInt`, which would drop the decimal part of "1.75". */
     /** It is also the conversion used by the `isNaN(str)` guard above. */
@@ -98,7 +110,31 @@ const getValue = (str) => {
   } else if (str.toLowerCase() === "false") {
     return false;
   }
-  /** S3 Storage returns the "MD5" hash wrapped with double quotes, must be removed. */
+  return removeDoubleQuotes(str);
+};
+
+const XML_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+const XML_ENTITY_REGEX = /&(?:#(\d+)|#x([0-9a-fA-F]+)|(amp|lt|gt|quot|apos));/g;
+
+/**
+ * Decode the predefined XML entities and the character references, in a single pass: "&amp;lt;" is "&lt;", not "<".
+ * Such as "a&amp;b.pdf" for "a&b.pdf", "l&#39;offre.pdf" for "l'offre.pdf", or "&quot;abc&quot;" for an ETag.
+ */
+const decodeXmlEntities = (str) => {
+  if (str.includes('&') === false) {
+    return str;
+  }
+  return str.replace(XML_ENTITY_REGEX, (entity, decimal, hexadecimal, name) => {
+    if (name !== undefined) {
+      return XML_ENTITIES[name];
+    }
+    const _codePoint = decimal !== undefined ? parseInt(decimal, 10) : parseInt(hexadecimal, 16);
+    return _codePoint <= 0x10FFFF ? String.fromCodePoint(_codePoint) : entity;
+  });
+};
+
+/** S3 Storage returns the "MD5" hash wrapped with double quotes, must be removed. */
+const removeDoubleQuotes = (str) => {
   if (str[0] === '"' && str?.[str.length - 1] === '"') {
     return str.slice(1, str.length - 1);
   }

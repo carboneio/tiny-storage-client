@@ -4,7 +4,7 @@ const URL = require('url').URL;
 const crypto = require('crypto');
 const fs = require('fs');
 const xmlToJson = require('./xmlToJson.js');
-const { getUrlParameters, isFnStream } = require('./helper.js');
+const { getUrlParameters, isFnStream, escapeXml } = require('./helper.js');
 
 module.exports = (config) => {
 
@@ -147,10 +147,13 @@ module.exports = (config) => {
       if (err) {
         return callback(err);
       }
-      const _body = resp?.body?.toString();
-      if (_body && resp.statusCode === 200) {
-        const _regRes = _body?.match(/<ListBucketResult[^<>]*?>([^]*?)<\/ListBucketResult>/);
-        resp.body = xmlToJson(_regRes?.[1], { forceArray: ['contents'] });
+      if (resp.statusCode === 200) {
+        const _regRes = resp?.body?.toString()?.match(/<ListBucketResult[^<>]*?>([^]*?)<\/ListBucketResult>/);
+        /** A body cut or replaced (proxy, gateway) must not be read as an empty or a complete list */
+        if (!_regRes) {
+          return callback(new Error('S3 listFiles | Invalid response: "ListBucketResult" not found in the body'), resp);
+        }
+        resp.body = xmlToJson(_regRes[1], { forceArray: ['contents'], forceString: ['key', 'name', 'prefix', 'delimiter', 'startafter', 'continuationtoken', 'nextcontinuationtoken'] });
       }
       return callback(null, resp);
     });
@@ -206,7 +209,7 @@ module.exports = (config) => {
       const _body = resp?.body?.toString();
       if (_body && resp.statusCode === 200) {
         const _regRes = _body?.match(/<Buckets[^<>]*?>([^]*?)<\/Buckets>/);
-        resp.body = xmlToJson(_regRes?.[1], { forceArray: ['bucket'] });
+        resp.body = xmlToJson(_regRes?.[1], { forceArray: ['bucket'], forceString: ['name'] });
       }
       return callback(null, resp);
     });
@@ -280,7 +283,7 @@ module.exports = (config) => {
 
     let _body = '<Delete>';
     for (let i = 0; i < files.length; i++) {
-      _body += `<Object><Key>${files?.[i]?.[options?.fileNameKey] ?? files?.[i]?.name ?? files?.[i]?.key ?? files?.[i]}</Key></Object>`;
+      _body += `<Object><Key>${escapeXml(files?.[i]?.[options?.fileNameKey] ?? files?.[i]?.name ?? files?.[i]?.key ?? files?.[i])}</Key></Object>`;
     }
     _body += '<Quiet>false</Quiet></Delete>';
     options.body = _body;
@@ -295,7 +298,7 @@ module.exports = (config) => {
       const _body = resp?.body?.toString();
       if (_body && resp.statusCode === 200) {
         const _regRes = _body?.match(/<DeleteResult[^<>]*?>([^]*?)<\/DeleteResult>/);
-        resp.body = xmlToJson(_regRes?.[1], { forceArray: ['deleted', 'error'] });
+        resp.body = xmlToJson(_regRes?.[1], { forceArray: ['deleted', 'error'], forceString: ['key', 'versionid', 'deletemarkerversionid'] });
       }
       return callback(null, resp);
     });
@@ -412,7 +415,7 @@ module.exports = (config) => {
       }
       /** If the response is an error as XML and not a stream, the error is parsed as JSON */
       if (res.statusCode >= 400 && res?.headers?.['content-type'] === 'application/xml' && _isStreamOutput === false) {
-        body = xmlToJson(body?.toString() ?? '');
+        body = xmlToJson(body?.toString() ?? '', { forceString: ['key', 'bucketname', 'requestid', 'hostid'] });
       }
       return _isStreamOutput === true ? callback(null, res) : callback(null, { headers : res.headers, statusCode: res.statusCode, body : body });
     };

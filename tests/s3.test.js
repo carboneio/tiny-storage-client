@@ -257,6 +257,19 @@ describe('S3 SDK', function () {
         });
       });
 
+      it('should return a bucket name made only of digits as a string', function (done) {
+        const nockRequest = nock(url1S3)
+          .get('/')
+          .reply(200, '<?xml version="1.0" encoding="UTF-8"?><ListAllMyBucketsResult><Buckets><Bucket><Name>2024</Name><CreationDate>2023-02-27T11:46:24.000Z</CreationDate></Bucket><Bucket><Name>0001</Name><CreationDate>2023-02-27T11:46:24.000Z</CreationDate></Bucket></Buckets></ListAllMyBucketsResult>');
+
+        storage.listBuckets((err, resp) => {
+          assert.strictEqual(err, null);
+          assert.deepStrictEqual(resp.body.bucket.map((bucket) => bucket.name), ['2024', '0001']);
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        });
+      });
+
       it('should return an error if credentials are not correct', function (done) {
         const _header = {
           'x-amz-request-id': 'BEFVPYB9PM889VMS',
@@ -528,6 +541,127 @@ describe('S3 SDK', function () {
           assert.strictEqual(resp.statusCode, 404);
           assert.strictEqual(JSON.stringify(resp.body), JSON.stringify(_expectedBody));
           assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      /** A 200 without a complete "ListBucketResult" used to be returned as a list without any file */
+      const _invalidBodies = {
+        'an empty body'                    : '',
+        'a body cut before the end'        : _listObjectsResponseXML.toString().slice(0, 600),
+        'an HTML page from a proxy'        : '<html><body><h1>Service Unavailable</h1></body></html>',
+        'a self-closing ListBucketResult'  : '<?xml version="1.0" encoding="UTF-8"?><ListBucketResult/>'
+      };
+      for (const [_description, _invalidBody] of Object.entries(_invalidBodies)) {
+        it(`should return an error if the status is 200 with ${_description}`, function (done) {
+          const nockRequest = nock(url1S3)
+            .get('/bucket')
+            .query({ 'list-type' : 2 })
+            .reply(200, _invalidBody);
+
+          storage.listFiles('bucket', (err, resp) => {
+            assert.strictEqual(err instanceof Error, true);
+            assert.strictEqual(err.message, 'S3 listFiles | Invalid response: "ListBucketResult" not found in the body');
+            assert.strictEqual(resp.statusCode, 200);
+            assert.strictEqual(nockRequest.pendingMocks().length, 0);
+            done();
+          });
+        });
+      }
+
+      it('should return an empty list of objects for an empty bucket', function (done) {
+        const nockRequest = nock(url1S3)
+          .get('/bucket')
+          .query({ 'list-type' : 2 })
+          .reply(200, '<?xml version="1.0" encoding="UTF-8"?><ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Name>bucket</Name><Prefix></Prefix><KeyCount>0</KeyCount><MaxKeys>1000</MaxKeys><IsTruncated>false</IsTruncated></ListBucketResult>');
+
+        storage.listFiles('bucket', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.keycount, 0);
+          assert.strictEqual(resp.body.istruncated, false);
+          assert.strictEqual(resp.body.contents, undefined);
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return the keys, names and tokens as written, even if they look like numbers or booleans', function (done) {
+        const _keys = ['0001', '1e3', '0x10', 'true', 'FALSE', '12345678901234567890', ' 42 ', '"quoted"', 'Infinity'];
+        const _contents = _keys.map((key) => `<Contents><Key>${key}</Key><LastModified>2023-03-02T07:18:55.000Z</LastModified><ETag>"fde6d729123cee4db6bfa3606306bc8c"</ETag><Size>11822</Size><StorageClass>STANDARD</StorageClass></Contents>`).join('');
+        const nockRequest = nock(url1S3)
+          .get('/2024')
+          .query({ 'list-type' : 2, 'prefix': '007' })
+          .reply(200, '<?xml version="1.0" encoding="UTF-8"?><ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">' +
+            '<Name>2024</Name><Prefix>007</Prefix><StartAfter>0009</StartAfter><ContinuationToken>1234</ContinuationToken><NextContinuationToken>5678</NextContinuationToken>' +
+            `<KeyCount>${_keys.length}</KeyCount><MaxKeys>1000</MaxKeys><IsTruncated>true</IsTruncated>${_contents}</ListBucketResult>`);
+
+        storage.listFiles('2024', { queries: { prefix: '007' } }, (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.deepStrictEqual(resp.body.contents.map((file) => file.key), _keys);
+          assert.strictEqual(resp.body.name, '2024');
+          assert.strictEqual(resp.body.prefix, '007');
+          assert.strictEqual(resp.body.startafter, '0009');
+          assert.strictEqual(resp.body.continuationtoken, '1234');
+          assert.strictEqual(resp.body.nextcontinuationtoken, '5678');
+          /** The other values are still converted */
+          assert.strictEqual(resp.body.keycount, _keys.length);
+          assert.strictEqual(resp.body.istruncated, true);
+          assert.strictEqual(resp.body.contents[0].size, 11822);
+          assert.strictEqual(resp.body.contents[0].etag, 'fde6d729123cee4db6bfa3606306bc8c');
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should decode the XML entities of the keys and ETags', function (done) {
+        /** AWS escapes "&", "<", ">" and the ETag quotes with named entities, Go based providers (OVH, MinIO) use "&#39;" and "&#34;" */
+        const nockRequest = nock(url1S3)
+          .get('/bucket')
+          .query({ 'list-type' : 2 })
+          .reply(200, '<?xml version="1.0" encoding="UTF-8"?><ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Name>bucket</Name><KeyCount>3</KeyCount><IsTruncated>false</IsTruncated>' +
+            '<Contents><Key>R&amp;D &lt;2024&gt;.pdf</Key><ETag>&quot;fde6d729123cee4db6bfa3606306bc8c&quot;</ETag><Size>1</Size></Contents>' +
+            '<Contents><Key>l&#39;offre &#34;v2&#34;.pdf</Key><ETag>&#34;fde6d729123cee4db6bfa3606306bc8c-2&#34;</ETag><Size>1</Size></Contents>' +
+            '<Contents><Key>&#49;&#x30;</Key><ETag>"fde6d729123cee4db6bfa3606306bc8c"</ETag><Size>1</Size></Contents></ListBucketResult>');
+
+        storage.listFiles('bucket', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.deepStrictEqual(resp.body.contents.map((file) => file.key), ['R&D <2024>.pdf', 'l\'offre "v2".pdf', '10']);
+          assert.deepStrictEqual(resp.body.contents.map((file) => file.etag), ['fde6d729123cee4db6bfa3606306bc8c', 'fde6d729123cee4db6bfa3606306bc8c-2', 'fde6d729123cee4db6bfa3606306bc8c']);
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return an ETag made only of digits as a string', function (done) {
+        const nockRequest = nock(url1S3)
+          .get('/bucket')
+          .query({ 'list-type' : 2 })
+          .reply(200, '<?xml version="1.0" encoding="UTF-8"?><ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Name>bucket</Name><KeyCount>2</KeyCount><IsTruncated>false</IsTruncated>' +
+            '<Contents><Key>a.pdf</Key><ETag>12345678901234567890123456789012</ETag><Size>1</Size></Contents>' +
+            '<Contents><Key>b.pdf</Key><ETag>1234567890123e456789012345678901</ETag><Size>1</Size></Contents></ListBucketResult>');
+
+        storage.listFiles('bucket', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.body.contents[0].etag, '12345678901234567890123456789012');
+          assert.strictEqual(resp.body.contents[1].etag, '1234567890123e456789012345678901');
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return the key of an error response as written', function (done) {
+        const nockRequest = nock(url1S3)
+          .defaultReplyHeaders({ 'content-type': 'application/xml' })
+          .get('/bucket/0001')
+          .reply(404, '<?xml version="1.0" encoding="UTF-8"?><Error><Code>NoSuchKey</Code><Message>The specified key does not exist.</Message><Key>0001</Key><BucketName>2024</BucketName><RequestId>0123456789</RequestId><HostId>0042</HostId></Error>');
+
+        storage.downloadFile('bucket', '0001', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 404);
+          assert.deepStrictEqual(resp.body, { error: { code: 'NoSuchKey', message: 'The specified key does not exist.', key: '0001', bucketname: '2024', requestid: '0123456789', hostid: '0042' } });
           assert.strictEqual(nockRequest.pendingMocks().length, 0);
           done();
         });
@@ -1778,6 +1912,51 @@ describe('S3 SDK', function () {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(_expectedMD5, 'i0eYOA1Frz9dq3A1PcMdFg==');
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should escape the XML special characters of the keys, and decode the keys of the response', function(done) {
+        const _keys = ['R&D <2024>.pdf', 'l\'offre "v2".pdf', '&amp;.pdf'];
+        const _expectedBody = '<Delete>' +
+          '<Object><Key>R&amp;D &lt;2024&gt;.pdf</Key></Object>' +
+          '<Object><Key>l&apos;offre &quot;v2&quot;.pdf</Key></Object>' +
+          '<Object><Key>&amp;amp;.pdf</Key></Object>' +
+          '<Quiet>false</Quiet></Delete>';
+
+        const nockRequestS1 = nock(url1S3)
+          .matchHeader('Content-MD5', crypto.createHash('md5').update(_expectedBody).digest('base64'))
+          .post('/www/')
+          .query(() => true)
+          .reply(200, function (uri, body) {
+            assert.strictEqual(body, _expectedBody);
+            return '<?xml version="1.0" encoding="UTF-8"?><DeleteResult>' +
+              '<Deleted><Key>R&amp;D &lt;2024&gt;.pdf</Key></Deleted>' +
+              '<Deleted><Key>l&#39;offre &#34;v2&#34;.pdf</Key></Deleted>' +
+              '<Deleted><Key>&amp;amp;.pdf</Key></Deleted></DeleteResult>';
+          });
+
+        storage.deleteFiles('www', _keys, (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.deepStrictEqual(resp.body.deleted.map((file) => file.key), _keys);
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return the deleted keys and the keys in error as written, even if they look like numbers', function(done) {
+        const nockRequestS1 = nock(url1S3)
+          .post('/www/')
+          .query(() => true)
+          .reply(200, '<?xml version="1.0" encoding="UTF-8"?><DeleteResult><Deleted><Key>0001</Key><VersionId>0042</VersionId></Deleted><Error><Key>1e3</Key><Code>AccessDenied</Code><Message>Access Denied</Message></Error></DeleteResult>');
+
+        storage.deleteFiles('www', ['0001', '1e3'], (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.deepStrictEqual(resp.body, {
+            deleted: [ { key: '0001', versionid: '0042' } ],
+            error: [ { key: '1e3', code: 'AccessDenied', message: 'Access Denied' } ]
+          });
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           done();
         });
