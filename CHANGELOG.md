@@ -1,5 +1,8 @@
 ### Unreleased
 - **S3**: `listFiles` returns an error when the status is `200` but the body does not contain a complete `<ListBucketResult>` (empty body, body cut before the end, HTML page of a proxy). The body was returned as is, without any file and without `istruncated`: a caller paginating the bucket read it as the last page, and a synchronisation tool could delete the missing files from another storage.
+- **S3**: object keys, bucket names, prefixes and pagination tokens are returned exactly as written in the XML. They were converted like any value: the key `0001` was returned as the number `1`, `1e3` as `1000`, `true` as a boolean, `12345678901234567890` as `12345678901234567000`, ` 42 ` lost its spaces and `"name"` its double quotes. Such a file could not be downloaded or deleted with the returned key, and paginating with `start-after` set to the last returned key skipped or repeated files. Applied to `listFiles`, `listBuckets`, `deleteFiles` and the XML error responses.
+- **S3**: an `ETag` is always returned as a string. An ETag made only of digits, or such as `123e45…`, was converted to a number.
+- `xmlToJson`: new option `forceString`, a list of element names whose values are returned without any conversion: `xmlToJson(xml, { forceString: ['key'] })`.
 
 ### v3.5.0
 - **Node 20 is now the minimum version** (`engines: { node: ">=20" }`). Tested on Node 20, 22, 24 and 26.

@@ -257,6 +257,19 @@ describe('S3 SDK', function () {
         });
       });
 
+      it('should return a bucket name made only of digits as a string', function (done) {
+        const nockRequest = nock(url1S3)
+          .get('/')
+          .reply(200, '<?xml version="1.0" encoding="UTF-8"?><ListAllMyBucketsResult><Buckets><Bucket><Name>2024</Name><CreationDate>2023-02-27T11:46:24.000Z</CreationDate></Bucket><Bucket><Name>0001</Name><CreationDate>2023-02-27T11:46:24.000Z</CreationDate></Bucket></Buckets></ListAllMyBucketsResult>');
+
+        storage.listBuckets((err, resp) => {
+          assert.strictEqual(err, null);
+          assert.deepStrictEqual(resp.body.bucket.map((bucket) => bucket.name), ['2024', '0001']);
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        });
+      });
+
       it('should return an error if credentials are not correct', function (done) {
         const _header = {
           'x-amz-request-id': 'BEFVPYB9PM889VMS',
@@ -569,6 +582,67 @@ describe('S3 SDK', function () {
           assert.strictEqual(resp.body.keycount, 0);
           assert.strictEqual(resp.body.istruncated, false);
           assert.strictEqual(resp.body.contents, undefined);
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return the keys, names and tokens as written, even if they look like numbers or booleans', function (done) {
+        const _keys = ['0001', '1e3', '0x10', 'true', 'FALSE', '12345678901234567890', ' 42 ', '"quoted"', 'Infinity'];
+        const _contents = _keys.map((key) => `<Contents><Key>${key}</Key><LastModified>2023-03-02T07:18:55.000Z</LastModified><ETag>"fde6d729123cee4db6bfa3606306bc8c"</ETag><Size>11822</Size><StorageClass>STANDARD</StorageClass></Contents>`).join('');
+        const nockRequest = nock(url1S3)
+          .get('/2024')
+          .query({ 'list-type' : 2, 'prefix': '007' })
+          .reply(200, '<?xml version="1.0" encoding="UTF-8"?><ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">' +
+            '<Name>2024</Name><Prefix>007</Prefix><StartAfter>0009</StartAfter><ContinuationToken>1234</ContinuationToken><NextContinuationToken>5678</NextContinuationToken>' +
+            `<KeyCount>${_keys.length}</KeyCount><MaxKeys>1000</MaxKeys><IsTruncated>true</IsTruncated>${_contents}</ListBucketResult>`);
+
+        storage.listFiles('2024', { queries: { prefix: '007' } }, (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.deepStrictEqual(resp.body.contents.map((file) => file.key), _keys);
+          assert.strictEqual(resp.body.name, '2024');
+          assert.strictEqual(resp.body.prefix, '007');
+          assert.strictEqual(resp.body.startafter, '0009');
+          assert.strictEqual(resp.body.continuationtoken, '1234');
+          assert.strictEqual(resp.body.nextcontinuationtoken, '5678');
+          /** The other values are still converted */
+          assert.strictEqual(resp.body.keycount, _keys.length);
+          assert.strictEqual(resp.body.istruncated, true);
+          assert.strictEqual(resp.body.contents[0].size, 11822);
+          assert.strictEqual(resp.body.contents[0].etag, 'fde6d729123cee4db6bfa3606306bc8c');
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return an ETag made only of digits as a string', function (done) {
+        const nockRequest = nock(url1S3)
+          .get('/bucket')
+          .query({ 'list-type' : 2 })
+          .reply(200, '<?xml version="1.0" encoding="UTF-8"?><ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Name>bucket</Name><KeyCount>2</KeyCount><IsTruncated>false</IsTruncated>' +
+            '<Contents><Key>a.pdf</Key><ETag>12345678901234567890123456789012</ETag><Size>1</Size></Contents>' +
+            '<Contents><Key>b.pdf</Key><ETag>1234567890123e456789012345678901</ETag><Size>1</Size></Contents></ListBucketResult>');
+
+        storage.listFiles('bucket', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.body.contents[0].etag, '12345678901234567890123456789012');
+          assert.strictEqual(resp.body.contents[1].etag, '1234567890123e456789012345678901');
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return the key of an error response as written', function (done) {
+        const nockRequest = nock(url1S3)
+          .defaultReplyHeaders({ 'content-type': 'application/xml' })
+          .get('/bucket/0001')
+          .reply(404, '<?xml version="1.0" encoding="UTF-8"?><Error><Code>NoSuchKey</Code><Message>The specified key does not exist.</Message><Key>0001</Key><BucketName>2024</BucketName><RequestId>0123456789</RequestId><HostId>0042</HostId></Error>');
+
+        storage.downloadFile('bucket', '0001', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 404);
+          assert.deepStrictEqual(resp.body, { error: { code: 'NoSuchKey', message: 'The specified key does not exist.', key: '0001', bucketname: '2024', requestid: '0123456789', hostid: '0042' } });
           assert.strictEqual(nockRequest.pendingMocks().length, 0);
           done();
         });
@@ -1819,6 +1893,23 @@ describe('S3 SDK', function () {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(_expectedMD5, 'i0eYOA1Frz9dq3A1PcMdFg==');
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return the deleted keys and the keys in error as written, even if they look like numbers', function(done) {
+        const nockRequestS1 = nock(url1S3)
+          .post('/www/')
+          .query(() => true)
+          .reply(200, '<?xml version="1.0" encoding="UTF-8"?><DeleteResult><Deleted><Key>0001</Key><VersionId>0042</VersionId></Deleted><Error><Key>1e3</Key><Code>AccessDenied</Code><Message>Access Denied</Message></Error></DeleteResult>');
+
+        storage.deleteFiles('www', ['0001', '1e3'], (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.deepStrictEqual(resp.body, {
+            deleted: [ { key: '0001', versionid: '0042' } ],
+            error: [ { key: '1e3', code: 'AccessDenied', message: 'Access Denied' } ]
+          });
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           done();
         });

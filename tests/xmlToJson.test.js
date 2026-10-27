@@ -332,6 +332,28 @@ describe('xmlToJson', function () {
     _assert(xmlToJson('<V>12345678901234567890</V>'), { v: 12345678901234567000 }); /** beyond 2^53 the precision is lost */
   });
 
+  it('should return the values of "forceString" elements exactly as written (options: forceString)', function () {
+    const _xml = '<A>0001</A><B>1e3</B><C>true</C><D>12345678901234567890</D><E> 42 </E><F>"quoted"</F><G>0001</G>';
+
+    _assert(xmlToJson(_xml, { forceString: ['a', 'b', 'c', 'd', 'e', 'f'] }), { a: '0001', b: '1e3', c: 'true', d: '12345678901234567890', e: ' 42 ', f: '"quoted"', g: 1 });
+  });
+
+  it('should apply "forceString" to the elements of a list (options: forceString)', function () {
+    const _xml = '<IsTruncated>false</IsTruncated><Contents><Key>0001</Key><Size>10</Size></Contents><Contents><Key>true</Key><Size>20</Size></Contents>';
+
+    _assert(xmlToJson(_xml, { forceArray: ['contents'], forceString: ['key'] }), {
+      istruncated: false,
+      contents: [ { key: '0001', size: 10 }, { key: 'true', size: 20 } ]
+    });
+  });
+
+  it('should always return an ETag as a string, without the double quotes', function () {
+    _assert(xmlToJson('<ETag>12345678901234567890123456789012</ETag>'), { etag: '12345678901234567890123456789012' });
+    _assert(xmlToJson('<ETag>1234567890123e456789012345678901</ETag>'), { etag: '1234567890123e456789012345678901' });
+    _assert(xmlToJson('<ETag>"12345678901234567890123456789012"</ETag>'), { etag: '12345678901234567890123456789012' });
+    _assert(xmlToJson('<ETag>"fde6d729123cee4db6bfa3606306bc8c-3"</ETag>'), { etag: 'fde6d729123cee4db6bfa3606306bc8c-3' });
+  });
+
   it('should return the Error response from S3 as JSON', function () {
     const _xml =
       '<?xml version="1.0" encoding="UTF-8"?>' +

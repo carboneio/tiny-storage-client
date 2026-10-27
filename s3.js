@@ -153,7 +153,7 @@ module.exports = (config) => {
         if (!_regRes) {
           return callback(new Error('S3 listFiles | Invalid response: "ListBucketResult" not found in the body'), resp);
         }
-        resp.body = xmlToJson(_regRes[1], { forceArray: ['contents'] });
+        resp.body = xmlToJson(_regRes[1], { forceArray: ['contents'], forceString: ['key', 'name', 'prefix', 'delimiter', 'startafter', 'continuationtoken', 'nextcontinuationtoken'] });
       }
       return callback(null, resp);
     });
@@ -209,7 +209,7 @@ module.exports = (config) => {
       const _body = resp?.body?.toString();
       if (_body && resp.statusCode === 200) {
         const _regRes = _body?.match(/<Buckets[^<>]*?>([^]*?)<\/Buckets>/);
-        resp.body = xmlToJson(_regRes?.[1], { forceArray: ['bucket'] });
+        resp.body = xmlToJson(_regRes?.[1], { forceArray: ['bucket'], forceString: ['name'] });
       }
       return callback(null, resp);
     });
@@ -298,7 +298,7 @@ module.exports = (config) => {
       const _body = resp?.body?.toString();
       if (_body && resp.statusCode === 200) {
         const _regRes = _body?.match(/<DeleteResult[^<>]*?>([^]*?)<\/DeleteResult>/);
-        resp.body = xmlToJson(_regRes?.[1], { forceArray: ['deleted', 'error'] });
+        resp.body = xmlToJson(_regRes?.[1], { forceArray: ['deleted', 'error'], forceString: ['key', 'versionid', 'deletemarkerversionid'] });
       }
       return callback(null, resp);
     });
@@ -415,7 +415,7 @@ module.exports = (config) => {
       }
       /** If the response is an error as XML and not a stream, the error is parsed as JSON */
       if (res.statusCode >= 400 && res?.headers?.['content-type'] === 'application/xml' && _isStreamOutput === false) {
-        body = xmlToJson(body?.toString() ?? '');
+        body = xmlToJson(body?.toString() ?? '', { forceString: ['key', 'bucketname', 'requestid', 'hostid'] });
       }
       return _isStreamOutput === true ? callback(null, res) : callback(null, { headers : res.headers, statusCode: res.statusCode, body : body });
     };
