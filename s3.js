@@ -147,10 +147,13 @@ module.exports = (config) => {
       if (err) {
         return callback(err);
       }
-      const _body = resp?.body?.toString();
-      if (_body && resp.statusCode === 200) {
-        const _regRes = _body?.match(/<ListBucketResult[^<>]*?>([^]*?)<\/ListBucketResult>/);
-        resp.body = xmlToJson(_regRes?.[1], { forceArray: ['contents'] });
+      if (resp.statusCode === 200) {
+        const _regRes = resp?.body?.toString()?.match(/<ListBucketResult[^<>]*?>([^]*?)<\/ListBucketResult>/);
+        /** A body cut or replaced (proxy, gateway) must not be read as an empty or a complete list */
+        if (!_regRes) {
+          return callback(new Error('S3 listFiles | Invalid response: "ListBucketResult" not found in the body'), resp);
+        }
+        resp.body = xmlToJson(_regRes[1], { forceArray: ['contents'] });
       }
       return callback(null, resp);
     });

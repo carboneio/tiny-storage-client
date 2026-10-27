@@ -1,3 +1,6 @@
+### Unreleased
+- **S3**: `listFiles` returns an error when the status is `200` but the body does not contain a complete `<ListBucketResult>` (empty body, body cut before the end, HTML page of a proxy). The body was returned as is, without any file and without `istruncated`: a caller paginating the bucket read it as the last page, and a synchronisation tool could delete the missing files from another storage.
+
 ### v3.5.0
 - **Node 20 is now the minimum version** (`engines: { node: ">=20" }`). Tested on Node 20, 22, 24 and 26.
 - **Swift**: object names are now URL encoded, as required by the [Swift API](https://docs.openstack.org/swift/latest/api/object_api_v1_overview.html). A name containing a `#` or a `?` used to be truncated and another object than the requested one was reached, `deleteFile('container', 'report#1.pdf')` deleted `report`. The `/` separators are untouched, Swift pseudo-folders keep working.

@@ -532,6 +532,47 @@ describe('S3 SDK', function () {
           done();
         });
       });
+
+      /** A 200 without a complete "ListBucketResult" used to be returned as a list without any file */
+      const _invalidBodies = {
+        'an empty body'                    : '',
+        'a body cut before the end'        : _listObjectsResponseXML.toString().slice(0, 600),
+        'an HTML page from a proxy'        : '<html><body><h1>Service Unavailable</h1></body></html>',
+        'a self-closing ListBucketResult'  : '<?xml version="1.0" encoding="UTF-8"?><ListBucketResult/>'
+      };
+      for (const [_description, _invalidBody] of Object.entries(_invalidBodies)) {
+        it(`should return an error if the status is 200 with ${_description}`, function (done) {
+          const nockRequest = nock(url1S3)
+            .get('/bucket')
+            .query({ 'list-type' : 2 })
+            .reply(200, _invalidBody);
+
+          storage.listFiles('bucket', (err, resp) => {
+            assert.strictEqual(err instanceof Error, true);
+            assert.strictEqual(err.message, 'S3 listFiles | Invalid response: "ListBucketResult" not found in the body');
+            assert.strictEqual(resp.statusCode, 200);
+            assert.strictEqual(nockRequest.pendingMocks().length, 0);
+            done();
+          });
+        });
+      }
+
+      it('should return an empty list of objects for an empty bucket', function (done) {
+        const nockRequest = nock(url1S3)
+          .get('/bucket')
+          .query({ 'list-type' : 2 })
+          .reply(200, '<?xml version="1.0" encoding="UTF-8"?><ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Name>bucket</Name><Prefix></Prefix><KeyCount>0</KeyCount><MaxKeys>1000</MaxKeys><IsTruncated>false</IsTruncated></ListBucketResult>');
+
+        storage.listFiles('bucket', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.keycount, 0);
+          assert.strictEqual(resp.body.istruncated, false);
+          assert.strictEqual(resp.body.contents, undefined);
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        });
+      });
     });
 
     describe("SWITCH TO CHILD STORAGE", function () {
