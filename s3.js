@@ -4,7 +4,7 @@ const URL = require('url').URL;
 const crypto = require('crypto');
 const fs = require('fs');
 const xmlToJson = require('./xmlToJson.js');
-const { getUrlParameters, isFnStream } = require('./helper.js');
+const { getUrlParameters, isFnStream, escapeXml } = require('./helper.js');
 
 module.exports = (config) => {
 
@@ -283,7 +283,7 @@ module.exports = (config) => {
 
     let _body = '<Delete>';
     for (let i = 0; i < files.length; i++) {
-      _body += `<Object><Key>${files?.[i]?.[options?.fileNameKey] ?? files?.[i]?.name ?? files?.[i]?.key ?? files?.[i]}</Key></Object>`;
+      _body += `<Object><Key>${escapeXml(files?.[i]?.[options?.fileNameKey] ?? files?.[i]?.name ?? files?.[i]?.key ?? files?.[i])}</Key></Object>`;
     }
     _body += '<Quiet>false</Quiet></Delete>';
     options.body = _body;

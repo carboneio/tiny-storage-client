@@ -4,7 +4,7 @@
  * @param {String} xml
  * @param {Object} options (Optional) accepts:
  *  - "forceArray" a list of strings, define if "child" of one element must be lists
- *  - "forceString" a list of strings, the values of these elements are returned exactly as written in the XML, without any conversion
+ *  - "forceString" a list of strings, the values of these elements are always strings, never converted to numbers or booleans
  * @returns {Object} XML as JSON
  */
 function xmlToJson (xml, options) {
@@ -93,6 +93,7 @@ function xmlToJson (xml, options) {
  * @returns {String|Boolean|Number}
  */
 const getValue = (str, tag, options) => {
+  str = decodeXmlEntities(str);
   if (options?.forceString?.includes(tag) === true) {
     return str;
   }
@@ -110,6 +111,26 @@ const getValue = (str, tag, options) => {
     return false;
   }
   return removeDoubleQuotes(str);
+};
+
+const XML_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+const XML_ENTITY_REGEX = /&(?:#(\d+)|#x([0-9a-fA-F]+)|(amp|lt|gt|quot|apos));/g;
+
+/**
+ * Decode the predefined XML entities and the character references, in a single pass: "&amp;lt;" is "&lt;", not "<".
+ * Such as "a&amp;b.pdf" for "a&b.pdf", "l&#39;offre.pdf" for "l'offre.pdf", or "&quot;abc&quot;" for an ETag.
+ */
+const decodeXmlEntities = (str) => {
+  if (str.includes('&') === false) {
+    return str;
+  }
+  return str.replace(XML_ENTITY_REGEX, (entity, decimal, hexadecimal, name) => {
+    if (name !== undefined) {
+      return XML_ENTITIES[name];
+    }
+    const _codePoint = decimal !== undefined ? parseInt(decimal, 10) : parseInt(hexadecimal, 16);
+    return _codePoint <= 0x10FFFF ? String.fromCodePoint(_codePoint) : entity;
+  });
 };
 
 /** S3 Storage returns the "MD5" hash wrapped with double quotes, must be removed. */

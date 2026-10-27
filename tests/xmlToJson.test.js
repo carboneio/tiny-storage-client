@@ -347,6 +347,32 @@ describe('xmlToJson', function () {
     });
   });
 
+  it('should decode the predefined XML entities', function () {
+    _assert(xmlToJson('<Key>a&amp;b &lt;c&gt; &quot;d&quot; &apos;e&apos;.pdf</Key>'), { key: 'a&b <c> "d" \'e\'.pdf' });
+  });
+
+  it('should decode the decimal and hexadecimal character references', function () {
+    _assert(xmlToJson('<Key>l&#39;offre&#x9;&#xA;&#xd;&#128512;&#x1F600;.pdf</Key>'), { key: 'l\'offre\t\n\r😀😀.pdf' });
+  });
+
+  it('should decode the entities in a single pass', function () {
+    _assert(xmlToJson('<Key>&amp;lt;&amp;amp;&amp;#39;</Key>'), { key: '&lt;&amp;&#39;' });
+  });
+
+  it('should keep unknown entities, invalid references and lone ampersands as written', function () {
+    _assert(xmlToJson('<Key>a&nbsp;b &#x110000; &#xZZ; & &amp b</Key>'), { key: 'a&nbsp;b &#x110000; &#xZZ; & &amp b' });
+  });
+
+  it('should decode the entities of "forceString" elements, and of the elements of a list', function () {
+    const _xml = '<Contents><Key>&#48;001</Key></Contents><Contents><Key>&quot;quoted&quot;</Key></Contents>';
+    _assert(xmlToJson(_xml, { forceArray: ['contents'], forceString: ['key'] }), { contents: [ { key: '0001' }, { key: '"quoted"' } ] });
+  });
+
+  it('should return an ETag without its double quotes written as entities', function () {
+    _assert(xmlToJson('<ETag>&quot;fde6d729123cee4db6bfa3606306bc8c&quot;</ETag>'), { etag: 'fde6d729123cee4db6bfa3606306bc8c' });
+    _assert(xmlToJson('<ETag>&#34;fde6d729123cee4db6bfa3606306bc8c-3&#34;</ETag>'), { etag: 'fde6d729123cee4db6bfa3606306bc8c-3' });
+  });
+
   it('should always return an ETag as a string, without the double quotes', function () {
     _assert(xmlToJson('<ETag>12345678901234567890123456789012</ETag>'), { etag: '12345678901234567890123456789012' });
     _assert(xmlToJson('<ETag>1234567890123e456789012345678901</ETag>'), { etag: '1234567890123e456789012345678901' });
