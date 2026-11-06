@@ -6,6 +6,9 @@ const fs = require('fs');
 const xmlToJson = require('./xmlToJson.js');
 const { getUrlParameters, isFnStream, escapeXml } = require('./helper.js');
 
+/** xmlToJson options of an S3 "Error" response: these values are returned as written in the XML */
+const XML_ERROR_OPTIONS = { forceString: ['key', 'bucketname', 'requestid', 'hostid'] };
+
 module.exports = (config) => {
 
   const _config = {
@@ -143,20 +146,7 @@ module.exports = (config) => {
     options = options ?? {};
     options.defaultQueries = 'list-type=2';
     options.alias = bucket;
-    return request('GET', `/${bucket}`, options, (err, resp) => {
-      if (err) {
-        return callback(err);
-      }
-      if (resp.statusCode === 200) {
-        const _regRes = resp?.body?.toString()?.match(/<ListBucketResult[^<>]*?>([^]*?)<\/ListBucketResult>/);
-        /** A body cut or replaced (proxy, gateway) must not be read as an empty or a complete list */
-        if (!_regRes) {
-          return callback(new Error('S3 listFiles | Invalid response: "ListBucketResult" not found in the body'), resp);
-        }
-        resp.body = xmlToJson(_regRes[1], { forceArray: ['contents'], forceString: ['key', 'name', 'prefix', 'delimiter', 'startafter', 'continuationtoken', 'nextcontinuationtoken'] });
-      }
-      return callback(null, resp);
-    });
+    return request('GET', `/${bucket}`, options, parseXmlResponse('listFiles', 'ListBucketResult', { forceArray: ['contents'], forceString: ['key', 'name', 'prefix', 'delimiter', 'startafter', 'continuationtoken', 'nextcontinuationtoken'] }, callback));
   }
 
   /**
@@ -202,17 +192,7 @@ module.exports = (config) => {
     }
     /** An explicit `null`/`undefined` passed as options must not crash the setters below */
     options = options ?? {};
-    return request('GET', `/`, options, (err, resp) => {
-      if (err) {
-        return callback(err);
-      }
-      const _body = resp?.body?.toString();
-      if (_body && resp.statusCode === 200) {
-        const _regRes = _body?.match(/<Buckets[^<>]*?>([^]*?)<\/Buckets>/);
-        resp.body = xmlToJson(_regRes?.[1], { forceArray: ['bucket'], forceString: ['name'] });
-      }
-      return callback(null, resp);
-    });
+    return request('GET', `/`, options, parseXmlResponse('listBuckets', 'Buckets', { forceArray: ['bucket'], forceString: ['name'] }, callback, true));
   }
 
   /**
@@ -239,17 +219,7 @@ module.exports = (config) => {
       ...options.headers
     };
 
-    request('PUT', `/${bucket}/${encodeURIComponent(filename)}`, options, function(err, resp) {
-      if (err) {
-        return callback(err);
-      }
-      const _body = resp?.body?.toString();
-      if (_body && resp.statusCode === 200) {
-        const _regRes = _body?.match(/<CopyObjectResult[^<>]*?>([^]*?)<\/CopyObjectResult>/);
-        resp.body = xmlToJson(_regRes?.[1] ?? '');
-      }
-      return callback(null, resp);
-    });
+    request('PUT', `/${bucket}/${encodeURIComponent(filename)}`, options, parseXmlResponse('setFileMetadata', 'CopyObjectResult', {}, callback));
   }
 
   /**
@@ -291,17 +261,7 @@ module.exports = (config) => {
       ...options?.headers,
       'Content-MD5': getMD5(_body)
     };
-    return request('POST', `/${bucket}/?delete`, options, (err, resp) => {
-      if (err) {
-        return callback(err);
-      }
-      const _body = resp?.body?.toString();
-      if (_body && resp.statusCode === 200) {
-        const _regRes = _body?.match(/<DeleteResult[^<>]*?>([^]*?)<\/DeleteResult>/);
-        resp.body = xmlToJson(_regRes?.[1], { forceArray: ['deleted', 'error'], forceString: ['key', 'versionid', 'deletemarkerversionid'] });
-      }
-      return callback(null, resp);
-    });
+    return request('POST', `/${bucket}/?delete`, options, parseXmlResponse('deleteFiles', 'DeleteResult', { forceArray: ['deleted', 'error'], forceString: ['key', 'versionid', 'deletemarkerversionid'] }, callback));
   }
 
   function setRockReqDefaults (newDefaults) {
@@ -415,7 +375,7 @@ module.exports = (config) => {
       }
       /** If the response is an error as XML and not a stream, the error is parsed as JSON */
       if (res.statusCode >= 400 && res?.headers?.['content-type'] === 'application/xml' && _isStreamOutput === false) {
-        body = xmlToJson(body?.toString() ?? '', { forceString: ['key', 'bucketname', 'requestid', 'hostid'] });
+        body = xmlToJson(body?.toString() ?? '', XML_ERROR_OPTIONS);
       }
       return _isStreamOutput === true ? callback(null, res) : callback(null, { headers : res.headers, statusCode: res.statusCode, body : body });
     };
@@ -446,6 +406,46 @@ module.exports = (config) => {
   }
 
   /** ========= PRIVATE FUNCTIONS ========== */
+
+  /**
+   * Return the callback of a request whose body is XML: on a 200, the content of `<rootTag>` is converted to JSON.
+   *
+   * A body empty, cut or replaced must not be read as an empty or a complete result: an error is returned with the
+   * response. AWS ListObjectsV2: "A 200 OK response can contain valid or invalid XML. Make sure to design your
+   * application to parse the contents of the response and handle it appropriately." AWS CopyObject: "If the error
+   * occurs during the copy operation, the error response is embedded in the 200 OK response." Such an embedded "Error"
+   * is parsed like a 4xx error: the caller reads `resp.body.error.code` ("InternalError", "SlowDown") and retries.
+   *
+   * @param {String} action name of the function, for the error message
+   * @param {String} rootTag XML element wrapping the result, such as "ListBucketResult"
+   * @param {Object} options xmlToJson options
+   * @param {Function} callback (err, resp) => {}
+   * @param {Boolean} isEmptyRootValid true if a self-closing `<rootTag/>` is a valid empty result: "<Buckets/>" is
+   *                  written by Garage and LocalStack for an account without any bucket
+   * @returns {Function} (err, resp) => {} the callback for `request`
+   */
+  function parseXmlResponse (action, rootTag, options, callback, isEmptyRootValid = false) {
+    const _rootTagRegExp = new RegExp(`<${rootTag}(?:\\s[^<>]*?)?(?:${isEmptyRootValid === true ? '\\/>|' : ''}>([^]*?)<\\/${rootTag}>)`);
+    return function (err, resp) {
+      if (err) {
+        return callback(err);
+      }
+      /** With a stream `output`, the raw response is returned and has no body */
+      if (resp.statusCode === 200 && resp.body !== undefined) {
+        const _body = resp.body.toString();
+        const _regRes = _body.match(_rootTagRegExp);
+        if (!_regRes) {
+          if (/<Error[\s>]/.test(_body) === true) {
+            resp.body = xmlToJson(_body, XML_ERROR_OPTIONS);
+          }
+          const _code = resp.body?.error?.code;
+          return callback(new Error(`S3 ${action} | Invalid response: "${rootTag}" not found in the body${_code ? ` (${_code})` : ''}`), resp);
+        }
+        resp.body = xmlToJson(_regRes[1] ?? '', options);
+      }
+      return callback(null, resp);
+    };
+  }
 
   /**
    * Used for the 'Content-MD5' header:

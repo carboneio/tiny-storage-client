@@ -270,6 +270,97 @@ describe('S3 SDK', function () {
         });
       });
 
+      it('should return an empty list for an account without any bucket', function (done) {
+        /** As written by the Go based providers (MinIO, OVH): an empty "Buckets" element */
+        const nockRequest = nock(url1S3)
+          .get('/')
+          .reply(200, '<?xml version="1.0" encoding="UTF-8"?><ListAllMyBucketsResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Owner><ID>02d6176db174dc93cb1b899f7c6078f08654445fe8cf1b6ce98d8855f66bdbf4</ID><DisplayName>minio</DisplayName></Owner><Buckets></Buckets></ListAllMyBucketsResult>');
+
+        storage.listBuckets((err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.deepStrictEqual(resp.body, {});
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      /** Garage (quick-xml) and LocalStack (ElementTree) write the empty list as a self-closing element */
+      for (const _emptyBuckets of ['<Buckets/>', '<Buckets />']) {
+        it(`should return an empty list for an account without any bucket written as "${_emptyBuckets}"`, function (done) {
+          const nockRequest = nock(url1S3)
+            .get('/')
+            .reply(200, `<?xml version="1.0" encoding="UTF-8"?><ListAllMyBucketsResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Owner><ID>02d6176db174dc93cb1b899f7c6078f08654445fe8cf1b6ce98d8855f66bdbf4</ID><DisplayName>minio</DisplayName></Owner>${_emptyBuckets}</ListAllMyBucketsResult>`);
+
+          storage.listBuckets((err, resp) => {
+            assert.strictEqual(err, null);
+            assert.strictEqual(resp.statusCode, 200);
+            assert.deepStrictEqual(resp.body, {});
+            assert.strictEqual(nockRequest.pendingMocks().length, 0);
+            done();
+          });
+        });
+      }
+
+      it('should return the raw response if the body is written into a stream with the option "output"', function (done) {
+        const _xml = '<?xml version="1.0" encoding="UTF-8"?><ListAllMyBucketsResult><Buckets><Bucket><Name>invoices</Name></Bucket></Buckets></ListAllMyBucketsResult>';
+        const nockRequest = nock(url1S3)
+          .get('/')
+          .reply(200, _xml);
+
+        storage.listBuckets({ output: outputStreamFunction }, (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body, undefined);
+          assert.strictEqual(dataStream, _xml);
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return an error, and the parsed error, if the status is 200 with an "Error" instead of a "Buckets"', function (done) {
+        /** AWS CompleteMultipartUpload sample "Error specified in body": an "Error" can be returned with the status 200 OK */
+        const nockRequest = nock(url1S3)
+          .defaultReplyHeaders({ 'content-type': 'application/xml', 'x-amz-request-id': '656c76696e6727732072657175657374' })
+          .get('/')
+          .reply(200, '<?xml version="1.0" encoding="UTF-8"?>\n\n<Error>\n  <Code>InternalError</Code>\n  <Message>We encountered an internal error. Please try again.</Message>\n  <RequestId>656c76696e6727732072657175657374</RequestId>\n  <HostId>Uuag1LuByRx9e6j5Onimru9pO4ZVKnJ2Qz7/C1NPcfTWAtRPfTaOFg==</HostId>\n</Error>');
+
+        storage.listBuckets((err, resp) => {
+          assert.strictEqual(err instanceof Error, true);
+          assert.strictEqual(err.message, 'S3 listBuckets | Invalid response: "Buckets" not found in the body (InternalError)');
+          assert.strictEqual(resp.statusCode, 200);
+          assert.deepStrictEqual(resp.body, { error: { code: 'InternalError', message: 'We encountered an internal error. Please try again.', requestid: '656c76696e6727732072657175657374', hostid: 'Uuag1LuByRx9e6j5Onimru9pO4ZVKnJ2Qz7/C1NPcfTWAtRPfTaOFg==' } });
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      /**
+       * AWS ListObjectsV2: "A 200 OK response can contain valid or invalid XML. Make sure to design your application
+       * to parse the contents of the response and handle it appropriately."
+       * A 200 without a complete "Buckets" used to be returned as an empty list of buckets
+       */
+      const _invalidBucketsBodies = {
+        'an empty body'              : '',
+        'a body cut before the end'  : '<?xml version="1.0" encoding="UTF-8"?><ListAllMyBucketsResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Owner><ID>89123456:user-feiowjfOEIJW</ID><DisplayName>12345678:user-feiowjfOEIJW</DisplayName></Owner><Buckets><Bucket><Name>invoices</Name><CreationDate>2023-02-27T11:46:24.000Z</CreationDate></Bucket><Bucket><Name>www</Name>',
+        'an HTML page from a proxy'  : '<html><body><h1>Service Unavailable</h1></body></html>'
+      };
+      for (const [_description, _invalidBody] of Object.entries(_invalidBucketsBodies)) {
+        it(`should return an error if the status is 200 with ${_description}`, function (done) {
+          const nockRequest = nock(url1S3)
+            .get('/')
+            .reply(200, _invalidBody);
+
+          storage.listBuckets((err, resp) => {
+            assert.strictEqual(err instanceof Error, true);
+            assert.strictEqual(err.message, 'S3 listBuckets | Invalid response: "Buckets" not found in the body');
+            assert.strictEqual(resp.statusCode, 200);
+            assert.strictEqual(nockRequest.pendingMocks().length, 0);
+            done();
+          });
+        });
+      }
+
       it('should return an error if credentials are not correct', function (done) {
         const _header = {
           'x-amz-request-id': 'BEFVPYB9PM889VMS',
@@ -1962,6 +2053,89 @@ describe('S3 SDK', function () {
         });
       });
 
+      it('should escape the carriage returns and newlines of the keys, and decode the keys of the response', function(done) {
+        /**
+         * AWS "Naming Amazon S3 objects", XML-related object key constraints: "Carriage return (\\r) must be replaced with &#13;",
+         * "Newline (\\n) must be replaced with &#10;". As specified by the XML standard, the parser of the server normalizes
+         * a raw "\\r" into "\\n": the key "with\\rcarriage.txt" was not deleted, and "with\\ncarriage.txt" was reported as deleted.
+         * The first key is the AWS DeleteObjects sample "DeleteObjects containing a carriage return", the response is written as MinIO does.
+         */
+        const _keys = ['/some/prefix/objectwith\rcarriagereturn', 'with\nnewline.txt'];
+        const _expectedBody = '<Delete>' +
+          '<Object><Key>/some/prefix/objectwith&#13;carriagereturn</Key></Object>' +
+          '<Object><Key>with&#10;newline.txt</Key></Object>' +
+          '<Quiet>false</Quiet></Delete>';
+
+        const nockRequestS1 = nock(url1S3)
+          .matchHeader('Content-MD5', crypto.createHash('md5').update(_expectedBody).digest('base64'))
+          .post('/www/')
+          .query(() => true)
+          .reply(200, function (uri, body) {
+            assert.strictEqual(body, _expectedBody);
+            return '<?xml version="1.0" encoding="UTF-8"?><DeleteResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">' +
+              '<Deleted><Key>/some/prefix/objectwith&#xD;carriagereturn</Key></Deleted>' +
+              '<Deleted><Key>with&#xA;newline.txt</Key></Deleted></DeleteResult>';
+          });
+
+        storage.deleteFiles('www', _keys, (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.deepStrictEqual(resp.body.deleted.map((file) => file.key), _keys);
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return an error if the status is 200 with an "Error" instead of a "DeleteResult"', function(done) {
+        /** AWS DeleteObjects sample "Malformed XML in the request": the "MalformedXML" error is returned with the status 200 OK */
+        const _headers = {
+          'x-amz-id-2'      : 'P3xqrhuhYxlrefdw3rEzmJh8z5KDtGzb+/FB7oiQaScI9Yaxd8olYXc7d1111ab+',
+          'x-amz-request-id': '264A17BF16E9E80A',
+          date              : 'Wed, 30 Nov 2011 03:39:32 GMT',
+          'content-type'    : 'application/xml',
+          server            : 'AmazonS3'
+        };
+        const _body = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+          '<Error>\n' +
+          '<Code>MalformedXML</Code>\n' +
+          '<Message>The XML you provided was not well-formed or did not \n' +
+          '        validate against our published schema</Message>\n' +
+          '<RequestId>264A17BF16E9E80A</RequestId>\n' +
+          '<HostId>P3xqrhuhYxlrefdw3rEzmJh8z5KDtGzb+/FB7oiQaScI9Yaxd8olYXc7d1111ab+</HostId>\n' +
+          '</Error>';
+        const nockRequestS1 = nock(url1S3)
+          .defaultReplyHeaders(_headers)
+          .post('/www/')
+          .query(() => true)
+          .reply(200, _body);
+
+        storage.deleteFiles('www', ['404.txt', 'a.txt'], (err, resp) => {
+          assert.strictEqual(err instanceof Error, true);
+          assert.strictEqual(err.message, 'S3 deleteFiles | Invalid response: "DeleteResult" not found in the body (MalformedXML)');
+          assert.strictEqual(resp.statusCode, 200);
+          /** The embedded error is parsed like a 4xx error, the caller can read its code */
+          assert.strictEqual(resp.body.error.code, 'MalformedXML');
+          assert.strictEqual(resp.body.error.requestid, '264A17BF16E9E80A');
+          assert.strictEqual(resp.body.error.message.startsWith('The XML you provided was not well-formed'), true);
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return an error if the status is 200 with an empty body', function(done) {
+        const nockRequestS1 = nock(url1S3)
+          .post('/www/')
+          .query(() => true)
+          .reply(200, '');
+
+        storage.deleteFiles('www', ['file.txt'], (err, resp) => {
+          assert.strictEqual(err instanceof Error, true);
+          assert.strictEqual(err.message, 'S3 deleteFiles | Invalid response: "DeleteResult" not found in the body');
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          done();
+        });
+      });
+
       it('should delete a list of objects', function(done) {
         const _headers = {
           'content-type': 'text/html; charset=UTF-8',
@@ -2450,6 +2624,58 @@ describe('S3 SDK', function () {
             etag: 'fde6d729123cee4db6bfa3606306bc8c'
           }));
           assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers2));
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return an error if the status is 200 with an "Error" embedded in the body instead of a "CopyObjectResult"', function(done) {
+        /**
+         * AWS CopyObject: "If the error occurs during the copy operation, the error response is embedded in the 200 OK response.
+         * For example, in a cross-region copy, you may encounter throttling and receive a 200 OK response."
+         * Sample "Error specified in body" of the AWS documentation. It used to be returned as a success with an empty body.
+         */
+        const _headers = {
+          'x-amz-id-2'      : 'Uuag1LuByRx9e6j5Onimru9pO4ZVKnJ2Qz7/C1NPcfTWAtRPfTaOFg==',
+          'x-amz-request-id': '656c76696e6727732072657175657374',
+          date              : 'Mon, 1 Nov 2010 20:34:56 GMT',
+          connection        : 'close',
+          server            : 'AmazonS3'
+        };
+        const _body = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+          '\n' +
+          '<Error>\n' +
+          '  <Code>InternalError</Code>\n' +
+          '  <Message>We encountered an internal error. Please try again.</Message>\n' +
+          '  <RequestId>656c76696e6727732072657175657374</RequestId>\n' +
+          '  <HostId>Uuag1LuByRx9e6j5Onimru9pO4ZVKnJ2Qz7/C1NPcfTWAtRPfTaOFg==</HostId>\n' +
+          '</Error>';
+        const nockRequestS2 = nock(url1S3)
+          .defaultReplyHeaders(_headers)
+          .put('/bucket/file.pdf')
+          .reply(200, _body);
+
+        storage.setFileMetadata('bucket', 'file.pdf', { headers: { "x-amz-meta-name": "Invoice 2023" } }, (err, resp) => {
+          assert.strictEqual(err instanceof Error, true);
+          assert.strictEqual(err.message, 'S3 setFileMetadata | Invalid response: "CopyObjectResult" not found in the body (InternalError)');
+          assert.strictEqual(resp.statusCode, 200);
+          /** The embedded error is parsed like a 4xx error, the caller can read its code and retry */
+          assert.deepStrictEqual(resp.body, { error: { code: 'InternalError', message: 'We encountered an internal error. Please try again.', requestid: '656c76696e6727732072657175657374', hostid: 'Uuag1LuByRx9e6j5Onimru9pO4ZVKnJ2Qz7/C1NPcfTWAtRPfTaOFg==' } });
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return an error if the status is 200 with an empty body', function(done) {
+        /** AWS CopyObject: "when you disconnect from Amazon S3 before the copy is complete, Amazon S3 might cancel the copy and you may receive a 200 OK response" */
+        const nockRequestS2 = nock(url1S3)
+          .put('/bucket/file.pdf')
+          .reply(200, '');
+
+        storage.setFileMetadata('bucket', 'file.pdf', { headers: { "x-amz-meta-name": "Invoice 2023" } }, (err, resp) => {
+          assert.strictEqual(err instanceof Error, true);
+          assert.strictEqual(err.message, 'S3 setFileMetadata | Invalid response: "CopyObjectResult" not found in the body');
+          assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
           done();
         });

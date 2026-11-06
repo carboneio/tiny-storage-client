@@ -41,16 +41,18 @@
     return String(name).split('/').map(_segment => encodeURIComponent(_segment)).join('/');
   }
 
-  const XML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' };
+  const XML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;', '\r': '&#13;', '\n': '&#10;' };
 
   /**
-   * Escape a value injected into an XML element, such as an object key: "a&b.pdf" must be sent as "a&amp;b.pdf"
+   * Escape a value injected into an XML element, such as an object key: "a&b.pdf" must be sent as "a&amp;b.pdf".
+   * A carriage return and a newline are written as character references, the XML parser of the server normalizes
+   * a raw "\r" into "\n" (AWS "Naming Amazon S3 objects", XML-related object key constraints)
    *
    * @param {String} value
    * @returns {String} the value, safe to inject into an XML element
    */
   function escapeXml (value) {
-    return String(value).replace(/[&<>"']/g, (char) => XML_ESCAPES[char]);
+    return String(value).replace(/[&<>"'\r\n]/g, (char) => XML_ESCAPES[char]);
   }
 
   module.exports = {
