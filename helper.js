@@ -41,8 +41,21 @@
     return String(name).split('/').map(_segment => encodeURIComponent(_segment)).join('/');
   }
 
+  const XML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' };
+
+  /**
+   * Escape a value injected into an XML element, such as an object key: "a&b.pdf" must be sent as "a&amp;b.pdf"
+   *
+   * @param {String} value
+   * @returns {String} the value, safe to inject into an XML element
+   */
+  function escapeXml (value) {
+    return String(value).replace(/[&<>"']/g, (char) => XML_ESCAPES[char]);
+  }
+
   module.exports = {
     getUrlParameters,
     encodeObjectName,
+    escapeXml,
     isFnStream: o => o instanceof Function
   }
