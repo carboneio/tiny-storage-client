@@ -373,8 +373,8 @@ module.exports = (config) => {
       } else if (err) {
         return callback(err, res);
       }
-      /** If the response is an error as XML and not a stream, the error is parsed as JSON */
-      if (res.statusCode >= 400 && res?.headers?.['content-type'] === 'application/xml' && _isStreamOutput === false) {
+      /** If the response is an error as XML and not a stream, the error is parsed as JSON. The content type may carry parameters: "application/xml; charset=utf-8" */
+      if (res.statusCode >= 400 && res?.headers?.['content-type']?.startsWith('application/xml') === true && _isStreamOutput === false) {
         body = xmlToJson(body?.toString() ?? '', XML_ERROR_OPTIONS);
       }
       return _isStreamOutput === true ? callback(null, res) : callback(null, { headers : res.headers, statusCode: res.statusCode, body : body });
@@ -409,22 +409,19 @@ module.exports = (config) => {
 
   /**
    * Return the callback of a request whose body is XML: on a 200, the content of `<rootTag>` is converted to JSON.
-   *
-   * A body empty, cut or replaced must not be read as an empty or a complete result: an error is returned with the
-   * response. AWS ListObjectsV2: "A 200 OK response can contain valid or invalid XML. Make sure to design your
-   * application to parse the contents of the response and handle it appropriately." AWS CopyObject: "If the error
-   * occurs during the copy operation, the error response is embedded in the 200 OK response." Such an embedded "Error"
-   * is parsed like a 4xx error: the caller reads `resp.body.error.code` ("InternalError", "SlowDown") and retries.
+   * A 200 without a complete `<rootTag>` (empty, cut, proxy page) returns an error with the response. An "Error"
+   * embedded in the 200 is parsed like a 4xx error, the caller reads `resp.body.error.code` and retries.
+   * @doc https://docs.aws.amazon.com/AmazonS3/latest/API/API_CopyObject.html "the error response is embedded in the 200 OK response"
    *
    * @param {String} action name of the function, for the error message
    * @param {String} rootTag XML element wrapping the result, such as "ListBucketResult"
    * @param {Object} options xmlToJson options
    * @param {Function} callback (err, resp) => {}
-   * @param {Boolean} isEmptyRootValid true if a self-closing `<rootTag/>` is a valid empty result: "<Buckets/>" is
+   * @param {Boolean} [isEmptyRootValid] true if a self-closing `<rootTag/>` is a valid empty result: "<Buckets/>" is
    *                  written by Garage and LocalStack for an account without any bucket
    * @returns {Function} (err, resp) => {} the callback for `request`
    */
-  function parseXmlResponse (action, rootTag, options, callback, isEmptyRootValid = false) {
+  function parseXmlResponse (action, rootTag, options, callback, isEmptyRootValid) {
     const _rootTagRegExp = new RegExp(`<${rootTag}(?:\\s[^<>]*?)?(?:${isEmptyRootValid === true ? '\\/>|' : ''}>([^]*?)<\\/${rootTag}>)`);
     return function (err, resp) {
       if (err) {
@@ -438,7 +435,7 @@ module.exports = (config) => {
           if (/<Error[\s>]/.test(_body) === true) {
             resp.body = xmlToJson(_body, XML_ERROR_OPTIONS);
           }
-          const _code = resp.body?.error?.code;
+          const _code = resp.body.error?.code;
           return callback(new Error(`S3 ${action} | Invalid response: "${rootTag}" not found in the body${_code ? ` (${_code})` : ''}`), resp);
         }
         resp.body = xmlToJson(_regRes[1] ?? '', options);

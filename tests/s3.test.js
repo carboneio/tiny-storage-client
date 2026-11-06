@@ -270,23 +270,8 @@ describe('S3 SDK', function () {
         });
       });
 
-      it('should return an empty list for an account without any bucket', function (done) {
-        /** As written by the Go based providers (MinIO, OVH): an empty "Buckets" element */
-        const nockRequest = nock(url1S3)
-          .get('/')
-          .reply(200, '<?xml version="1.0" encoding="UTF-8"?><ListAllMyBucketsResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Owner><ID>02d6176db174dc93cb1b899f7c6078f08654445fe8cf1b6ce98d8855f66bdbf4</ID><DisplayName>minio</DisplayName></Owner><Buckets></Buckets></ListAllMyBucketsResult>');
-
-        storage.listBuckets((err, resp) => {
-          assert.strictEqual(err, null);
-          assert.strictEqual(resp.statusCode, 200);
-          assert.deepStrictEqual(resp.body, {});
-          assert.strictEqual(nockRequest.pendingMocks().length, 0);
-          done();
-        });
-      });
-
-      /** Garage (quick-xml) and LocalStack (ElementTree) write the empty list as a self-closing element */
-      for (const _emptyBuckets of ['<Buckets/>', '<Buckets />']) {
+      /** MinIO and OVH write an empty "Buckets", Garage (quick-xml) and LocalStack (ElementTree) a self-closing one */
+      for (const _emptyBuckets of ['<Buckets></Buckets>', '<Buckets/>', '<Buckets />']) {
         it(`should return an empty list for an account without any bucket written as "${_emptyBuckets}"`, function (done) {
           const nockRequest = nock(url1S3)
             .get('/')
@@ -335,11 +320,7 @@ describe('S3 SDK', function () {
         });
       });
 
-      /**
-       * AWS ListObjectsV2: "A 200 OK response can contain valid or invalid XML. Make sure to design your application
-       * to parse the contents of the response and handle it appropriately."
-       * A 200 without a complete "Buckets" used to be returned as an empty list of buckets
-       */
+      /** A 200 without a complete "Buckets" used to be returned as an empty list of buckets */
       const _invalidBucketsBodies = {
         'an empty body'              : '',
         'a body cut before the end'  : '<?xml version="1.0" encoding="UTF-8"?><ListAllMyBucketsResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Owner><ID>89123456:user-feiowjfOEIJW</ID><DisplayName>12345678:user-feiowjfOEIJW</DisplayName></Owner><Buckets><Bucket><Name>invoices</Name><CreationDate>2023-02-27T11:46:24.000Z</CreationDate></Bucket><Bucket><Name>www</Name>',
@@ -360,6 +341,21 @@ describe('S3 SDK', function () {
           });
         });
       }
+
+      it('should parse the XML error if the content type carries a charset parameter', function (done) {
+        const nockRequest = nock(url1S3)
+          .defaultReplyHeaders({ 'content-type': 'application/xml; charset=utf-8' })
+          .get('/')
+          .reply(403, '<?xml version="1.0" encoding="UTF-8"?><Error><Code>AccessDenied</Code><Message>Access Denied</Message><RequestId>656c76696e6727732072657175657374</RequestId></Error>');
+
+        storage.listBuckets((err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 403);
+          assert.deepStrictEqual(resp.body, { error: { code: 'AccessDenied', message: 'Access Denied', requestid: '656c76696e6727732072657175657374' } });
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        });
+      });
 
       it('should return an error if credentials are not correct', function (done) {
         const _header = {
@@ -660,6 +656,23 @@ describe('S3 SDK', function () {
           });
         });
       }
+
+      it('should return an error, and the parsed error, if the status is 200 with an "Error" instead of a "ListBucketResult"', function (done) {
+        const nockRequest = nock(url1S3)
+          .defaultReplyHeaders({ 'content-type': 'application/xml' })
+          .get('/bucket')
+          .query({ 'list-type' : 2 })
+          .reply(200, '<?xml version="1.0" encoding="UTF-8"?><Error><Code>SlowDown</Code><Message>Please reduce your request rate.</Message><RequestId>656c76696e6727732072657175657374</RequestId><HostId>Uuag1LuByRx9e6j5Onimru9pO4ZVKnJ2Qz7/C1NPcfTWAtRPfTaOFg==</HostId></Error>');
+
+        storage.listFiles('bucket', (err, resp) => {
+          assert.strictEqual(err instanceof Error, true);
+          assert.strictEqual(err.message, 'S3 listFiles | Invalid response: "ListBucketResult" not found in the body (SlowDown)');
+          assert.strictEqual(resp.statusCode, 200);
+          assert.deepStrictEqual(resp.body, { error: { code: 'SlowDown', message: 'Please reduce your request rate.', requestid: '656c76696e6727732072657175657374', hostid: 'Uuag1LuByRx9e6j5Onimru9pO4ZVKnJ2Qz7/C1NPcfTWAtRPfTaOFg==' } });
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        });
+      });
 
       it('should return an empty list of objects for an empty bucket', function (done) {
         const nockRequest = nock(url1S3)
@@ -2055,9 +2068,9 @@ describe('S3 SDK', function () {
 
       it('should escape the carriage returns and newlines of the keys, and decode the keys of the response', function(done) {
         /**
-         * AWS "Naming Amazon S3 objects", XML-related object key constraints: "Carriage return (\\r) must be replaced with &#13;",
-         * "Newline (\\n) must be replaced with &#10;". As specified by the XML standard, the parser of the server normalizes
-         * a raw "\\r" into "\\n": the key "with\\rcarriage.txt" was not deleted, and "with\\ncarriage.txt" was reported as deleted.
+         * AWS "Naming Amazon S3 objects", XML-related object key constraints: "Carriage return (\r) must be replaced with &#13;",
+         * "Newline (\n) must be replaced with &#10;". As specified by the XML standard, the parser of the server normalizes
+         * a raw "\r" into "\n": the key "with\rcarriage.txt" was not deleted, and "with\ncarriage.txt" was reported as deleted.
          * The first key is the AWS DeleteObjects sample "DeleteObjects containing a carriage return", the response is written as MinIO does.
          */
         const _keys = ['/some/prefix/objectwith\rcarriagereturn', 'with\nnewline.txt'];
