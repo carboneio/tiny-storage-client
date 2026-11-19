@@ -11,6 +11,7 @@ const fs     = require('fs');
 const path   = require('path');
 var stream = require('stream');
 const crypto = require('crypto');
+const zlib   = require('zlib');
 const { syncContentLength } = require('./utils/nockHelper.js');
 
 
@@ -71,7 +72,7 @@ describe('S3 SDK', function () {
       const _authS3 = { accessKeyId: '-', secretAccessKey: '-', region: '-', url: '-' };
       const _storage = s3(_authS3);
       const _config = _storage.getConfig();
-      assert.strictEqual(_config.timeout, 5000);
+      assert.strictEqual(_config.timeout, 60000);
       assert.strictEqual(_config.activeStorage, 0);
       assert.strictEqual(_config.storages.length, 1);
       assert.strictEqual(JSON.stringify(_config.storages[0]), JSON.stringify(_authS3));
@@ -81,7 +82,7 @@ describe('S3 SDK', function () {
       const _authS3 = [{ accessKeyId: 'id', secretAccessKey: 'access', region: 'GRA', url: 's3.api.com' }, { accessKeyId: 'test', secretAccessKey: 'access', region: 'DE', url: 'api.s3.test' }, { accessKeyId: 'id', secretAccessKey: 'access', region: 'NY', url: 's3.api.test' }];
       const _storage = s3(_authS3);
       const _config = _storage.getConfig();
-      assert.strictEqual(_config.timeout, 5000);
+      assert.strictEqual(_config.timeout, 60000);
       assert.strictEqual(_config.activeStorage, 0);
       assert.strictEqual(_config.storages.length, 3);
       assert.strictEqual(JSON.stringify(_config.storages), JSON.stringify(_authS3));
@@ -106,7 +107,7 @@ describe('S3 SDK', function () {
       const _authS3 = [{ accessKeyId: 'id', secretAccessKey: 'secret', region: 'GRA', url: 'api.s3.test' }, { accessKeyId: 'ID', secretAccessKey: 'SECRET', region: 'DE', url: 'API.S3.test' }];
       _storage.setConfig(_authS3);
       const _config = _storage.getConfig();
-      assert.strictEqual(_config.timeout, 5000);
+      assert.strictEqual(_config.timeout, 60000);
       assert.strictEqual(_config.activeStorage, 0);
       assert.strictEqual(_config.storages.length, 2);
       assert.strictEqual(JSON.stringify(_config.storages), JSON.stringify(_authS3));
@@ -140,7 +141,7 @@ describe('S3 SDK', function () {
 
     it("should set a new timeout value", function() {
       const _storage = s3({ accessKeyId: '-', secretAccessKey: '-', region: '-', url: '-' });
-      assert.strictEqual(_storage.getConfig().timeout, 5000);
+      assert.strictEqual(_storage.getConfig().timeout, 60000);
       _storage.setTimeout(10000);
       assert.strictEqual(_storage.getConfig().timeout, 10000);
     });
@@ -534,6 +535,22 @@ describe('S3 SDK', function () {
         });
       });
 
+      it('should decompress a list of objects replied compressed with "gzip"', function (done) {
+        const nockRequest = nock(url1S3)
+          .defaultReplyHeaders({ 'content-type': 'application/xml', 'content-encoding': 'gzip' })
+          .get('/bucket')
+          .query({ 'list-type' : 2 })
+          .reply(200, () => zlib.gzipSync(_listObjectsResponseXML));
+
+        storage.listFiles('bucket', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify(_listObjectsResponseJSON));
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        });
+      });
+
       it('should fetch a list of objects from a bucket as ALIAS', function (done) {
         const _header = {
           'content-type': 'application/xml',
@@ -844,6 +861,60 @@ describe('S3 SDK', function () {
           assert.strictEqual(resp.body.toString(), fileTxt);
           assert.strictEqual(nockRequest.pendingMocks().length, 0);
           done();
+        });
+      });
+
+      describe('Files stored with a "Content-Encoding" metadata', function () {
+        const _raw = Buffer.from('The platypus is a semiaquatic mammal. '.repeat(100));
+        const _compressors = { gzip: zlib.gzipSync, deflate: zlib.deflateSync, br: zlib.brotliCompressSync };
+
+        Object.keys(_compressors).forEach((encoding) => {
+          const _stored = _compressors[encoding](_raw);
+
+          it('should return the stored "' + encoding + '" bytes untouched (not decompressed)', function (done) {
+            const nockRequest = nock(url1S3)
+              .defaultReplyHeaders({ 'content-encoding': encoding, 'content-length': String(_stored.length) })
+              .get('/bucket/file.txt')
+              .reply(200, () => _stored);
+            storage.downloadFile('bucket', 'file.txt', (err, resp) => {
+              assert.strictEqual(err, null);
+              assert.strictEqual(resp.statusCode, 200);
+              assert.strictEqual(resp.headers['content-encoding'], encoding);
+              assert.strictEqual(resp.body.equals(_stored), true);
+              assert.strictEqual(nockRequest.pendingMocks().length, 0);
+              done();
+            });
+          });
+
+          it('should stream the stored "' + encoding + '" bytes untouched (not decompressed)', function (done) {
+            const _chunks = [];
+            const _output = () => new stream.Writable({ write (chunk, _enc, cb) { _chunks.push(chunk); cb(); } });
+            const nockRequest = nock(url1S3)
+              .defaultReplyHeaders({ 'content-encoding': encoding })
+              .get('/bucket/file.txt')
+              .reply(200, () => _stored);
+            storage.downloadFile('bucket', 'file.txt', { output: _output }, (err, resp) => {
+              assert.strictEqual(err, null);
+              assert.strictEqual(resp.statusCode, 200);
+              assert.strictEqual(Buffer.concat(_chunks).equals(_stored), true);
+              assert.strictEqual(nockRequest.pendingMocks().length, 0);
+              done();
+            });
+          });
+
+          it('should decompress the "' + encoding + '" body if the option "requestOptions.decompress" is true', function (done) {
+            const nockRequest = nock(url1S3)
+              .defaultReplyHeaders({ 'content-encoding': encoding })
+              .get('/bucket/file.txt')
+              .reply(200, () => _stored);
+            storage.downloadFile('bucket', 'file.txt', { requestOptions: { decompress: true } }, (err, resp) => {
+              assert.strictEqual(err, null);
+              assert.strictEqual(resp.statusCode, 200);
+              assert.strictEqual(resp.body.equals(_raw), true);
+              assert.strictEqual(nockRequest.pendingMocks().length, 0);
+              done();
+            });
+          });
         });
       });
 
@@ -3138,6 +3209,316 @@ describe('S3 SDK', function () {
       });
     });
 
+  });
+
+  describe('Cause of the error "All S3 storages are not available"', function () {
+
+    afterEach(function () {
+      nock.cleanAll();
+    });
+
+    function networkError (code) {
+      const _err = new Error(`read ${code}`);
+      _err.code = code;
+      return _err;
+    }
+
+    describe('SINGLE STORAGE', function () {
+      let _logs = [];
+
+      beforeEach(function () {
+        _logs = [];
+        storage = s3({
+          accessKeyId    : '2371bebbe7ac4b2db39c09eadf011661',
+          secretAccessKey: '9978f6abf7f445566a2d316424aeef2',
+          url            : url1S3.replace('https://', ''),
+          region         : 'gra'
+        });
+        storage.setLogFunction((message, level) => _logs.push({ message, level }));
+      });
+
+      it('should return the status code of a 503 and log a single error', function (done) {
+        /** rock-req retries a 503 once */
+        const nockRequest = nock(url1S3)
+          .get('/bucket/file.docx')
+          .query({ versionId: '1' })
+          .times(2)
+          .reply(503, 'Slow Down');
+
+        storage.downloadFile('bucket', 'file.docx', { queries: { versionId: '1' } }, function (err, resp) {
+          assert.strictEqual(err instanceof Error, true);
+          assert.strictEqual(err.message, 'All S3 storages are not available');
+          assert.strictEqual(err.storageStatusCode, 503);
+          assert.strictEqual(err.statusCode, undefined);
+          assert.strictEqual(err.status, undefined);
+          assert.strictEqual(err.code, undefined);
+          assert.strictEqual(err.cause, undefined);
+          assert.strictEqual(resp, undefined);
+          assert.deepStrictEqual(_logs, [{ message: 'S3 Storage | GET /bucket/file.docx | Storage not available, no fallback storage | Status code: 503', level: 'error' }]);
+          assert.strictEqual(storage.getConfig().activeStorage, 0);
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return the status code of a 401', function (done) {
+        const nockRequest = nock(url1S3)
+          .post('/bucket/')
+          .query(true)
+          .reply(401);
+
+        storage.deleteFiles('bucket', ['file.txt'], function (err) {
+          assert.strictEqual(err.message, 'All S3 storages are not available');
+          assert.strictEqual(err.storageStatusCode, 401);
+          assert.strictEqual(err.statusCode, undefined);
+          assert.strictEqual(err.status, undefined);
+          assert.deepStrictEqual(_logs, [{ message: 'S3 Storage | POST /bucket/ | Storage not available, no fallback storage | Status code: 401', level: 'error' }]);
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should retry the bulk delete POST once on a 503 (rock-req default)', function (done) {
+        const nockRequest = nock(url1S3)
+          .post('/bucket/').query(true).reply(503)
+          .post('/bucket/').query(true).reply(200, '<?xml version="1.0" encoding="UTF-8"?><DeleteResult><Deleted><Key>file.txt</Key></Deleted></DeleteResult>');
+
+        storage.deleteFiles('bucket', ['file.txt'], function (err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.deepStrictEqual(_logs, []);
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      ['ETIMEDOUT', 'ECONNRESET'].forEach((code) => {
+        it(`should return the network error code ${code} and the original error as cause`, function (done) {
+          /** rock-req >= 5.3 retries a network error once (maxRetry: 1) */
+          const nockRequest = nock(url1S3)
+            .put('/bucket/file.txt')
+            .times(2)
+            .replyWithError(networkError(code));
+
+          storage.uploadFile('bucket', 'file.txt', Buffer.from('content'), function (err) {
+            assert.strictEqual(err.message, 'All S3 storages are not available');
+            assert.strictEqual(err.code, code);
+            assert.strictEqual(err.storageStatusCode, undefined);
+            assert.strictEqual(err.cause instanceof Error, true);
+            assert.strictEqual(err.cause.message, `read ${code}`);
+            assert.deepStrictEqual(_logs, [{ message: `S3 Storage | PUT /bucket/file.txt | Storage not available, no fallback storage | Error: read ${code}`, level: 'error' }]);
+            assert.strictEqual(nockRequest.pendingMocks().length, 0);
+            done();
+          });
+        });
+      });
+
+      it('should not mix the causes of parallel requests', function (done) {
+        nock(url1S3).get('/bucket/a.txt').times(2).reply(503);
+        nock(url1S3).get('/bucket/b.txt').times(2).replyWithError(networkError('ECONNRESET'));
+        nock(url1S3).get('/bucket/c.txt').reply(200, 'ok');
+        let _pending = 3;
+        const _end = () => --_pending === 0 && done();
+        storage.downloadFile('bucket', 'a.txt', function (err) {
+          assert.strictEqual(err.storageStatusCode, 503);
+          assert.strictEqual(err.statusCode, undefined);
+          assert.strictEqual(err.status, undefined);
+          assert.strictEqual(err.code, undefined);
+          _end();
+        });
+        storage.downloadFile('bucket', 'b.txt', function (err) {
+          assert.strictEqual(err.storageStatusCode, undefined);
+          assert.strictEqual(err.code, 'ECONNRESET');
+          _end();
+        });
+        storage.downloadFile('bucket', 'c.txt', function (err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          _end();
+        });
+      });
+    });
+
+    describe('MULTIPLE STORAGES', function () {
+      it('should fallback to the second storage as before, and return the cause of the last failure', function (done) {
+        const _logs = [];
+        storage.setLogFunction((message, level) => _logs.push({ message, level }));
+        /** rock-req >= 5.3 retries a network error once (maxRetry: 1) */
+        const nockRequestS1 = nock(url1S3)
+          .get('/invoices-gra-1234/file.docx')
+          .times(2)
+          .replyWithError(networkError('ETIMEDOUT'))
+          .get('/')
+          .reply(500);
+        const nockRequestS2 = nock(url2S3)
+          .get('/invoices-de-8888/file.docx')
+          .times(2)
+          .reply(503);
+
+        storage.downloadFile('invoices', 'file.docx', function (err, resp) {
+          assert.strictEqual(err.message, 'All S3 storages are not available');
+          assert.strictEqual(err.storageStatusCode, 503);
+          assert.strictEqual(err.statusCode, undefined);
+          assert.strictEqual(err.status, undefined);
+          assert.strictEqual(err.code, undefined);
+          assert.strictEqual(err.cause, undefined);
+          assert.strictEqual(resp, undefined);
+          assert.strictEqual(storage.getConfig().activeStorage, 0);
+          assert.deepStrictEqual(_logs.filter((log) => log.level !== ''), [
+            { message: 'S3 Storage | Activate fallback storage: switch from "0" to "1" | Error: read ETIMEDOUT', level: 'warning' },
+            { message: 'S3 Storage | Activate fallback storage: switch from "1" to "2" | Status code: 503', level: 'warning' },
+            { message: 'S3 Storage | All storages are not available - switch to the main storage', level: 'error' }
+          ]);
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should still return the file of the second storage if the first one fails', function (done) {
+        const nockRequestS1 = nock(url1S3)
+          .get('/invoices-gra-1234/file.docx')
+          .reply(500);
+        const nockRequestS2 = nock(url2S3)
+          .get('/invoices-de-8888/file.docx')
+          .reply(200, 'ok');
+
+        storage.downloadFile('invoices', 'file.docx', function (err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.toString(), 'ok');
+          assert.strictEqual(storage.getConfig().activeStorage, 1);
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          done();
+        });
+      });
+    });
+  });
+
+  describe('Options of the caller', function () {
+    afterEach(function () {
+      nock.cleanAll();
+    });
+
+    it('downloadFile should ask for "accept-encoding: identity" (signed) and not mutate the options of the caller', function (done) {
+      const _options = { headers: { 'x-amz-meta-test': '1' }, queries: { versionId: '2' } };
+      const _snapshot = JSON.parse(JSON.stringify(_options));
+      const nockRequest = nock(url1S3)
+        .matchHeader('accept-encoding', 'identity')
+        .matchHeader('authorization', /SignedHeaders=[^,]*accept-encoding/)
+        .get('/invoices-gra-1234/file.txt')
+        .query({ versionId: '2' })
+        .reply(200, 'ok');
+
+      storage.downloadFile('invoices', 'file.txt', _options, function (err, resp) {
+        assert.strictEqual(err, null);
+        assert.strictEqual(resp.statusCode, 200);
+        assert.deepStrictEqual(_options, _snapshot);
+        assert.strictEqual(nockRequest.pendingMocks().length, 0);
+        done();
+      });
+    });
+
+    it('downloadFile should keep the "accept-encoding" header of the caller, whatever its case', function (done) {
+      const _gzip = zlib.gzipSync('compressed');
+      const nockRequest = nock(url1S3)
+        .matchHeader('accept-encoding', 'gzip')
+        .get('/invoices-gra-1234/file.txt')
+        .reply(200, _gzip, { 'content-encoding': 'gzip' });
+
+      storage.downloadFile('invoices', 'file.txt', { headers: { 'Accept-Encoding': 'gzip' } }, function (err, resp) {
+        assert.strictEqual(err, null);
+        /** still not decompressed */
+        assert.deepStrictEqual(resp.body, _gzip);
+        assert.strictEqual(nockRequest.pendingMocks().length, 0);
+        done();
+      });
+    });
+
+    it('downloadFile should not ask for "accept-encoding: identity" if "decompress" is true', function (done) {
+      const nockRequest = nock(url1S3)
+        .matchHeader('accept-encoding', 'gzip, deflate, br')
+        .get('/invoices-gra-1234/file.txt')
+        .reply(200, zlib.gzipSync('compressed'), { 'content-encoding': 'gzip' });
+
+      storage.downloadFile('invoices', 'file.txt', { requestOptions: { decompress: true } }, function (err, resp) {
+        assert.strictEqual(err, null);
+        assert.strictEqual(resp.body.toString(), 'compressed');
+        assert.strictEqual(nockRequest.pendingMocks().length, 0);
+        done();
+      });
+    });
+
+    it('a reused options object should not leak "decompress" from downloadFile into another request', function (done) {
+      const _options = {};
+      const nockRequest = nock(url1S3)
+        .get('/invoices-gra-1234/file.txt')
+        .matchHeader('accept-encoding', 'identity')
+        .reply(200, zlib.gzipSync('compressed'), { 'content-encoding': 'gzip' })
+        .get('/bucket/file.txt')
+        .matchHeader('accept-encoding', 'gzip, deflate, br')
+        .reply(200, zlib.gzipSync('compressed'), { 'content-encoding': 'gzip' });
+
+      storage.downloadFile('invoices', 'file.txt', _options, function (err, resp) {
+        assert.strictEqual(err, null);
+        assert.notStrictEqual(resp.body.toString(), 'compressed');
+        storage.request('GET', '/bucket/file.txt', _options, function (err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.body.toString(), 'compressed');
+          assert.deepStrictEqual(_options, {});
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        });
+      });
+    });
+
+    it('a reused options object should start a new request after all storages failed (no "try"/failure kept on the options)', function (done) {
+      const _options = {};
+      const nockRequestS1 = nock(url1S3)
+        .get('/bucket/file.txt')
+        .reply(500)
+        .get('/bucket/file.txt')
+        .reply(200, 'ok');
+      /** Reconnection to the main storage, not asserted */
+      nock(url1S3).get('/').reply(500);
+      const nockRequestS2 = nock(url2S3)
+        .get('/bucket/file.txt')
+        .reply(500);
+
+      storage.request('GET', '/bucket/file.txt', _options, function (err) {
+        assert.strictEqual(err.message, 'All S3 storages are not available');
+        assert.strictEqual(err.storageStatusCode, 500);
+        assert.strictEqual(err.statusCode, undefined);
+        assert.strictEqual(err.status, undefined);
+        assert.deepStrictEqual(_options, {});
+        storage.request('GET', '/bucket/file.txt', _options, function (err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.toString(), 'ok');
+          assert.deepStrictEqual(_options, {});
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          done();
+        });
+      });
+    });
+
+    it('requestOptions should not override the method, the URL or the signed headers', function (done) {
+      const nockRequest = nock(url1S3)
+        .matchHeader('x-custom', 'a')
+        .matchHeader('x-amz-meta-test', '1')
+        .matchHeader('authorization', /SignedHeaders=[^,]*x-custom/)
+        .get('/bucket/file.txt')
+        .reply(200, 'ok');
+
+      storage.request('GET', '/bucket/file.txt', { headers: { 'x-amz-meta-test': '1' }, requestOptions: { method: 'DELETE', url: 'https://other.host.test/x', headers: { 'x-custom': 'a' } } }, function (err, resp) {
+        assert.strictEqual(err, null);
+        assert.strictEqual(resp.statusCode, 200);
+        assert.strictEqual(nockRequest.pendingMocks().length, 0);
+        done();
+      });
+    });
   });
 
 });

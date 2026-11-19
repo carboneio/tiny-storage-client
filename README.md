@@ -9,7 +9,7 @@
 
 * 🦄 **Simple to use** - Only 10 core methods: `uploadFile`, `downloadFile`, `deleteFile`, `listFiles`, `listBuckets`, `headBucket`, `setFileMetadata`, `getFileMetadata`, `deleteFiles` and `request` for custom requests. A few helpers come on top: `setTimeout`, `setConfig`/`getConfig`, `setLogFunction` and `setRockReqDefaults`/`getRockReqDefaults`.
 * 🚀 **Performance** - Vanilla JS + Only 2 dependencies [rock-req](https://github.com/carboneio/rock-req) as HTTP client and [aws4](https://github.com/mhart/aws4) for signing S3 requests.
-* 🌎 **High availability** - Provide one or a list of storages credentials: the SDK will switch storage if something goes wrong (Server/DNS not responding, timeout, error 500, too many redirects, authentication error, and more...). As soon as the main storage is available, the SDK returns to the main storage.
+* 🌎 **High availability** - Provide one or a list of storages credentials: the SDK will switch storage if something goes wrong (Server/DNS not responding, timeout, error 500, too many redirects, authentication error, and more...). As soon as the main storage is available, the SDK returns to the main storage (S3: checked on the next request; Swift: checked at most every 60 s, up to 10 min while it stays down).
 * ✨ **Reconnect automatically** - If a request fails due to an authentication token expiration, the SDK fetches a new authentication token and retries the initial request with it (Swift Storage only).
 * ✅ **Battle-tested** - Used in production against hundreds of TBs of file uploads, downloads and deletes, and covered by an extensive test suite.
 * 👉 **Convert XML/JSON responses to JS** - XML/JSON responses are automatically converted into `Objects`/`Arrays` (only for: `listFiles`, `listBuckets` and `Errors`).
@@ -43,7 +43,6 @@ Install and setup in less than 2 minutes:
 | ✅  [example](./USAGE-SWIFT.md#head-bucket)                     | ✅ [example](./USAGE-S3.md#head-bucket)         | `headBucket`      | Determine if a bucket exists and you have permission to access it      |
 | ✅ [example](./USAGE-SWIFT.md#list-buckets)                      | ✅ [example](./USAGE-S3.md#list-buckets)         | `listBuckets`      | Returns a list of all buckets owned by the authenticated sender of the request. |
 | ✅ [example](./USAGE-SWIFT.md#custom-request)                      | ✅  [example](./USAGE-S3.md#custom-requests)        | `request`         | Create custom requests                                                 |
-| ✅ [example](./USAGE-SWIFT.md#connection)                      | ❌          | `connection`         | Connection is required only for Openstack Swift Object storage to get a unique auth token                                                 |
 | ✅  [example](./USAGE-SWIFT.md#container-alias)                    |  ✅  [example](./USAGE-S3.md#bucket-alias)          | Bucket Alias  | Simplify requests by using bucket alias |
 
 
@@ -84,8 +83,8 @@ s3storage.downloadFile('bucketName', 'filename.pdf', (err, resp) => {
 
 ## Swift Example
 
-The same client is used for OpenStack Swift, only the credentials differ. Swift requires calling `connection` once
-to fetch an auth token before any other request (the SDK renews it automatically when it expires).
+The same client is used for OpenStack Swift, only the credentials differ. The first request authenticates automatically
+(the SDK renews the token when it expires).
 
 ```js
 const storageClient = require('tiny-storage-client');
@@ -103,21 +102,16 @@ const swiftStorage = storageClient([{
     region  : 'SBG'
   }])
 
-swiftStorage.connection((err) => {
+swiftStorage.downloadFile('containerName', 'filename.pdf', (err, resp) => {
   if (err) {
-    return console.log("Error on connection: ", err);
+    return console.log("Error on download: ", err);
   }
-  swiftStorage.downloadFile('containerName', 'filename.pdf', (err, resp) => {
-    if (err) {
-      return console.log("Error on download: ", err);
-    }
-    /**
-     * Request response:
-     * - resp.body => downloaded file as Buffer
-     * - resp.headers
-     * - resp.statusCode
-     */
-  })
+  /**
+   * Request response:
+   * - resp.body => downloaded file as Buffer
+   * - resp.headers
+   * - resp.statusCode
+   */
 })
 ```
 

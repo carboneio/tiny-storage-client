@@ -25,7 +25,21 @@ Requires **Node.js 20 or higher**.
 
 ### Setup
 
-Initialise the SDK with one or multiple storage, if something goes wrong (Error 500 / Timeout), the next region/provider will take over automatically. If no storage is available, an error message is returned `Error: All S3 storages are not available`.
+Initialise the SDK with one or multiple storage, if something goes wrong (Error 500 / Timeout), the next region/provider will take over automatically. If no storage is available, an error message is returned `Error: All S3 storages are not available`. The error carries the cause of the last failure:
+- `err.storageStatusCode`: the last HTTP status code of the storage (5xx, 401), if the storage replied
+- `err.code`: the network error code (`ETIMEDOUT`, `ECONNRESET`...), if any
+- `err.cause`: the original network `Error`, if any
+
+`err.statusCode` and `err.status` are never set: HTTP frameworks (Express...) reply with them, a storage `401` must not become the `401` of your API.
+
+```js
+storage.downloadFile('invoices', 'file.pdf', (err, resp) => {
+  if (err) {
+    // "All S3 storages are not available" 503 undefined
+    return console.log(err.message, err.storageStatusCode, err.code);
+  }
+});
+```
 
 On the following example, the SDK is initialised with credentials of 2 cloud providers: a OVHCloud S3 storage and a AWS S3 storage.
 
@@ -45,6 +59,16 @@ const s3storage = storageClient([{
   region         : 'eu-west-3'
 }])
 ```
+
+### Security notes
+
+- `uploadFile` reads any local path it is given: never pass a path built from user input.
+- Object names are encoded, but `..` segments are sent as is: validating names built from user input is the caller's responsibility.
+- With a stream `output`, `resp` is the raw HTTP response: `console.log(resp)` or `util.inspect(resp)` prints the request headers, including the `Authorization` signature. Log `resp.statusCode` and `resp.headers` only.
+
+### HTTP client options
+
+`setRockReqDefaults()` (and `global.rockReqConf`) change the defaults of [rock-req](https://github.com/carboneio/rock-req) for every request, except `keepAliveTimeout` and `keepAliveDuration`: rock-req reads them once, when it creates its HTTP agents in `rock.extend()`, so they are silently ignored. To change them, pass your own agent: `setRockReqDefaults({ agent: new https.Agent({ keepAlive: true, keepAliveMsecs: 3000 }) })`.
 
 ### Upload a file
 
@@ -134,6 +158,8 @@ s3storage.downloadFile('bucketName', '2023-invoice.pdf', { output: createOutputS
    */
 })
 ```
+
+The file is returned exactly as stored, byte for byte: a file uploaded with a `Content-Encoding` metadata (`gzip`, `deflate`, `br`) is **not** decompressed, so `resp.body` matches the stored size and checksum, and can be copied to another storage as is. The header `resp.headers['content-encoding']` tells how to decode it. `downloadFile` sends `accept-encoding: identity` so a proxy or CDN does not compress the file on the fly, unless you set this header. To decompress it on download, pass the option `{ requestOptions: { decompress: true } }` on each call (`setRockReqDefaults` does not change it).
 
 ### Delete file
 
@@ -422,16 +448,30 @@ For bucket requests, pass the bucket name as `path`, such as: `/{bucket}`. For o
 
 ### Logs
 
-By default, logs are printed with to `console.log`. You can use the `setLogFunction` to override the default log function. Create a function with two arguments: `message` as a string, `level` as a string and the value can be: `info`/`warning`/`error`. Example to use:
+By default, logs are printed with `console.log`. Use `setLogFunction` to override the default log function: `(message, level, fields) => {}`
+- `message`: string
+- `level`: `info`, `warning` or `error`
+- `fields`: flat object for structured logs (JSON loggers, metrics). Always `event` and `storage` (`'s3'`), and when relevant: `index`, `region`, `method`, `path` (without query string), `status` (HTTP status of the storage), `code` (network error code, e.g. `ETIMEDOUT`), `from`, `to` (storage indexes). Never tokens, credentials or signed URLs.
+
+A function with two arguments `(message, level)` keeps working. The default console output is unchanged.
+
 ```js
-s3storage.setLogFunction((message, level) => {
-  console.log(`${level} : ${message}`);
+s3storage.setLogFunction((message, level, fields) => {
+  logger[level === 'warning' ? 'warn' : level]({ ...fields }, message);
 })
 ```
 
+| `event` | Level | When |
+|---|---|---|
+| `storage_fallback` | warning | A request failed (network error, 5xx, 401): the next storage is used |
+| `storage_unavailable` | error | No storage available, the request returns `All S3 storages are not available` |
+| `storage_main_restored` | info | The main storage answers again, the next requests use it |
+| `storage_index_invalid` | error | `requestStorageIndex` points to no storage |
+| `getmd5_error` | error | The `Content-MD5` of a body cannot be computed |
+
 ### Timeout
 
-The default request timeout is 5 seconds, change it by calling `setTimeout`:
+The default request timeout is 60 seconds of inactivity (no byte received or sent, not the total duration, like the AWS SDK). With several storages, a storage that stops answering takes up to 2 × the timeout before the next storage is used (one retry by rock-req): lower it with `setTimeout` for a faster failover:
 ```js
 s3storage.setTimeout(30000); // 30 seconds
 ```

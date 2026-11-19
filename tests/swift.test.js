@@ -5,6 +5,7 @@ const nock   = require('nock');
 const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
+const zlib   = require('zlib');
 var stream = require('stream');
 const { syncContentLength } = require('./utils/nockHelper.js');
 
@@ -370,8 +371,10 @@ describe('Ovh Object Storage Swift', function () {
         region                       : 'SBG'
       }]);
 
+      /** rock-req >= 5.3 retries the authentication POST once on a timeout (maxRetry: 1) */
       const firstNock = nock(authURL)
         .post('/auth/tokens')
+        .times(2)
         .delayConnection(500)
         .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
         .post('/auth/tokens')
@@ -957,6 +960,22 @@ describe('Ovh Object Storage Swift', function () {
         });
       });
 
+      it('should decompress a list of files replied compressed with "gzip"', function (done) {
+        const _files = fs.readFileSync(path.join(__dirname, 'assets', 'files.json'));
+        const firstNock = nock(publicUrlGRA)
+          .defaultReplyHeaders({ 'content-type': 'application/json', 'content-encoding': 'gzip' })
+          .get('/templates')
+          .reply(200, () => zlib.gzipSync(_files));
+
+        storage.listFiles('templates', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify(JSON.parse(_files)));
+          assert.strictEqual(firstNock.pendingMocks().length, 0);
+          done();
+        });
+      });
+
       it('should return a list of files as a JSON (ALIAS)', function (done) {
         const firstNock = nock(publicUrlGRA)
           .defaultReplyHeaders({
@@ -1366,9 +1385,8 @@ describe('Ovh Object Storage Swift', function () {
             .get('/templates')
             .replyWithError('Error Message 1234');
 
+          /** The parallel failovers share a single authentication on SBG */
           const secondNock = nock(authURL)
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -1430,17 +1448,10 @@ describe('Ovh Object Storage Swift', function () {
             .get('/templates')
             .reply(401, 'Unauthorized');
 
+          /** The parallel 401s share a single reconnection: one failed authentication on GRA, one on SBG */
           const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(500, {})
-            .post('/auth/tokens')
-            .reply(500, {})
-            .post('/auth/tokens')
-            .reply(500, {})
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -1524,9 +1535,8 @@ describe('Ovh Object Storage Swift', function () {
             .delayConnection(500)
             .reply(200, {});
 
+          /** The parallel failovers share a single authentication on SBG */
           const secondNock = nock(authURL)
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -1586,9 +1596,8 @@ describe('Ovh Object Storage Swift', function () {
             .get('/templates')
             .reply(500, {});
 
+          /** The parallel failovers share a single authentication on SBG */
           const secondNock = nock(authURL)
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -1647,13 +1656,10 @@ describe('Ovh Object Storage Swift', function () {
             .get('/templates')
             .reply(401, 'Unauthorized');
 
+          /** The parallel 401s share a single reconnection: one failed authentication on GRA, one on SBG */
           const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3WithoutObjectStore)
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3WithoutObjectStore)
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -1736,6 +1742,60 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(resp.headers['date'].length > 0, true);
           assert.strictEqual(resp.statusCode, 200);
           done();
+        });
+      });
+
+      describe('Files stored with a "Content-Encoding" metadata', function () {
+        const _raw = Buffer.from('The platypus is a semiaquatic mammal. '.repeat(100));
+        const _compressors = { gzip: zlib.gzipSync, deflate: zlib.deflateSync, br: zlib.brotliCompressSync };
+
+        Object.keys(_compressors).forEach((encoding) => {
+          const _stored = _compressors[encoding](_raw);
+
+          it('should return the stored "' + encoding + '" bytes untouched (not decompressed)', function (done) {
+            const nockRequest = nock(publicUrlGRA)
+              .defaultReplyHeaders({ 'content-encoding': encoding, 'content-length': String(_stored.length) })
+              .get('/templates/file.txt')
+              .reply(200, () => _stored);
+            storage.downloadFile('templates', 'file.txt', (err, resp) => {
+              assert.strictEqual(err, null);
+              assert.strictEqual(resp.statusCode, 200);
+              assert.strictEqual(resp.headers['content-encoding'], encoding);
+              assert.strictEqual(resp.body.equals(_stored), true);
+              assert.strictEqual(nockRequest.pendingMocks().length, 0);
+              done();
+            });
+          });
+
+          it('should stream the stored "' + encoding + '" bytes untouched (not decompressed)', function (done) {
+            const _chunks = [];
+            const _output = () => new stream.Writable({ write (chunk, _enc, cb) { _chunks.push(chunk); cb(); } });
+            const nockRequest = nock(publicUrlGRA)
+              .defaultReplyHeaders({ 'content-encoding': encoding })
+              .get('/templates/file.txt')
+              .reply(200, () => _stored);
+            storage.downloadFile('templates', 'file.txt', { output: _output }, (err, resp) => {
+              assert.strictEqual(err, null);
+              assert.strictEqual(resp.statusCode, 200);
+              assert.strictEqual(Buffer.concat(_chunks).equals(_stored), true);
+              assert.strictEqual(nockRequest.pendingMocks().length, 0);
+              done();
+            });
+          });
+
+          it('should decompress the "' + encoding + '" body if the option "requestOptions.decompress" is true', function (done) {
+            const nockRequest = nock(publicUrlGRA)
+              .defaultReplyHeaders({ 'content-encoding': encoding })
+              .get('/templates/file.txt')
+              .reply(200, () => _stored);
+            storage.downloadFile('templates', 'file.txt', { requestOptions: { decompress: true } }, (err, resp) => {
+              assert.strictEqual(err, null);
+              assert.strictEqual(resp.statusCode, 200);
+              assert.strictEqual(resp.body.equals(_raw), true);
+              assert.strictEqual(nockRequest.pendingMocks().length, 0);
+              done();
+            });
+          });
         });
       });
 
@@ -2076,9 +2136,8 @@ describe('Ovh Object Storage Swift', function () {
             .get('/templates/test.odt')
             .replyWithError('Error Message 1234');
 
+          /** The parallel failovers share a single authentication on SBG */
           const secondNock = nock(authURL)
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -2137,13 +2196,10 @@ describe('Ovh Object Storage Swift', function () {
             .get('/templates/test.odt')
             .reply(401, 'Unauthorized');
 
+          /** The parallel 401s share a single reconnection: one failed authentication on GRA, one on SBG */
           const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(500, {})
-            .post('/auth/tokens')
-            .reply(500, {})
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -2203,9 +2259,8 @@ describe('Ovh Object Storage Swift', function () {
             .delayConnection(500)
             .reply(200, {});
 
+          /** The parallel failovers share a single authentication on SBG */
           const secondNock = nock(authURL)
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -2265,9 +2320,8 @@ describe('Ovh Object Storage Swift', function () {
             .get('/templates/test.odt')
             .reply(500, {});
 
+          /** The parallel failovers share a single authentication on SBG */
           const secondNock = nock(authURL)
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -2714,9 +2768,8 @@ describe('Ovh Object Storage Swift', function () {
             .put('/templates/test.odt')
             .replyWithError('Error Message 1234');
 
+          /** The parallel failovers share a single authentication on SBG */
           const secondNock = nock(authURL)
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -2767,17 +2820,10 @@ describe('Ovh Object Storage Swift', function () {
             .put('/templates/test.odt')
             .reply(401, 'Unauthorized');
 
+          /** The parallel 401s share a single reconnection: one failed authentication on GRA, one on SBG */
           const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(500, {})
-            .post('/auth/tokens')
-            .reply(500, {})
-            .post('/auth/tokens')
-            .reply(500, {})
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -2848,9 +2894,8 @@ describe('Ovh Object Storage Swift', function () {
             .delayConnection(500)
             .reply(200);
 
+          /** The parallel failovers share a single authentication on SBG */
           const secondNock = nock(authURL)
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -2902,9 +2947,8 @@ describe('Ovh Object Storage Swift', function () {
             .put('/templates/test.odt')
             .reply(500, {});
 
+          /** The parallel failovers share a single authentication on SBG */
           const secondNock = nock(authURL)
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -3256,9 +3300,8 @@ describe('Ovh Object Storage Swift', function () {
             .delete('/templates/test.odt')
             .replyWithError('Error Message 1234');
 
+          /** The parallel failovers share a single authentication on SBG */
           const secondNock = nock(authURL)
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -3305,17 +3348,10 @@ describe('Ovh Object Storage Swift', function () {
             .delete('/templates/test.odt')
             .reply(401, 'Unauthorized');
 
+          /** The parallel 401s share a single reconnection: one failed authentication on GRA, one on SBG */
           const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(500, {})
-            .post('/auth/tokens')
-            .reply(500, {})
-            .post('/auth/tokens')
-            .reply(500, {})
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -3373,9 +3409,8 @@ describe('Ovh Object Storage Swift', function () {
             .delayConnection(500)
             .reply(200, {});
 
+          /** The parallel failovers share a single authentication on SBG */
           const secondNock = nock(authURL)
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -3420,9 +3455,8 @@ describe('Ovh Object Storage Swift', function () {
             .delete('/templates/test.odt')
             .reply(500, {});
 
+          /** The parallel failovers share a single authentication on SBG */
           const secondNock = nock(authURL)
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -3828,9 +3862,8 @@ describe('Ovh Object Storage Swift', function () {
             .intercept("/templates/test.odt", "HEAD")
             .replyWithError('Error Message 1234');
 
+          /** The parallel failovers share a single authentication on SBG */
           const secondNock = nock(authURL)
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -3889,13 +3922,10 @@ describe('Ovh Object Storage Swift', function () {
             .intercept("/templates/test.odt", "HEAD")
             .reply(401, 'Unauthorized');
 
+          /** The parallel 401s share a single reconnection: one failed authentication on GRA, one on SBG */
           const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(500, {})
-            .post('/auth/tokens')
-            .reply(500, {})
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -3955,9 +3985,8 @@ describe('Ovh Object Storage Swift', function () {
             .delayConnection(500)
             .reply(200, {});
 
+          /** The parallel failovers share a single authentication on SBG */
           const secondNock = nock(authURL)
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -4017,9 +4046,8 @@ describe('Ovh Object Storage Swift', function () {
             .intercept("/templates/test.odt", "HEAD")
             .reply(500, {});
 
+          /** The parallel failovers share a single authentication on SBG */
           const secondNock = nock(authURL)
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -4461,9 +4489,8 @@ describe('Ovh Object Storage Swift', function () {
             .post('/templates/test.odt')
             .replyWithError('Error Message 1234');
 
+          /** The parallel failovers share a single authentication on SBG */
           const secondNock = nock(authURL)
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -4528,17 +4555,10 @@ describe('Ovh Object Storage Swift', function () {
             .post('/templates/test.odt')
             .reply(401, 'Unauthorized');
 
+          /** The parallel 401s share a single reconnection: one failed authentication on GRA, one on SBG */
           const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(500, {})
-            .post('/auth/tokens')
-            .reply(500, {})
-            .post('/auth/tokens')
-            .reply(500, {})
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -4621,9 +4641,8 @@ describe('Ovh Object Storage Swift', function () {
             .delayConnection(500)
             .reply(200, {});
 
+          /** The parallel failovers share a single authentication on SBG */
           const secondNock = nock(authURL)
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -4686,9 +4705,8 @@ describe('Ovh Object Storage Swift', function () {
             .post('/templates/test.odt')
             .reply(500, {});
 
+          /** The parallel failovers share a single authentication on SBG */
           const secondNock = nock(authURL)
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -5139,9 +5157,8 @@ describe('Ovh Object Storage Swift', function () {
             .intercept("/templates/test.odt", "COPY")
             .replyWithError('Error Message 1234');
 
+          /** The parallel failovers share a single authentication on SBG */
           const secondNock = nock(authURL)
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -5202,17 +5219,10 @@ describe('Ovh Object Storage Swift', function () {
             .intercept("/templates/test.odt", "COPY")
             .reply(401, 'Unauthorized');
 
+          /** The parallel 401s share a single reconnection: one failed authentication on GRA, one on SBG */
           const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(500, {})
-            .post('/auth/tokens')
-            .reply(500, {})
-            .post('/auth/tokens')
-            .reply(500, {})
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -5291,9 +5301,8 @@ describe('Ovh Object Storage Swift', function () {
             .delayConnection(500)
             .reply(200, 'NOT OK');
 
+          /** The parallel failovers share a single authentication on SBG */
           const secondNock = nock(authURL)
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -5353,9 +5362,8 @@ describe('Ovh Object Storage Swift', function () {
             .intercept("/templates/test.odt", "COPY")
             .reply(500, {});
 
+          /** The parallel failovers share a single authentication on SBG */
           const secondNock = nock(authURL)
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -5667,9 +5675,8 @@ describe('Ovh Object Storage Swift', function () {
             .intercept('/templates/file.txt', "GET")
             .replyWithError('Error Message 1234');
 
+          /** The parallel failovers share a single authentication on SBG */
           const secondNock = nock(authURL)
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -5714,17 +5721,10 @@ describe('Ovh Object Storage Swift', function () {
             .intercept('/templates/file.txt', "GET")
             .reply(401, 'Unauthorized');
 
+          /** The parallel 401s share a single reconnection: one failed authentication on GRA, one on SBG */
           const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(500, {})
-            .post('/auth/tokens')
-            .reply(500, {})
-            .post('/auth/tokens')
-            .reply(500, {})
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -5773,9 +5773,8 @@ describe('Ovh Object Storage Swift', function () {
             .delayConnection(500)
             .reply(200);
 
+          /** The parallel failovers share a single authentication on SBG */
           const secondNock = nock(authURL)
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -5814,9 +5813,8 @@ describe('Ovh Object Storage Swift', function () {
             .intercept('/templates/file.txt', "GET")
             .reply(500);
 
+          /** The parallel failovers share a single authentication on SBG */
           const secondNock = nock(authURL)
-            .post('/auth/tokens')
-            .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth })
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
 
@@ -5884,6 +5882,645 @@ describe('Ovh Object Storage Swift', function () {
       });
     });
 
+  });
+
+  describe('Cause of the error "Object Storages are not available"', function () {
+    const _storage1 = { username: 'storage-1-user', password: 'storage-1-password', authUrl: authURL, tenantName: 'storage-1-tenant', region: 'GRA' };
+    const _storage2 = { username: 'storage-2-user', password: 'storage-2-password', authUrl: authURL, tenantName: 'storage-2-tenant', region: 'SBG' };
+    let _swift = null;
+    let _logs = [];
+
+    function networkError (code) {
+      const _err = new Error(`read ${code}`);
+      _err.code = code;
+      return _err;
+    }
+
+    /** A dedicated instance: the log function of the shared one is not overwritten */
+    function connect (storages, done) {
+      _logs = [];
+      _swift = storageSDK(storages);
+      _swift.setLogFunction((message, level) => _logs.push({ message, level }));
+      nock(authURL).post('/auth/tokens').reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+      _swift.connection((err) => {
+        assert.strictEqual(err, null);
+        _logs = [];
+        done();
+      });
+    }
+
+    describe('SINGLE STORAGE', function () {
+      beforeEach(function (done) {
+        connect([_storage1], done);
+      });
+
+      it('should return the status code of a 503 and log a single error', function (done) {
+        /** rock-req retries a 503 once */
+        const nockRequest = nock(publicUrlGRA)
+          .get('/templates/file.txt')
+          .times(2)
+          .reply(503, 'Service Unavailable');
+
+        _swift.downloadFile('templates', 'file.txt', function (err, resp) {
+          assert.strictEqual(err instanceof Error, true);
+          assert.strictEqual(err.message, 'Object Storages are not available');
+          assert.strictEqual(err.storageStatusCode, 503);
+          assert.strictEqual(err.statusCode, undefined);
+          assert.strictEqual(err.status, undefined);
+          assert.strictEqual(err.code, undefined);
+          assert.strictEqual(err.cause, undefined);
+          assert.strictEqual(resp, undefined);
+          assert.deepStrictEqual(_logs, [{ message: 'SWIFT Storage | Index "0" region "GRA" | GET /templates/file.txt | Storage not available, no fallback storage | Status code: 503', level: 'error' }]);
+          assert.strictEqual(_swift.getConfig().activeStorage, 0);
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should retry the bulk delete and metadata POSTs once on a 503 (rock-req default)', function (done) {
+        const nockRequest = nock(publicUrlGRA)
+          .post('/').query(true).reply(503)
+          .post('/').query(true).reply(200, 'deleted')
+          .post('/templates/file.txt').reply(503)
+          .post('/templates/file.txt').reply(202);
+
+        _swift.deleteFiles('templates', ['file.txt'], function (err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          _swift.setFileMetadata('templates', 'file.txt', { headers: { 'X-Object-Meta-A': '1' } }, function (err, resp) {
+            assert.strictEqual(err, null);
+            assert.strictEqual(resp.statusCode, 202);
+            assert.deepStrictEqual(_logs, []);
+            assert.strictEqual(nockRequest.pendingMocks().length, 0);
+            done();
+          });
+        });
+      });
+
+      ['ETIMEDOUT', 'ECONNRESET'].forEach((code) => {
+        it(`should return the network error code ${code} and the original error as cause`, function (done) {
+          /** rock-req >= 5.3 retries a network error once (maxRetry: 1) */
+          const nockRequest = nock(publicUrlGRA)
+            .get('/templates')
+            .query(true)
+            .times(2)
+            .replyWithError(networkError(code));
+
+          _swift.listFiles('templates', { queries: { prefix: 'a' } }, function (err) {
+            assert.strictEqual(err.message, 'Object Storages are not available');
+            assert.strictEqual(err.code, code);
+            assert.strictEqual(err.storageStatusCode, undefined);
+            assert.strictEqual(err.cause.message, `read ${code}`);
+            assert.deepStrictEqual(_logs, [{ message: `SWIFT Storage | Index "0" region "GRA" | GET /templates | Storage not available, no fallback storage | Error: read ${code}`, level: 'error' }]);
+            assert.strictEqual(nockRequest.pendingMocks().length, 0);
+            done();
+          });
+        });
+      });
+
+      it('should return the status code of the authentication if the reconnection fails (401 then 500)', function (done) {
+        const nockRequest = nock(publicUrlGRA)
+          .get('/templates/file.txt')
+          .reply(401);
+        const nockAuth = nock(authURL)
+          .post('/auth/tokens')
+          .reply(500, {});
+
+        _swift.downloadFile('templates', 'file.txt', function (err) {
+          assert.strictEqual(err.message, 'Object Storages are not available');
+          assert.strictEqual(err.storageStatusCode, 500);
+          assert.strictEqual(err.statusCode, undefined);
+          assert.strictEqual(err.status, undefined);
+          assert.strictEqual(err.code, undefined);
+          assert.deepStrictEqual(_logs.filter((log) => log.level === 'warning' || log.level === 'error'), [
+            { message: 'SWIFT Storage | Index "0" region "GRA" connection failed | Status 500 | Message: Internal Server Error | Storage not available, no fallback storage', level: 'error' }
+          ]);
+          assert.strictEqual(_swift.getConfig().activeStorage, 0);
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          assert.strictEqual(nockAuth.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return the network error code of the authentication', function (done) {
+        /** rock-req >= 5.3 retries the authentication POST once (maxRetry: 1) */
+        const nockAuth = nock(authURL)
+          .post('/auth/tokens')
+          .times(2)
+          .replyWithError(networkError('ECONNRESET'));
+
+        _swift.connection(function (err) {
+          assert.strictEqual(err.message, 'Object Storages are not available');
+          assert.strictEqual(err.code, 'ECONNRESET');
+          assert.strictEqual(err.storageStatusCode, undefined);
+          assert.strictEqual(err.cause.message, 'read ECONNRESET');
+          assert.deepStrictEqual(_logs.filter((log) => log.level === 'warning' || log.level === 'error'), [
+            { message: 'SWIFT Storage | Index "0" region "GRA" Action "connection" Error: read ECONNRESET | Storage not available, no fallback storage', level: 'error' }
+          ]);
+          assert.strictEqual(nockAuth.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return the cause if the storage catalog is not found', function (done) {
+        nock(authURL).post('/auth/tokens').reply(200, connectionResultSuccessV3WithoutObjectStore);
+
+        _swift.connection(function (err) {
+          assert.strictEqual(err.message, 'Object Storages are not available');
+          assert.strictEqual(err.storageStatusCode, undefined);
+          assert.strictEqual(err.code, undefined);
+          assert.strictEqual(err.cause.message, 'Storage catalog not found');
+          done();
+        });
+      });
+    });
+
+    describe('MULTIPLE STORAGES', function () {
+      beforeEach(function (done) {
+        connect([_storage1, _storage2], done);
+      });
+
+      it('should fallback to the second storage as before', function (done) {
+        const nockRequestGRA = nock(publicUrlGRA).get('/templates/file.txt').reply(500);
+        const nockAuth = nock(authURL).post('/auth/tokens').reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+        const nockRequestSBG = nock(publicUrlSBG).get('/templates/file.txt').reply(200, 'ok');
+
+        _swift.downloadFile('templates', 'file.txt', function (err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(resp.body.toString(), 'ok');
+          assert.strictEqual(_swift.getConfig().activeStorage, 1);
+          assert.deepStrictEqual(_logs.filter((log) => log.level === 'warning' || log.level === 'error'), [
+            { message: 'SWIFT Storage | Index "0" region "GRA" | GET /templates/file.txt | 500', level: 'error' },
+            { message: 'SWIFT Storage | Activate fallback storage: switch from "0" to "1"', level: 'warning' }
+          ]);
+          assert.strictEqual(nockRequestGRA.pendingMocks().length, 0);
+          assert.strictEqual(nockAuth.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestSBG.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return the cause of the last failure if all storages are not available', function (done) {
+        /** rock-req >= 5.3 retries a network error once (maxRetry: 1) */
+        const nockRequestGRA = nock(publicUrlGRA).get('/templates/file.txt').times(2).replyWithError(networkError('ETIMEDOUT'));
+        const nockAuth = nock(authURL).post('/auth/tokens').reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+        /** rock-req retries a 503 once */
+        const nockRequestSBG = nock(publicUrlSBG).get('/templates/file.txt').times(2).reply(503);
+
+        _swift.downloadFile('templates', 'file.txt', function (err, resp) {
+          assert.strictEqual(err.message, 'Object Storages are not available');
+          assert.strictEqual(err.storageStatusCode, 503);
+          assert.strictEqual(err.statusCode, undefined);
+          assert.strictEqual(err.status, undefined);
+          assert.strictEqual(err.code, undefined);
+          assert.strictEqual(err.cause, undefined);
+          assert.strictEqual(resp, undefined);
+          assert.strictEqual(_swift.getConfig().activeStorage, 0);
+          assert.deepStrictEqual(_logs.filter((log) => log.level === 'warning' || log.level === 'error'), [
+            { message: 'SWIFT Storage | Index "0" region "GRA" | GET /templates/file.txt | Error: read ETIMEDOUT', level: 'error' },
+            { message: 'SWIFT Storage | Activate fallback storage: switch from "0" to "1"', level: 'warning' },
+            { message: 'SWIFT Storage | Index "1" region "SBG" | GET /templates/file.txt | 503', level: 'error' },
+            { message: 'SWIFT Storage | Activate fallback storage: switch from "1" to "2"', level: 'warning' },
+            { message: 'SWIFT Storage | Object Storages are not available', level: 'error' }
+          ]);
+          assert.strictEqual(nockRequestGRA.pendingMocks().length, 0);
+          assert.strictEqual(nockAuth.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestSBG.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return the status code of the last authentication if all storages are not available', function (done) {
+        const nockAuth = nock(authURL).post('/auth/tokens').reply(500, {})
+          /** rock-req retries a 503 once */
+          .post('/auth/tokens').times(2).reply(503, {});
+
+        _swift.connection(function (err) {
+          assert.strictEqual(err.message, 'Object Storages are not available');
+          assert.strictEqual(err.storageStatusCode, 503);
+          assert.strictEqual(err.statusCode, undefined);
+          assert.strictEqual(err.status, undefined);
+          assert.strictEqual(_swift.getConfig().activeStorage, 0);
+          assert.strictEqual(nockAuth.pendingMocks().length, 0);
+          done();
+        });
+      });
+    });
+  });
+
+
+  describe('Expired token: a single reconnection shared by the parallel requests', function () {
+    const _newToken = 'new-token';
+    let _swift;
+    let _logs;
+
+    function listFiles () {
+      return new Promise((resolve) => _swift.listFiles('templates', (err, resp) => resolve({ err, resp })));
+    }
+
+    beforeEach(function (done) {
+      _logs = [];
+      _swift = storageSDK({ username: 'u', password: 'p', authUrl: authURL, tenantName: 't', region: 'GRA' });
+      _swift.setLogFunction((message, level) => _logs.push({ message, level }));
+      nock(authURL).post('/auth/tokens').reply(200, connectionResultSuccessV3, { 'X-Subject-Token': tokenAuth });
+      _swift.connection(done);
+    });
+
+    it('should authenticate once when 15 parallel requests receive a 401, then retry all of them with the new token', async function () {
+      const nockStorage = nock(publicUrlGRA)
+        .get('/templates').matchHeader('x-auth-token', tokenAuth).times(15).reply(401, 'Unauthorized')
+        .get('/templates').matchHeader('x-auth-token', _newToken).times(15).reply(200, '[]', { 'content-type': 'application/json' });
+      const nockAuth = nock(authURL)
+        .post('/auth/tokens').reply(200, connectionResultSuccessV3, { 'X-Subject-Token': _newToken })
+        .post('/auth/tokens').reply(200, connectionResultSuccessV3, { 'X-Subject-Token': 'unexpected' });
+
+      const results = await Promise.all(Array.from({ length: 15 }, listFiles));
+      for (const { err, resp } of results) {
+        assert.strictEqual(err, null);
+        assert.strictEqual(resp.statusCode, 200);
+        assert.deepStrictEqual(resp.body, []);
+      }
+      /** a single authentication: the second one is still pending */
+      assert.strictEqual(nockAuth.pendingMocks().length, 1);
+      assert.strictEqual(nockStorage.pendingMocks().length, 0);
+      assert.strictEqual(_logs.filter((l) => l.message.includes('try reconnect')).length, 1);
+    });
+
+    it('should return the same error to all the parallel requests if the reconnection fails, with a single authentication', async function () {
+      const nockStorage = nock(publicUrlGRA).get('/templates').times(15).reply(401, 'Unauthorized');
+      const nockAuth = nock(authURL)
+        .post('/auth/tokens').reply(401, {})
+        .post('/auth/tokens').reply(200, connectionResultSuccessV3, { 'X-Subject-Token': 'unexpected' });
+
+      const results = await Promise.all(Array.from({ length: 15 }, listFiles));
+      for (const { err, resp } of results) {
+        assert.strictEqual(err.message, 'Object Storages are not available');
+        assert.strictEqual(err.storageStatusCode, 401);
+        assert.strictEqual(err.statusCode, undefined);
+        assert.strictEqual(err, results[0].err);
+        assert.strictEqual(resp, undefined);
+      }
+      assert.strictEqual(nockAuth.pendingMocks().length, 1);
+      assert.strictEqual(nockStorage.pendingMocks().length, 0);
+
+      /** Nothing left waiting: the next 401 starts a new reconnection */
+      nock(publicUrlGRA)
+        .get('/templates').reply(401, 'Unauthorized')
+        .get('/templates').reply(200, '[]', { 'content-type': 'application/json' });
+      const { err, resp } = await listFiles();
+      assert.strictEqual(err, null);
+      assert.strictEqual(resp.statusCode, 200);
+      assert.strictEqual(nockAuth.pendingMocks().length, 0);
+    });
+
+    it('should not wait forever if the reconnection throws synchronously', async function () {
+      nock(publicUrlGRA).get('/templates').times(2).reply(401, 'Unauthorized');
+      const _storages = _swift.getConfig().storages;
+      /** Corrupted configuration: connection() throws a TypeError before sending any request */
+      _swift.getConfig().storages = [null];
+      const results = await Promise.all([listFiles(), listFiles()]);
+      for (const { err } of results) {
+        assert.strictEqual(err instanceof TypeError, true);
+      }
+      _swift.getConfig().storages = _storages;
+      nock(publicUrlGRA)
+        .get('/templates').reply(401, 'Unauthorized')
+        .get('/templates').reply(200, '[]', { 'content-type': 'application/json' });
+      nock(authURL).post('/auth/tokens').reply(200, connectionResultSuccessV3, { 'X-Subject-Token': _newToken });
+      const { err, resp } = await listFiles();
+      assert.strictEqual(err, null);
+      assert.strictEqual(resp.statusCode, 200);
+    });
+  });
+
+  describe('Lazy connection: connection() is optional', function () {
+    const _storageGRA = { username: 'u', password: 'p', authUrl: authURL, tenantName: 't', region: 'GRA' };
+    const _storageSBG = { username: 'u2', password: 'p2', authUrl: authURL, tenantName: 't2', region: 'SBG' };
+    let _swift = null;
+    let _logs = [];
+
+    function listFiles () {
+      return new Promise((resolve) => _swift.listFiles('templates', (err, resp) => resolve({ err, resp })));
+    }
+
+    beforeEach(function () {
+      _logs = [];
+      _swift = storageSDK(_storageGRA);
+      _swift.setLogFunction((message, level) => _logs.push({ message, level }));
+    });
+
+    afterEach(function () {
+      nock.cleanAll();
+    });
+
+    it('should authenticate on the first request without calling connection()', async function () {
+      const nockAuth = nock(authURL).post('/auth/tokens').reply(200, connectionResultSuccessV3, { 'X-Subject-Token': tokenAuth });
+      const nockStorage = nock(publicUrlGRA).get('/templates').matchHeader('x-auth-token', tokenAuth).reply(200, '[]', { 'content-type': 'application/json' });
+      const { err, resp } = await listFiles();
+      assert.strictEqual(err, null);
+      assert.strictEqual(resp.statusCode, 200);
+      assert.deepStrictEqual(resp.body, []);
+      assert.strictEqual(nockAuth.pendingMocks().length, 0);
+      assert.strictEqual(nockStorage.pendingMocks().length, 0);
+      assert.deepStrictEqual(_logs.map((l) => l.level), ['info', 'info']);
+    });
+
+    it('should authenticate once for 15 parallel first requests', async function () {
+      const nockAuth = nock(authURL)
+        .post('/auth/tokens').reply(200, connectionResultSuccessV3, { 'X-Subject-Token': tokenAuth })
+        .post('/auth/tokens').reply(200, connectionResultSuccessV3, { 'X-Subject-Token': 'unexpected' });
+      const nockStorage = nock(publicUrlGRA).get('/templates').matchHeader('x-auth-token', tokenAuth).times(15).reply(200, '[]', { 'content-type': 'application/json' });
+      const results = await Promise.all(Array.from({ length: 15 }, listFiles));
+      for (const { err, resp } of results) {
+        assert.strictEqual(err, null);
+        assert.strictEqual(resp.statusCode, 200);
+      }
+      assert.strictEqual(nockAuth.pendingMocks().length, 1);
+      assert.strictEqual(nockStorage.pendingMocks().length, 0);
+    });
+
+    it('should return the cause of a failed lazy authentication to all the parallel requests, and retry on the next request', async function () {
+      const nockAuth = nock(authURL)
+        .post('/auth/tokens').reply(401, {})
+        .post('/auth/tokens').reply(200, connectionResultSuccessV3, { 'X-Subject-Token': tokenAuth });
+      const results = await Promise.all(Array.from({ length: 15 }, listFiles));
+      for (const { err, resp } of results) {
+        assert.strictEqual(err.message, 'Object Storages are not available');
+        assert.strictEqual(err.storageStatusCode, 401);
+        assert.strictEqual(err.statusCode, undefined);
+        assert.strictEqual(err, results[0].err);
+        assert.strictEqual(resp, undefined);
+      }
+      assert.strictEqual(nockAuth.pendingMocks().length, 1);
+
+      const nockStorage = nock(publicUrlGRA).get('/templates').matchHeader('x-auth-token', tokenAuth).reply(200, '[]', { 'content-type': 'application/json' });
+      const { err, resp } = await listFiles();
+      assert.strictEqual(err, null);
+      assert.strictEqual(resp.statusCode, 200);
+      assert.strictEqual(nockAuth.pendingMocks().length, 0);
+      assert.strictEqual(nockStorage.pendingMocks().length, 0);
+    });
+
+    it('should fail over to the next storage during a lazy authentication', async function () {
+      _swift = storageSDK([_storageGRA, _storageSBG]);
+      _swift.setLogFunction(() => {});
+      const nockAuth = nock(authURL)
+        .post('/auth/tokens').reply(500, {})
+        .post('/auth/tokens').reply(200, connectionResultSuccessV3, { 'X-Subject-Token': tokenAuth });
+      const nockStorage = nock(publicUrlSBG).get('/templates').reply(200, '[]', { 'content-type': 'application/json' });
+      const { err, resp } = await listFiles();
+      assert.strictEqual(err, null);
+      assert.strictEqual(resp.statusCode, 200);
+      assert.strictEqual(_swift.getConfig().activeStorage, 1);
+      assert.strictEqual(nockAuth.pendingMocks().length, 0);
+      assert.strictEqual(nockStorage.pendingMocks().length, 0);
+    });
+
+    it('an explicit connection() should still authenticate and call its callback, then the requests use its token', function (done) {
+      nock(authURL).post('/auth/tokens').reply(200, connectionResultSuccessV3, { 'X-Subject-Token': tokenAuth });
+      _swift.connection((err) => {
+        assert.strictEqual(err, null);
+        assert.strictEqual(_swift.getConfig().token, tokenAuth);
+        assert.strictEqual(_swift.getConfig().endpoints.url, publicUrlGRA);
+        /** No new authentication */
+        const nockStorage = nock(publicUrlGRA).get('/templates').matchHeader('x-auth-token', tokenAuth).reply(200, '[]', { 'content-type': 'application/json' });
+        _swift.listFiles('templates', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(nockStorage.pendingMocks().length, 0);
+          done();
+        });
+      });
+    });
+
+    it('an explicit connection() should return the authentication error to its callback', function (done) {
+      nock(authURL).post('/auth/tokens').reply(401, {});
+      _swift.connection((err) => {
+        assert.strictEqual(err.message, 'Object Storages are not available');
+        assert.strictEqual(err.storageStatusCode, 401);
+        done();
+      });
+    });
+
+    it('an explicit connection() called during a lazy authentication should join it (a single authentication)', async function () {
+      const nockAuth = nock(authURL)
+        .post('/auth/tokens').reply(200, connectionResultSuccessV3, { 'X-Subject-Token': tokenAuth })
+        .post('/auth/tokens').reply(200, connectionResultSuccessV3, { 'X-Subject-Token': 'unexpected' });
+      nock(publicUrlGRA).get('/templates').matchHeader('x-auth-token', tokenAuth).reply(200, '[]', { 'content-type': 'application/json' });
+      const _request = listFiles();
+      const _connectionErr = await new Promise((resolve) => _swift.connection(resolve));
+      const { err, resp } = await _request;
+      assert.strictEqual(_connectionErr, null);
+      assert.strictEqual(err, null);
+      assert.strictEqual(resp.statusCode, 200);
+      assert.strictEqual(nockAuth.pendingMocks().length, 1);
+    });
+
+    it('an explicit connection() after a successful one should authenticate again, as before', function (done) {
+      nock(authURL)
+        .post('/auth/tokens').reply(200, connectionResultSuccessV3, { 'X-Subject-Token': tokenAuth })
+        .post('/auth/tokens').reply(200, connectionResultSuccessV3, { 'X-Subject-Token': 'second-token' });
+      _swift.connection((err) => {
+        assert.strictEqual(err, null);
+        _swift.connection((err) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(_swift.getConfig().token, 'second-token');
+          done();
+        });
+      });
+    });
+
+    it('setStorages() followed by a request should authenticate on the new storages', async function () {
+      nock(authURL).post('/auth/tokens').reply(200, connectionResultSuccessV3, { 'X-Subject-Token': tokenAuth });
+      nock(publicUrlGRA).get('/templates').reply(200, '[]', { 'content-type': 'application/json' });
+      assert.strictEqual((await listFiles()).err, null);
+
+      _swift.setStorages(_storageSBG);
+      const nockAuth = nock(authURL).post('/auth/tokens', (body) => body.auth.identity.password.user.name === 'u2').reply(200, connectionResultSuccessV3, { 'X-Subject-Token': 'sbg-token' });
+      const nockStorage = nock(publicUrlSBG).get('/templates').matchHeader('x-auth-token', 'sbg-token').reply(200, '[]', { 'content-type': 'application/json' });
+      const { err, resp } = await listFiles();
+      assert.strictEqual(err, null);
+      assert.strictEqual(resp.statusCode, 200);
+      assert.strictEqual(nockAuth.pendingMocks().length, 0);
+      assert.strictEqual(nockStorage.pendingMocks().length, 0);
+    });
+
+    it('setStorages() during a lazy authentication should not use the endpoint of the previous storages', async function () {
+      nock(authURL)
+        .post('/auth/tokens', (body) => body.auth.identity.password.user.name === 'u').delay(20).reply(200, connectionResultSuccessV3, { 'X-Subject-Token': tokenAuth })
+        .post('/auth/tokens', (body) => body.auth.identity.password.user.name === 'u2').reply(200, connectionResultSuccessV3, { 'X-Subject-Token': 'sbg-token' });
+      const nockStorage = nock(publicUrlSBG).get('/templates').matchHeader('x-auth-token', 'sbg-token').times(2).reply(200, '[]', { 'content-type': 'application/json' });
+      /** The previous storage must never be requested */
+      const nockStale = nock(publicUrlGRA).get('/templates').times(2).reply(500, 'stale endpoint');
+      const _first = listFiles();
+      _swift.setStorages(_storageSBG);
+      const _second = listFiles();
+      for (const { err, resp } of await Promise.all([_first, _second])) {
+        assert.strictEqual(err, null);
+        assert.strictEqual(resp.statusCode, 200);
+      }
+      assert.strictEqual(nockStorage.pendingMocks().length, 0);
+      assert.strictEqual(_swift.getConfig().endpoints.url, publicUrlSBG);
+      assert.strictEqual(nockStale.pendingMocks().length, 1);
+      assert.strictEqual(nock.pendingMocks().length, 1);
+    });
+
+    it('should not authenticate again once connected (no overhead on the next requests)', async function () {
+      const nockAuth = nock(authURL)
+        .post('/auth/tokens').reply(200, connectionResultSuccessV3, { 'X-Subject-Token': tokenAuth })
+        .post('/auth/tokens').reply(200, connectionResultSuccessV3, { 'X-Subject-Token': 'unexpected' });
+      nock(publicUrlGRA).get('/templates').times(3).reply(200, '[]', { 'content-type': 'application/json' });
+      await listFiles();
+      await listFiles();
+      const { err } = await listFiles();
+      assert.strictEqual(err, null);
+      assert.strictEqual(nockAuth.pendingMocks().length, 1);
+    });
+  });
+
+  describe('Options of the caller and requestOptions', function () {
+    const _storage1 = { username: 'storage-1-user', password: 'storage-1-password', authUrl: authURL, tenantName: 'storage-1-tenant', region: 'GRA' };
+    let _swift = null;
+
+    beforeEach(function (done) {
+      _swift = storageSDK([_storage1]);
+      _swift.setLogFunction(() => {});
+      nock(authURL).post('/auth/tokens').reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+      _swift.connection((err) => {
+        assert.strictEqual(err, null);
+        done();
+      });
+    });
+
+    afterEach(function () {
+      nock.cleanAll();
+    });
+
+    it('downloadFile should ask for "accept-encoding: identity" and not mutate the options of the caller', function (done) {
+      const _options = { headers: { 'x-test': '1' }, queries: { temp_url_expires: '1' } };
+      const _snapshot = JSON.parse(JSON.stringify(_options));
+      const nockRequest = nock(publicUrlGRA)
+        .get('/templates/file.txt')
+        .query({ temp_url_expires: '1' })
+        .matchHeader('accept-encoding', 'identity')
+        .matchHeader('x-auth-token', tokenAuth)
+        .reply(200, 'ok');
+
+      _swift.downloadFile('templates', 'file.txt', _options, function (err, resp) {
+        assert.strictEqual(err, null);
+        assert.strictEqual(resp.statusCode, 200);
+        assert.deepStrictEqual(_options, _snapshot);
+        assert.strictEqual(nockRequest.pendingMocks().length, 0);
+        done();
+      });
+    });
+
+    it('downloadFile should keep the "accept-encoding" header of the caller, whatever its case', function (done) {
+      const _gzip = zlib.gzipSync('compressed');
+      const nockRequest = nock(publicUrlGRA)
+        .get('/templates/file.txt')
+        .matchHeader('accept-encoding', 'gzip')
+        .reply(200, _gzip, { 'content-encoding': 'gzip' });
+
+      _swift.downloadFile('templates', 'file.txt', { headers: { 'Accept-Encoding': 'gzip' } }, function (err, resp) {
+        assert.strictEqual(err, null);
+        /** still not decompressed */
+        assert.deepStrictEqual(resp.body, _gzip);
+        assert.strictEqual(nockRequest.pendingMocks().length, 0);
+        done();
+      });
+    });
+
+    it('a reused options object should not leak "decompress" from downloadFile into another request', function (done) {
+      const _options = {};
+      const nockRequest = nock(publicUrlGRA)
+        .get('/templates/file.txt')
+        .matchHeader('accept-encoding', 'identity')
+        .reply(200, zlib.gzipSync('compressed'), { 'content-encoding': 'gzip' })
+        .get('/templates/file.txt')
+        .matchHeader('accept-encoding', 'gzip, deflate, br')
+        .reply(200, zlib.gzipSync('compressed'), { 'content-encoding': 'gzip' });
+
+      _swift.downloadFile('templates', 'file.txt', _options, function (err, resp) {
+        assert.strictEqual(err, null);
+        assert.notStrictEqual(resp.body.toString(), 'compressed');
+        _swift.request('GET', '/templates/file.txt', _options, function (err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.body.toString(), 'compressed');
+          assert.deepStrictEqual(_options, {});
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          done();
+        });
+      });
+    });
+
+    it('requestOptions should not override the method, the URL or the auth token', function (done) {
+      const nockRequest = nock(publicUrlGRA)
+        .get('/templates')
+        .matchHeader('x-auth-token', tokenAuth)
+        .matchHeader('x-custom', 'a')
+        .reply(200, '[]');
+
+      _swift.request('GET', '/templates', { requestOptions: { method: 'DELETE', url: 'https://other.host.test/x', headers: { 'x-custom': 'a', 'x-auth-token': 'wrong' } } }, function (err, resp) {
+        assert.strictEqual(err, null);
+        assert.strictEqual(resp.statusCode, 200);
+        assert.strictEqual(nockRequest.pendingMocks().length, 0);
+        done();
+      });
+    });
+
+    it('should reconnect only once per request on 401, and return the second 401', function (done) {
+      const nockRequest = nock(publicUrlGRA)
+        .get('/templates')
+        .times(2)
+        .reply(401, 'Unauthorized');
+      const nockAuth = nock(authURL)
+        .post('/auth/tokens')
+        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+      /** Must not be requested */
+      const nockExtra = nock(publicUrlGRA).get('/templates').reply(401, 'Unauthorized');
+      const nockExtraAuth = nock(authURL).post('/auth/tokens').reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+      _swift.request('GET', '/templates', function (err, resp) {
+        assert.strictEqual(err, null);
+        assert.strictEqual(resp.statusCode, 401);
+        assert.strictEqual(resp.body.toString(), 'Unauthorized');
+        assert.strictEqual(nockRequest.pendingMocks().length, 0);
+        assert.strictEqual(nockAuth.pendingMocks().length, 0);
+        assert.strictEqual(nockExtra.pendingMocks().length, 1);
+        assert.strictEqual(nockExtraAuth.pendingMocks().length, 1);
+        done();
+      });
+    });
+
+    it('should reconnect again on the 401 of a new request', function (done) {
+      const nockRequest = nock(publicUrlGRA)
+        .get('/templates')
+        .reply(401, 'Unauthorized')
+        .get('/templates')
+        .reply(200, '[]')
+        .get('/templates')
+        .reply(401, 'Unauthorized')
+        .get('/templates')
+        .reply(200, '[]');
+      const nockAuth = nock(authURL)
+        .post('/auth/tokens')
+        .times(2)
+        .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
+
+      _swift.request('GET', '/templates', function (err, resp) {
+        assert.strictEqual(err, null);
+        assert.strictEqual(resp.statusCode, 200);
+        _swift.request('GET', '/templates', function (err, resp) {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.statusCode, 200);
+          assert.strictEqual(nockRequest.pendingMocks().length, 0);
+          assert.strictEqual(nockAuth.pendingMocks().length, 0);
+          done();
+        });
+      });
+    });
   });
 });
 

@@ -5,6 +5,9 @@ on:
     branches: [main, master]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Node ${{ matrix.node-version }}
@@ -15,11 +18,13 @@ jobs:
       # Every version of the range declared in the "engines" field of package.json,
       # up to the current release. Node 26 is the version used to publish on npm.
       matrix:
-        node-version: [20.x, 22.x, 24.x, 26.x]
+        node-version: [20.x, 26.x] # oldest supported (engines >=20) and latest
     env:
       CI: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -29,3 +34,12 @@ jobs:
       - run: npm ci
 
       - run: npm test
+
+      - name: Lint
+        if: startsWith(matrix.node-version, '26')
+        run: npm run lint:check
+
+      # Only the shipped dependencies, and only high or critical: dev tools never reach users
+      - name: Audit production dependencies
+        if: startsWith(matrix.node-version, '26')
+        run: npm audit --omit=dev --audit-level=high

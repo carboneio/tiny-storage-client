@@ -12,7 +12,7 @@ describe('xmlToJson', function () {
     _assert(xmlToJson(undefined), {});
     _assert(xmlToJson({}), {});
     _assert(xmlToJson([]), {});
-    _assert(xmlToJson('<<a><</a>/>/><</>a/>'), {});
+    _assert(xmlToJson('<<a><</a>/>/><</>a/>'), { a: '<' });
   });
 
   it('should return simple object', function () {

@@ -3,7 +3,7 @@
 ## Highlight
 
 * 🚀 Vanilla JS + Only 1 dependency [rock-req](https://github.com/carboneio/rock-req) for HTTP requests.
-* 🌎 Provide one or a list of storages credentials: the SDK will switch storage if something goes wrong (Server/DNS not responding, timeout, error 500, too many redirects, authentication error, and more...). As soon as the main storage is available, the SDK returns to the main storage
+* 🌎 Provide one or a list of storages credentials: the SDK will switch storage if something goes wrong (Server/DNS not responding, timeout, error 500, too many redirects, authentication error, and more...). As soon as the main storage is available again, the SDK returns to it: while a fallback is active, a request starts at most one background check every 60 s (an authentication on the main storage, then a `HEAD` of its account). The delay doubles on each failure, up to 10 min. Requests are never delayed by this check, and parallel failovers share a single authentication on the fallback storage
 * ✨ If a request fails due to an authentication token expiration, the SDK fetches a new authentication token and retries the initial request with it.
 * 🔒 Object names and request parameters are automatically encoded, as required by the [Swift API](https://docs.openstack.org/swift/latest/api/object_api_v1_overview.html). The `/` separators are kept as-is, so pseudo-folders such as `invoices/2024/client.pdf` keep working.
 * 🚩 When initialising the Tiny SDK client, provide only a list of S3 or a list of Swift credentials, switching from one storage system to another is not supported.
@@ -73,9 +73,14 @@ Requires **Node.js 20 or higher**.
 
 ## API Usage
 
-### Connection
+### Setup
 
-Initialise the SDK with one or multiple storage, if something goes wrong, the next region will take over automatically. If no storage is available, an error message is returned `Error: Object Storages are not available`.
+Initialise the SDK with one or multiple storage, if something goes wrong, the next region will take over automatically. If no storage is available, an error message is returned `Error: Object Storages are not available`. The error carries the cause of the last failure (request or authentication):
+- `err.storageStatusCode`: the last HTTP status code of the storage (5xx, or the status of the failed authentication), if the storage replied
+- `err.code`: the network error code (`ETIMEDOUT`, `ECONNRESET`...), if any
+- `err.cause`: the original `Error`, if any (network error, `Storage catalog not found`, `Storage endpoint not found, invalid region`)
+
+`err.statusCode` and `err.status` are never set: HTTP frameworks (Express...) reply with them, a storage `401` must not become the `401` of your API.
 
 ```js
 const storageClient = require('tiny-storage-client');
@@ -95,20 +100,33 @@ let storage = storageClient([{
   region     : 'region-2'
 }]);
 
-storage.connection((err) => {
+/** The first request authenticates automatically, then sends the request */
+storage.downloadFile('container', 'filename.pdf', (err, resp) => {
   if (err) {
-    // Invalid credentials
+    // e.g. invalid credentials: Error 'Object Storages are not available' with its cause
   }
-  // Success, connected!
 })
 ```
 
-`connection` must be called once before any other method: it fetches the auth token and resolves the
-endpoint of the region. The token is then renewed automatically when it expires.
+Authentication (auth token and endpoint of the region) is handled by the SDK, like S3: the first request
+authenticates, with a single authentication shared by the requests running in parallel. The token is renewed
+automatically when it expires.
 
 The optional `interface` selects which endpoint of the Swift catalog is used for the region. When it is
 not set, every interface of the region matches and the first one returned by the server is used, which
 may not be the one you expect if the catalog exposes several.
+
+### Security notes
+
+- `uploadFile` reads any local path it is given: never pass a path built from user input.
+- Object names are encoded, but `..` segments are sent as is (`a/../b`): validating names built from user input is the caller's responsibility.
+- The `authUrl` must be the final Keystone URL, with its protocol (`https://`): the authentication request carries the password, so it never follows a redirect (a `3xx` is an authentication failure, the next storage is tried).
+- With a stream `output`, `resp` is the raw HTTP response: `console.log(resp)` or `util.inspect(resp)` prints the request headers, including the `X-Auth-Token`. Log `resp.statusCode` and `resp.headers` only.
+
+### HTTP client options
+
+`setRockReqDefaults()` (and `global.rockReqConf`) change the defaults of [rock-req](https://github.com/carboneio/rock-req) for every request, except `keepAliveTimeout` and `keepAliveDuration`: rock-req reads them once, when it creates its HTTP agents in `rock.extend()`, so they are silently ignored. To change them, pass your own agent: `setRockReqDefaults({ agent: new https.Agent({ keepAlive: true, keepAliveMsecs: 3000 }) })`.
+
 ### Upload a file
 
 ```js
@@ -204,6 +222,8 @@ storage.downloadFile('containerName', '2023-invoice.pdf', { output: createOutput
    */
 })
 ```
+
+The file is returned exactly as stored, byte for byte: a file uploaded with a `Content-Encoding` metadata (`gzip`, `deflate`, `br`) is **not** decompressed, so `resp.body` matches the stored size and checksum, and can be copied to another storage as is. The header `resp.headers['content-encoding']` tells how to decode it. `downloadFile` sends `accept-encoding: identity` so a proxy or CDN does not compress the file on the fly, unless you set this header. To decompress it on download, pass the option `{ requestOptions: { decompress: true } }` on each call (`setRockReqDefaults` does not change it).
 
 ### Delete a file
 
@@ -413,6 +433,10 @@ function createOutputStream(opts, res) {
 storage.request(method, path, { headers, queries, body, output: createOutputStream }, (err) => {})
 ```
 
+Every method accepts the option `requestOptions`, passed to [rock-req](https://github.com/carboneio/rock-req) (e.g. `{ requestOptions: { timeout: 10000, decompress: true } }`). It cannot override the URL, the method or the `X-Auth-Token`; `requestOptions.headers` are merged with the headers.
+
+On a `401`, the client reconnects and retries the request once; a second `401` is returned in `resp.statusCode`.
+
 The base URL requests by default the account, passing an empty string will request the account details. For container requests, pass the container name, such as: `/{container}`. For file requests, pass the container and the file, such as: `/{container}/{filename}`. Object Storage Swift API specification: https://docs.openstack.org/api-ref/object-store/
 
 The `request` function automatically reconnects to the Object Storage or switch storage if something goes wrong.
@@ -438,16 +462,34 @@ Example of custom request, bulk delete file from a `customerDocuments` container
 
 ### Logs
 
-By default, logs are printed with to `console.log`. You can use the `setLogFunction` to override the default log function. Create a function with two arguments: `message` as a string, `level` as a string and the value can be: `info`/`warning`/`error`. Example to use:
+By default, logs are printed with `console.log`. Use `setLogFunction` to override the default log function: `(message, level, fields) => {}`
+- `message`: string
+- `level`: `info`, `warning` or `error`
+- `fields`: flat object for structured logs (JSON loggers, metrics). Always `event` and `storage` (`'swift'`), and when relevant: `index`, `region`, `method`, `path` (without query string), `status` (HTTP status of the storage), `code` (network error code, e.g. `ETIMEDOUT`), `from`, `to` (storage indexes). Never tokens, credentials or signed URLs.
+
+A function with two arguments `(message, level)` keeps working. The default console output is unchanged.
+
 ```js
-storage.setLogFunction((message, level) => {
-  console.log(`${level} : ${message}`);
+storage.setLogFunction((message, level, fields) => {
+  logger[level === 'warning' ? 'warn' : level]({ ...fields }, message);
 })
 ```
 
+| `event` | Level | When |
+|---|---|---|
+| `storage_connecting` | info | Authentication on a storage |
+| `storage_connected` | info | Authenticated, endpoint of the region resolved |
+| `storage_connection_failed` | warning | Authentication failed on a storage, the next one is tried |
+| `storage_reconnect` | info | The token expired (`401`): a new authentication, shared by the parallel requests |
+| `storage_request_failed` | error | A request failed (network error, 5xx) with several storages: the next storage is used |
+| `storage_fallback` | warning | Switch to the next storage |
+| `storage_main_unavailable` | info | The background check of the main storage failed, the fallback is kept: next check in 2× the delay (60 s to 10 min) |
+| `storage_main_restored` | info | The main storage answers again, the next requests use it |
+| `storage_unavailable` | error | No storage available, the request returns `Object Storages are not available` |
+
 ### Timeout
 
-The default request timeout is 5 seconds, change it by calling `setTimeout`:
+The default request timeout is 60 seconds of inactivity (no byte received or sent, not the total duration, like the AWS SDK). With several storages, a storage that stops answering takes up to 2 × the timeout before the next storage is used (one retry by rock-req): lower it with `setTimeout` for a faster failover:
 ```js
 storage.setTimeout(30000); // 30 seconds
 ```

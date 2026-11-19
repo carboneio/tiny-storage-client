@@ -3,7 +3,11 @@ name: Publish
 on:
   push:
     tags: ["v*"]
-  workflow_dispatch: # Allow manual runs from the GitHub Actions UI
+
+# Two tags pushed close together must not publish at the same time
+concurrency:
+  group: publish
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -17,13 +21,15 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           # Node >= 24 is required: npm must be >= 11.5.1 to publish with a Trusted Publisher (OIDC).
           # Node 22 ships npm 10.x and cannot.
           node-version: 26
-          cache: npm
+          # No npm cache in the publish job: a cache poisoned by another workflow must not reach the published package
           registry-url: https://registry.npmjs.org
 
       - run: npm ci
@@ -33,7 +39,6 @@ jobs:
       # A tag that does not match the version of package.json would publish under the
       # wrong number, and npm never allows a version to be reused.
       - name: Check the tag matches the version of package.json
-        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           TAG_VERSION=${GITHUB_REF#refs/tags/v}
           PKG_VERSION=$(node -p "require('./package.json').version")
@@ -43,7 +48,19 @@ jobs:
             exit 1
           fi
 
+      # Only the files of the "files" whitelist (plus the ones npm always adds) may be published
+      - name: Check the package content
+        run: |
+          FILES=$(npm pack --dry-run --json | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0)).flatMap(p => p.files.map(f => f.path)).join('\\n'))")
+          echo "$FILES"
+          ALLOWED=$(node -p "[...require('./package.json').files, 'package.json'].join('\\n')")
+          # npm always adds the README, LICENSE and CHANGELOG files, whatever their extension
+          UNEXPECTED=$(echo "$FILES" | grep -vxF "$ALLOWED" | grep -viE '^(readme|licen[cs]e|changelog)(\.[a-z]+)?$' || true)
+          if [ -n "$UNEXPECTED" ]; then
+            echo "::error::Unexpected files in the package: $UNEXPECTED"
+            exit 1
+          fi
+
       # Publish to npm using Trusted Publisher (OIDC — no NPM_TOKEN secret needed)
       - name: Publish to npm
-        if: startsWith(github.ref, 'refs/tags/v')
         run: npm publish --provenance

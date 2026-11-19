@@ -19,7 +19,7 @@ function xmlToJson (xml, options) {
   let _previousTagFull = '';
   let _skipObject = null;
   /** Regex variables */
-  const _xmlTagRegExp = /<([^>]+?)>/g;
+  const _xmlTagRegExp = /<([^<>]+)>/g; /** No "<" inside a tag: linear time on a body made of "<" (no backtracking) */
   let _previousLastIndex = 0;
   let _tagParsed = [];
   /** Loop through all XML tags */
@@ -44,7 +44,7 @@ function xmlToJson (xml, options) {
         child = options?.forceArray?.includes(_previousTag) === true ? [{}] : {};
         childName = _previousTag;
       } /** If a child already exist, and the two tags are equal, the existing element is retreive from the JSON and transformed as LIST */
-      else if (_tag === _previousTag && _tagFull[0] !== '/' && _previousTagFull[0] === '/' && child === null && (root[_tag]?.constructor === Object || root[_tag]?.constructor === Array)) {
+      else if (_tag === _previousTag && _tagFull[0] !== '/' && _previousTagFull[0] === '/' && child === null && (root[_tag]?.constructor === Object || root[_tag]?.constructor === Array) && Object.hasOwn(root, _tag)) {
         child = root[_tag]?.constructor === Object ? [root[_tag]] : root[_tag];
         childName = _tag;
       } /** Skip objects of 2 depth */
@@ -53,9 +53,12 @@ function xmlToJson (xml, options) {
         continue;
       }
 
-      /** When we reach the end of a list of child tags `</name></files>`, the child is assigned to the root object */
-      if (_tagFull[0] === '/' && _previousTagFull[0] === '/' && child) {
-        root[childName] = child?.constructor === Array ? [ ...child ] : { ...child };
+      /** When we reach the end of a list of child tags `</name></files>` (or an empty element of a list `<files></files>`, dropped), the child is assigned to the root object */
+      if (_tagFull[0] === '/' && (_previousTagFull[0] === '/' || _tag === childName) && child) {
+        /** A `<__proto__>` element would replace the prototype of the result: dropped */
+        if (childName !== '__proto__') {
+          root[childName] = child?.constructor === Array ? [ ...child ] : { ...child };
+        }
         child = null;
         childName = null;
       } /** When we reach the end of a tag <color>red</color>, the value is assign to the child or root object */
