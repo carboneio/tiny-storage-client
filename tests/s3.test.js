@@ -1375,6 +1375,7 @@ describe('S3 SDK', function () {
           });
         const nockRequestS3 = nock(url1S3)
           .get('/')
+          .delay(100) // the health check answers after the failing requests: one deterministic order
           .reply(200);
         const nockRequestS4 = nock(url1S3)
           .get('/bucket/file.odt')
@@ -1452,6 +1453,7 @@ describe('S3 SDK', function () {
           });
         const nockRequestS7 = nock(url1S3)
           .get('/')
+          .delay(100) // the health check answers after the failing requests: one deterministic order
           .reply(200);
         /** Fourth Batch */
         const nockRequestS8 = nock(url1S3)
