@@ -1,7 +1,7 @@
 ### v4.1.0
-Resilience release: a busy storage is slowed down instead of abandoned, and one failing request no longer moves all traffic to the fallback storage. The API is unchanged. Upgrade `rock-req` to 5.3.2 in your app at the same time (see below). Behaviour changes are listed first.
+Resilience release: a busy storage can now be retried with a backoff (opt-in), and one failing request no longer moves all traffic to the fallback storage. The API is unchanged. Upgrade `rock-req` to 5.4.0 in your app at the same time (see below). Behaviour changes are listed first.
 
-- **Deployment**: `rock-req` is now pinned to exactly 5.3.2. If your app also uses `rock-req` and sets `rock.defaults` (for example a proxy in `beforeRequest`), it must use 5.3.2 too, otherwise npm installs two copies and your defaults stop applying to storage requests.
+- **Deployment**: `rock-req` is now pinned to exactly 5.4.0. If your app also uses `rock-req` and sets `rock.defaults` (for example a proxy in `beforeRequest`), it must use 5.4.0 too, otherwise npm installs two copies and your defaults stop applying to storage requests.
 - **S3 and Swift**: the active storage now switches for all requests only after 3 server errors in a row. A single `5xx` still sends that request to the next storage, and a network error, a timeout or an S3 `401` still switch at once. One corrupt object no longer moves every request to a fallback that may be stale.
 - **S3 and Swift**: a `501 Not Implemented` is returned to you directly, with no retry and no failover.
 - **S3 and Swift**: redirects are no longer followed. A signed S3 request or a Swift token is never sent to another host, the `3xx` is returned to you.

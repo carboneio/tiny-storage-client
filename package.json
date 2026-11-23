@@ -50,10 +50,10 @@
   "license": "Apache-2.0",
   "dependencies": {
     "aws4": "=1.13.2",
-    "rock-req": "=5.3.2"
+    "rock-req": "=5.4.0"
   },
   "devDependencies": {
-    "eslint": "=10.8.1",
+    "eslint": "=10.15.0",
     "mocha": "=12.0.3",
     "nock": "=14.0.17"
   }

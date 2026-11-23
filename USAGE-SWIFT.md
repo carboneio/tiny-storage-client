@@ -139,7 +139,7 @@ With a stream `output`, only a `2xx` response is written into your stream. Any o
 
 `setRockReqDefaults()` (and `global.rockReqConf`) change the defaults of [rock-req](https://github.com/carboneio/rock-req) for every request, its retries included (`maxRetry`, `retryOnCode`, `beforeRequest`), with two exceptions. `followRedirects` is always `false`. And `keepAliveTimeout` and `keepAliveDuration` are silently ignored: rock-req reads them once, when it creates its HTTP agents in `rock.extend()`. To change them, pass your own agent: `setRockReqDefaults({ agent: new https.Agent({ keepAlive: true, keepAliveMsecs: 3000 }) })`.
 
-The SDK uses its own copy of rock-req if the version of your application differs (rock-req `=5.3.2`): your `rock.defaults` then do not apply to the storage requests. Depend on the same rock-req version as the SDK.
+The SDK uses its own copy of rock-req if the version of your application differs (rock-req `=5.4.0`): your `rock.defaults` then do not apply to the storage requests. Depend on the same rock-req version as the SDK.
 
 ### Upload a file
 

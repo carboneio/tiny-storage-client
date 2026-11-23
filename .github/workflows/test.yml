@@ -15,8 +15,6 @@ jobs:
     timeout-minutes: 10
     strategy:
       fail-fast: false
-      # Every version of the range declared in the "engines" field of package.json,
-      # up to the current release. Node 26 is the version used to publish on npm.
       matrix:
         node-version: [20.x, 22.x, 24.x, 26.x]
     env:
