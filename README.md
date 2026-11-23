@@ -9,7 +9,7 @@
 
 * 🦄 **Simple to use** - Only 10 core methods: `uploadFile`, `downloadFile`, `deleteFile`, `listFiles`, `listBuckets`, `headBucket`, `setFileMetadata`, `getFileMetadata`, `deleteFiles` and `request` for custom requests. A few helpers come on top: `setTimeout`, `setConfig`/`getConfig`, `setLogFunction` and `setRockReqDefaults`/`getRockReqDefaults`.
 * 🚀 **Performance** - Vanilla JS + Only 2 dependencies [rock-req](https://github.com/carboneio/rock-req) as HTTP client and [aws4](https://github.com/mhart/aws4) for signing S3 requests.
-* 🌎 **High availability** - Provide one or a list of storages credentials: the SDK will switch storage if something goes wrong (Server/DNS not responding, timeout, error 500, too many redirects, authentication error, and more...). As soon as the main storage is available, the SDK returns to the main storage (S3: checked on the next request; Swift: checked at most every 60 s, up to 10 min while it stays down).
+* 🌎 **High availability** - Provide one or a list of storages credentials: the SDK will switch storage if something goes wrong (Server/DNS not responding, timeout, repeated 5xx errors, authentication error). A throttled request (`429`, S3 `503 SlowDown`, Swift `498`) is handled as before (a `429` / `498` is returned, an S3 `503` goes to the next storage), optionally after backoff retries on the same storage (`maxThrottleRetry`). As soon as the main storage is available, the SDK returns to the main storage (S3: checked at the next request after a switch, then every 60 s doubling up to 10 min while it stays down; Swift: at most every 60 s, up to 10 min). See [S3](./USAGE-S3.md#throttling-retries-and-failover) and [Swift](./USAGE-SWIFT.md#throttling-retries-and-failover).
 * ✨ **Reconnect automatically** - If a request fails due to an authentication token expiration, the SDK fetches a new authentication token and retries the initial request with it (Swift Storage only).
 * ✅ **Battle-tested** - Used in production against hundreds of TBs of file uploads, downloads and deletes, and covered by an extensive test suite.
 * 👉 **Convert XML/JSON responses to JS** - XML/JSON responses are automatically converted into `Objects`/`Arrays` (only for: `listFiles`, `listBuckets` and `Errors`).
@@ -80,6 +80,12 @@ s3storage.downloadFile('bucketName', 'filename.pdf', (err, resp) => {
    */
 })
 ```
+
+### S3 storage class and OVHcloud endpoints
+
+Each S3 storage accepts an optional `storageClass`, sent as `x-amz-storage-class` on `uploadFile` and `setFileMetadata` (unless you set the header). After a failover, the class of the storage actually used applies. The values are provider specific: on OVHcloud (endpoint `s3.<region>.io.cloud.ovh.net`), `EXPRESS_ONEZONE` is High Performance in 1-AZ regions and `STANDARD` is Standard; MinIO and Cloudflare R2 reject an unknown value with a `400`. See [Storage class](./USAGE-S3.md#storage-class).
+
+On OVHcloud, prefer the endpoint `s3.<region>.io.cloud.ovh.net` to the legacy `perf` endpoint.
 
 ## Swift Example
 

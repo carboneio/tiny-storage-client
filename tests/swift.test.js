@@ -1274,7 +1274,8 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
+          /** Server errors: the active storage is switched only after 3 consecutive failures, the request alone was sent to SBG */
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
           done();
         });
       });
@@ -1596,7 +1597,7 @@ describe('Ovh Object Storage Swift', function () {
             .get('/templates')
             .reply(500, {});
 
-          /** The parallel failovers share a single authentication on SBG */
+          /** A 500 fails once on GRA (no retry on the same storage), then each request is sent to SBG: the parallel requests share a single authentication on SBG */
           const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
@@ -1637,7 +1638,8 @@ describe('Ovh Object Storage Swift', function () {
             assert.strictEqual(_listFiles2[0].name.length > 0, true);
             assert.strictEqual(_listFiles2[0].content_type.length > 0, true);
 
-            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
+            /** Server errors: the active storage is switched only after 3 consecutive failures, the requests alone were sent to SBG */
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -2022,7 +2024,8 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
+          /** Server errors: the active storage is switched only after 3 consecutive failures, the request alone was sent to SBG */
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
           done();
         });
       });
@@ -2320,7 +2323,7 @@ describe('Ovh Object Storage Swift', function () {
             .get('/templates/test.odt')
             .reply(500, {});
 
-          /** The parallel failovers share a single authentication on SBG */
+          /** A 500 fails once on GRA (no retry on the same storage), then each request is sent to SBG: the parallel requests share a single authentication on SBG */
           const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
@@ -2362,7 +2365,8 @@ describe('Ovh Object Storage Swift', function () {
             assert.strictEqual(results[1].headers['x-openstack-request-id'].length > 0, true);
             assert.strictEqual(results[1].headers['content-length'].length > 0, true);
             assert.strictEqual(results[1].headers['date'].length > 0, true);
-            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
+            /** Server errors: the active storage is switched only after 3 consecutive failures, the requests alone were sent to SBG */
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -2679,6 +2683,8 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          /** Server errors: the active storage is switched only after 3 consecutive failures, the request alone was sent to SBG */
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
           done();
         });
       });
@@ -2947,7 +2953,7 @@ describe('Ovh Object Storage Swift', function () {
             .put('/templates/test.odt')
             .reply(500, {});
 
-          /** The parallel failovers share a single authentication on SBG */
+          /** A 500 fails once on GRA (no retry on the same storage), then each request is sent to SBG: the parallel requests share a single authentication on SBG */
           const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
@@ -2978,7 +2984,8 @@ describe('Ovh Object Storage Swift', function () {
             assert.strictEqual(results[1].body.toString(), '');
             assert.strictEqual(JSON.stringify(results[1].headers), '{}');
 
-            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
+            /** Server errors: the active storage is switched only after 3 consecutive failures, the requests alone were sent to SBG */
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -3218,6 +3225,8 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          /** Server errors: the active storage is switched only after 3 consecutive failures, the request alone was sent to SBG */
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
           done();
         });
       });
@@ -3455,7 +3464,7 @@ describe('Ovh Object Storage Swift', function () {
             .delete('/templates/test.odt')
             .reply(500, {});
 
-          /** The parallel failovers share a single authentication on SBG */
+          /** A 500 fails once on GRA (no retry on the same storage), then each request is sent to SBG: the parallel requests share a single authentication on SBG */
           const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
@@ -3481,7 +3490,8 @@ describe('Ovh Object Storage Swift', function () {
             assert.strictEqual(results[1].body.toString(), '');
             assert.strictEqual(JSON.stringify(results[1].headers), '{}');
 
-            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
+            /** Server errors: the active storage is switched only after 3 consecutive failures, the requests alone were sent to SBG */
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -3750,7 +3760,8 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
-          assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
+          /** Server errors: the active storage is switched only after 3 consecutive failures, the request alone was sent to SBG */
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
           done();
         });
       });
@@ -4046,7 +4057,7 @@ describe('Ovh Object Storage Swift', function () {
             .intercept("/templates/test.odt", "HEAD")
             .reply(500, {});
 
-          /** The parallel failovers share a single authentication on SBG */
+          /** A 500 fails once on GRA (no retry on the same storage), then each request is sent to SBG: the parallel requests share a single authentication on SBG */
           const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
@@ -4088,7 +4099,8 @@ describe('Ovh Object Storage Swift', function () {
             assert.strictEqual(results[1].headers['content-length'].length > 0, true);
             assert.strictEqual(results[1].headers['date'].length > 0, true);
 
-            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
+            /** Server errors: the active storage is switched only after 3 consecutive failures, the requests alone were sent to SBG */
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -4364,6 +4376,8 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          /** Server errors: the active storage is switched only after 3 consecutive failures, the request alone was sent to SBG */
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
           assert.strictEqual(resp.statusCode, 201);
           assert.strictEqual(resp.body.toString(), '');
           assert.strictEqual(resp.headers['x-trans-id'].length > 0, true);
@@ -4705,7 +4719,7 @@ describe('Ovh Object Storage Swift', function () {
             .post('/templates/test.odt')
             .reply(500, {});
 
-          /** The parallel failovers share a single authentication on SBG */
+          /** A 500 fails once on GRA (no retry on the same storage), then each request is sent to SBG: the parallel requests share a single authentication on SBG */
           const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
@@ -4745,7 +4759,8 @@ describe('Ovh Object Storage Swift', function () {
             assert.strictEqual(results[1].headers['content-length'] === '0', true);
             assert.strictEqual(results[1].headers['date'].length > 0, true);
 
-            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
+            /** Server errors: the active storage is switched only after 3 consecutive failures, the requests alone were sent to SBG */
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -5034,6 +5049,8 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          /** Server errors: the active storage is switched only after 3 consecutive failures, the request alone was sent to SBG */
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
           assert.strictEqual(resp.headers['x-trans-id'].length > 0, true);
           assert.strictEqual(resp.headers['x-openstack-request-id'].length > 0, true);
           assert.strictEqual(resp.headers['content-length'], String(Buffer.byteLength('OK')));
@@ -5362,7 +5379,7 @@ describe('Ovh Object Storage Swift', function () {
             .intercept("/templates/test.odt", "COPY")
             .reply(500, {});
 
-          /** The parallel failovers share a single authentication on SBG */
+          /** A 500 fails once on GRA (no retry on the same storage), then each request is sent to SBG: the parallel requests share a single authentication on SBG */
           const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
@@ -5400,7 +5417,8 @@ describe('Ovh Object Storage Swift', function () {
             assert.strictEqual(results[1]['body'].toString(), 'OK');
             assert.strictEqual(results[1]['statusCode'], 200);
 
-            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
+            /** Server errors: the active storage is switched only after 3 consecutive failures, the requests alone were sent to SBG */
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -5454,6 +5472,7 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(dataStream, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(JSON.stringify(resp.headers), '{}');
+          dataStream = '';
           done();
         });
       });
@@ -5483,6 +5502,9 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(err, null);
           assert.strictEqual(res.statusCode, 404);
           assert.strictEqual(JSON.stringify(res.headers), '{}');
+          /** A non-2xx response is buffered and returned: output() is not called, nothing is written into the caller's stream */
+          assert.strictEqual(dataStream, '');
+          assert.strictEqual(Buffer.isBuffer(res.body), true);
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           done();
         });
@@ -5586,6 +5608,8 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(firstNock.pendingMocks().length, 0);
           assert.strictEqual(secondNock.pendingMocks().length, 0);
           assert.strictEqual(thirdNock.pendingMocks().length, 0);
+          /** Server errors: the active storage is switched only after 3 consecutive failures, the request alone was sent to SBG */
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
           assert.strictEqual(dataStream, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
           assert.strictEqual(res.statusCode, 200);
           assert.strictEqual(JSON.stringify(res.headers), '{}');
@@ -5813,7 +5837,7 @@ describe('Ovh Object Storage Swift', function () {
             .intercept('/templates/file.txt', "GET")
             .reply(500);
 
-          /** The parallel failovers share a single authentication on SBG */
+          /** A 500 fails once on GRA (no retry on the same storage), then each request is sent to SBG: the parallel requests share a single authentication on SBG */
           const secondNock = nock(authURL)
             .post('/auth/tokens')
             .reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
@@ -5833,7 +5857,8 @@ describe('Ovh Object Storage Swift', function () {
             assert.strictEqual(results[0].body, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
             assert.strictEqual(results[1].body, 'The platypus, sometimes referred to as the duck-billed platypus, is a semiaquatic, egg-laying mammal endemic to eastern Australia.');
 
-            assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
+            /** Server errors: the active storage is switched only after 3 consecutive failures, the requests alone were sent to SBG */
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
             assert.strictEqual(firstNock.pendingMocks().length, 0);
             assert.strictEqual(secondNock.pendingMocks().length, 0);
             assert.strictEqual(thirdNock.pendingMocks().length, 0);
@@ -5914,8 +5939,8 @@ describe('Ovh Object Storage Swift', function () {
         connect([_storage1], done);
       });
 
-      it('should return the status code of a 503 and log a single error', function (done) {
-        /** rock-req retries a 503 once */
+      it('should return the status code of a 503 after the retry of rock-req, and log the failure', function (done) {
+        /** rock-req retries a 503 once, the client does not retry a server error on the same storage */
         const nockRequest = nock(publicUrlGRA)
           .get('/templates/file.txt')
           .times(2)
@@ -5930,7 +5955,10 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(err.code, undefined);
           assert.strictEqual(err.cause, undefined);
           assert.strictEqual(resp, undefined);
-          assert.deepStrictEqual(_logs, [{ message: 'SWIFT Storage | Index "0" region "GRA" | GET /templates/file.txt | Storage not available, no fallback storage | Status code: 503', level: 'error' }]);
+          assert.deepStrictEqual(_logs, [
+            { message: 'SWIFT Storage | Index "0" region "GRA" | GET /templates/file.txt | 503', level: 'error' },
+            { message: 'SWIFT Storage | Index "0" region "GRA" | GET /templates/file.txt | Storage not available, no fallback storage | Status code: 503', level: 'error' }
+          ]);
           assert.strictEqual(_swift.getConfig().activeStorage, 0);
           assert.strictEqual(nockRequest.pendingMocks().length, 0);
           done();
@@ -5938,6 +5966,7 @@ describe('Ovh Object Storage Swift', function () {
       });
 
       it('should retry the bulk delete and metadata POSTs once on a 503 (rock-req default)', function (done) {
+        /** rock-req retries a 503 once: the client logs nothing */
         const nockRequest = nock(publicUrlGRA)
           .post('/').query(true).reply(503)
           .post('/').query(true).reply(200, 'deleted')
@@ -5971,7 +6000,11 @@ describe('Ovh Object Storage Swift', function () {
             assert.strictEqual(err.code, code);
             assert.strictEqual(err.storageStatusCode, undefined);
             assert.strictEqual(err.cause.message, `read ${code}`);
-            assert.deepStrictEqual(_logs, [{ message: `SWIFT Storage | Index "0" region "GRA" | GET /templates | Storage not available, no fallback storage | Error: read ${code}`, level: 'error' }]);
+            /** The failed request is logged, then the storage is unavailable (no fallback storage) */
+            assert.deepStrictEqual(_logs, [
+              { message: `SWIFT Storage | Index "0" region "GRA" | GET /templates | Error: read ${code}`, level: 'error' },
+              { message: `SWIFT Storage | Index "0" region "GRA" | GET /templates | Storage not available, no fallback storage | Error: read ${code}`, level: 'error' }
+            ]);
             assert.strictEqual(nockRequest.pendingMocks().length, 0);
             done();
           });
@@ -6040,7 +6073,8 @@ describe('Ovh Object Storage Swift', function () {
         connect([_storage1, _storage2], done);
       });
 
-      it('should fallback to the second storage as before', function (done) {
+      it('should send the request to the second storage after a failure of the first one, without switching the active storage', function (done) {
+        /** A 500 is sent once (never retried on the same storage), then the request alone is sent to SBG (authenticated apart) */
         const nockRequestGRA = nock(publicUrlGRA).get('/templates/file.txt').reply(500);
         const nockAuth = nock(authURL).post('/auth/tokens').reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
         const nockRequestSBG = nock(publicUrlSBG).get('/templates/file.txt').reply(200, 'ok');
@@ -6049,10 +6083,10 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(resp.body.toString(), 'ok');
-          assert.strictEqual(_swift.getConfig().activeStorage, 1);
+          /** A single failure: below the threshold of 3 consecutive failures, the active storage is unchanged */
+          assert.strictEqual(_swift.getConfig().activeStorage, 0);
           assert.deepStrictEqual(_logs.filter((log) => log.level === 'warning' || log.level === 'error'), [
-            { message: 'SWIFT Storage | Index "0" region "GRA" | GET /templates/file.txt | 500', level: 'error' },
-            { message: 'SWIFT Storage | Activate fallback storage: switch from "0" to "1"', level: 'warning' }
+            { message: 'SWIFT Storage | Index "0" region "GRA" | GET /templates/file.txt | 500', level: 'error' }
           ]);
           assert.strictEqual(nockRequestGRA.pendingMocks().length, 0);
           assert.strictEqual(nockAuth.pendingMocks().length, 0);
@@ -6065,7 +6099,7 @@ describe('Ovh Object Storage Swift', function () {
         /** rock-req >= 5.3 retries a network error once (maxRetry: 1) */
         const nockRequestGRA = nock(publicUrlGRA).get('/templates/file.txt').times(2).replyWithError(networkError('ETIMEDOUT'));
         const nockAuth = nock(authURL).post('/auth/tokens').reply(200, connectionResultSuccessV3, { "X-Subject-Token": tokenAuth });
-        /** rock-req retries a 503 once */
+        /** rock-req retries a 503 once, then the client fails over: no storage is left */
         const nockRequestSBG = nock(publicUrlSBG).get('/templates/file.txt').times(2).reply(503);
 
         _swift.downloadFile('templates', 'file.txt', function (err, resp) {
@@ -6076,12 +6110,12 @@ describe('Ovh Object Storage Swift', function () {
           assert.strictEqual(err.code, undefined);
           assert.strictEqual(err.cause, undefined);
           assert.strictEqual(resp, undefined);
-          assert.strictEqual(_swift.getConfig().activeStorage, 0);
+          /** The network error switched the active storage at once; the single 503 failure of SBG does not switch it again (nor reset it to the main storage) */
+          assert.strictEqual(_swift.getConfig().activeStorage, 1);
           assert.deepStrictEqual(_logs.filter((log) => log.level === 'warning' || log.level === 'error'), [
             { message: 'SWIFT Storage | Index "0" region "GRA" | GET /templates/file.txt | Error: read ETIMEDOUT', level: 'error' },
             { message: 'SWIFT Storage | Activate fallback storage: switch from "0" to "1"', level: 'warning' },
             { message: 'SWIFT Storage | Index "1" region "SBG" | GET /templates/file.txt | 503', level: 'error' },
-            { message: 'SWIFT Storage | Activate fallback storage: switch from "1" to "2"', level: 'warning' },
             { message: 'SWIFT Storage | Object Storages are not available', level: 'error' }
           ]);
           assert.strictEqual(nockRequestGRA.pendingMocks().length, 0);
@@ -6352,7 +6386,7 @@ describe('Ovh Object Storage Swift', function () {
         .post('/auth/tokens', (body) => body.auth.identity.password.user.name === 'u2').reply(200, connectionResultSuccessV3, { 'X-Subject-Token': 'sbg-token' });
       const nockStorage = nock(publicUrlSBG).get('/templates').matchHeader('x-auth-token', 'sbg-token').times(2).reply(200, '[]', { 'content-type': 'application/json' });
       /** The previous storage must never be requested */
-      const nockStale = nock(publicUrlGRA).get('/templates').times(2).reply(500, 'stale endpoint');
+      const nockStale = nock(publicUrlGRA).get('/templates').reply(500, 'stale endpoint');
       const _first = listFiles();
       _swift.setStorages(_storageSBG);
       const _second = listFiles();

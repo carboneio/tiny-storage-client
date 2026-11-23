@@ -78,7 +78,7 @@
    * Build the error returned when no storage can serve a request. The message is unchanged, callers may match on it.
    * The last failure of the request is attached:
    * - `storageStatusCode`: the last HTTP status of the storage (5xx, 401), if the storage replied
-   * - `code`: the network error code (ETIMEDOUT, ECONNRESET...), if any
+   * - `code`: the network error code (ETIMEDOUT, ECONNRESET...), or else the error code of the storage (S3 "InternalError"), if any
    * - `cause`: the original network Error, if any
    * `statusCode` and `status` are never set: HTTP frameworks (Express, ...) reply with them,
    * a storage 401 would log out the user of the caller's app.
@@ -92,8 +92,9 @@
     if (failure?.statusCode) {
       _err.storageStatusCode = failure.statusCode;
     }
-    if (failure?.error?.code) {
-      _err.code = failure.error.code;
+    /** The network error code, or the error code of the storage, such as "InternalError" (S3) */
+    if (failure?.error?.code || failure?.code) {
+      _err.code = failure.error?.code || failure.code;
     }
     return _err;
   }
@@ -165,20 +166,205 @@
   }
 
   /**
-   * Stream `output` of a request: the body of a response retried on another storage (5xx, 401) is discarded,
-   * the caller's `output()` is called once, for the response returned to the caller.
+   * Stream `output` of a request, shared by its attempts. Only a 2xx response is written into the caller's stream: the body of
+   * any other response (3xx, 4xx, throttled, failing over) is kept in `body`, and returned or retried like a buffered one.
+   * The caller's `output()` is called at most once per request (`written`): the request is then never retried nor failed over.
+   * A retry by rock-req (network error) gets this first stream, destroyed by the failed attempt: rock-req ends with the error.
    *
    * @param {Function} output caller's function returning a Writable stream
-   * @param {Function} isRetried (res) => true if the response is retried on another storage / after a reconnection
-   * @returns {Function} the `output` option of rock-req: (opts, res) => Writable
+   * @returns {Object} { output, body, written } `output` is the option of rock-req: (opts, res) => Writable
    */
-  function finalOutput (output, isRetried) {
-    return (opts, res) => (isRetried(res) === true ? new Writable({ write (chunk, encoding, cb) { cb(); } }) : output(opts, res));
+  function streamOutput (output) {
+    let _caller = null;
+    const _stream = {
+      body    : null,
+      written : false,
+      output  : (opts, res) => {
+        /** The caller's stream was given to a previous attempt: any later response (a retry of rock-req, 2xx or not) gets it back, destroyed, and ends the request with its error */
+        if (_stream.written === true) {
+          return _caller;
+        }
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          const _chunks = _stream.body = [];
+          return new Writable({ write (chunk, encoding, cb) { _chunks.push(chunk); cb(); } });
+        }
+        _stream.body = null;
+        _stream.written = true;
+        return (_caller ??= output(opts, res));
+      }
+    };
+    return _stream;
+  }
+
+  /** Throttling (S3 503 SlowDown, 429, Swift 498): retried on the same storage with a full-jitter exponential backoff, after the quick retry of rock-req */
+  const THROTTLE_DELAY_BASE = 500; // ms
+  const THROTTLE_DELAY_MAX = 20000; // ms
+  /** A Retry-After longer than the backoff delay is honoured up to this extra delay */
+  const RETRY_AFTER_MAX_EXTRA = 5000; // ms
+  /** Global switch of the active storage after this number of consecutive failures (5xx) of the active storage */
+  const FAILURE_THRESHOLD = 3;
+  /** Default number of backoff retries of a throttled request (option `maxThrottleRetry` of each storage): 0, as before 4.1 (only the quick retry of rock-req) */
+  const THROTTLE_RETRY = 0;
+  /** Probe of the main storage while a fallback is active: one at a time, every PROBE_DELAY_MIN ms, doubled on each failure up to PROBE_DELAY_MAX */
+  const PROBE_DELAY_MIN = 60000;
+  const PROBE_DELAY_MAX = 600000;
+
+  /**
+   * Retry-After header (RFC 9110: delay in seconds or HTTP-date) in ms. Missing, invalid or past: 0
+   *
+   * @param {Object} headers response headers
+   * @returns {Number} ms
+   */
+  function retryAfter (headers) {
+    const _value = headers?.['retry-after'];
+    const _ms = typeof _value !== 'string' ? 0 : /^\d+$/.test(_value) === true ? _value * 1000 : Date.parse(_value) - Date.now();
+    return _ms > 0 ? _ms : 0;
+  }
+
+  /**
+   * Delay before retrying a throttled request: full jitter `random() * min(base * 2^attempt, cap)`. A Retry-After is
+   * honoured, extended by RETRY_AFTER_MAX_EXTRA ms at most: `max(delay, min(retryAfter, delay + extra))`
+   *
+   * @param {Number} attempt number of retries already done (0 for the first one)
+   * @param {Object} headers response headers
+   * @returns {Number} ms
+   */
+  function throttleDelay (attempt, headers) {
+    const _delay = Math.random() * Math.min(THROTTLE_DELAY_BASE * 2 ** attempt, THROTTLE_DELAY_MAX);
+    const _retryAfter = retryAfter(headers);
+    return _retryAfter > 0 ? Math.max(_delay, Math.min(_retryAfter, _delay + RETRY_AFTER_MAX_EXTRA)) : _delay;
+  }
+
+  /** A server error, failed over: every 5xx but "501 Not Implemented", a feature the request needs and no storage has */
+  function isServerError (statusCode) {
+    return statusCode >= 500 && statusCode !== 501;
+  }
+
+  /**
+   * Delay before sending a throttled request again on the same storage, or undefined after `maxThrottleRetry` retries (option of
+   * the storage, integer >= 0, 0 by default)
+   *
+   * @param {Object} state { throttles } retries done on the storage of the attempt, updated
+   * @param {Object} storage the storage of the attempt
+   * @param {Object} headers response headers (Retry-After)
+   * @returns {Number|undefined} ms
+   */
+  function throttleRetry (state, storage, headers) {
+    /** Checked again here: a value changed on the storage object after setConfig()/setStorages() never makes the retries unbounded (Infinity) */
+    const _max = Number.isInteger(storage?.maxThrottleRetry) === true && storage.maxThrottleRetry >= 0 ? storage.maxThrottleRetry : THROTTLE_RETRY;
+    return state.throttles < _max ? throttleDelay(state.throttles++, headers) : undefined;
+  }
+
+  /**
+   * Consecutive failures of the active storage. `generation` changes with the active storage: an attempt captures it when it
+   * is sent to the active storage (-1 otherwise), its failure counts only if the active storage did not change meanwhile
+   * (parallel requests, a switch then a return to this storage)
+   */
+  function failureTracker () {
+    return {
+      generation : 0,
+      failures   : 0,
+      /** Generation of an attempt sent to the storage `index` */
+      of (index, activeStorage) {
+        return index === activeStorage ? this.generation : -1;
+      },
+      /** The active storage changed */
+      reset () {
+        this.generation++;
+        this.failures = 0;
+      },
+      /** A failure of an attempt: true if the active storage must be switched, at once if `isDown` */
+      fail (generation, isDown) {
+        return generation === this.generation && (isDown === true || ++this.failures >= FAILURE_THRESHOLD);
+      },
+      /** An answer of the storage of an attempt: the failures of the active storage are reset */
+      success (generation) {
+        if (generation === this.generation) {
+          this.failures = 0;
+        }
+      }
+    };
+  }
+
+  /**
+   * Schedule of the probe of the main storage while a fallback is active: one at a time, every PROBE_DELAY_MIN ms, doubled on each
+   * failure up to PROBE_DELAY_MAX. Replaced by setConfig()/setStorages(): a probe in progress ends on its own schedule, discarded
+   */
+  function probeSchedule () {
+    return {
+      delay   : PROBE_DELAY_MIN,
+      at      : 0,
+      running : false,
+      /** True if a probe must be sent now. A clock set back must not postpone it */
+      due () {
+        const _now = Date.now();
+        return this.running === false && (_now - this.at >= this.delay || _now < this.at);
+      },
+      start () {
+        this.running = true;
+        this.at = Date.now();
+      },
+      /** A fallback was just activated: the next request probes the main storage at once (a short blip is recovered at once, as before 4.1), then PROBE_DELAY_MIN after a failure */
+      soon () {
+        this.at = 0;
+        this.delay = PROBE_DELAY_MIN / 2;
+      },
+      /** End of a probe: back to the minimum delay if the main storage is up, else doubled */
+      end (isUp) {
+        this.running = false;
+        this.delay = isUp === true ? PROBE_DELAY_MIN : Math.min(this.delay * 2, PROBE_DELAY_MAX);
+      }
+    };
+  }
+
+  /**
+   * Call every callback waiting for a shared authentication: an exception of one caller must not strand the others,
+   * the first one is rethrown after all are called
+   */
+  function callAll (callbacks, ...args) {
+    let _error = null;
+    for (let i = 0; i < callbacks.length; i++) {
+      try {
+        callbacks[i](...args);
+      } catch (e) {
+        _error = _error ?? { e };
+      }
+    }
+    if (_error !== null) {
+      throw _error.e;
+    }
+  }
+
+  /**
+   * Throw if the option `maxThrottleRetry` of a storage is set but is not an integer >= 0 (checked by setConfig/setStorages,
+   * like `storageClass`: a wrong value is never silently ignored)
+   * @param {Object} storage
+   * @param {String} name "S3" or "Swift", for the message
+   */
+  function checkMaxThrottleRetry (storage, name) {
+    if (storage?.maxThrottleRetry !== undefined && (Number.isInteger(storage.maxThrottleRetry) === false || storage.maxThrottleRetry < 0)) {
+      throw new Error(`${name} Storage "maxThrottleRetry" must be an integer >= 0, such as 3`);
+    }
+  }
+
+  /** Call `fn` after `delay` ms (the clients shadow the global setTimeout with their own) */
+  function wait (delay, fn) {
+    return setTimeout(fn, delay);
   }
 
   module.exports = {
     catchSyncError,
-    finalOutput,
+    streamOutput,
+    retryAfter,
+    throttleDelay,
+    throttleRetry,
+    checkMaxThrottleRetry,
+    isServerError,
+    failureTracker,
+    probeSchedule,
+    callAll,
+    wait,
+    hasHeader,
     downloadOptions,
     getUrlParameters,
     encodeObjectName,

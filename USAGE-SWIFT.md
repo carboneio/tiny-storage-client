@@ -3,7 +3,7 @@
 ## Highlight
 
 * 🚀 Vanilla JS + Only 1 dependency [rock-req](https://github.com/carboneio/rock-req) for HTTP requests.
-* 🌎 Provide one or a list of storages credentials: the SDK will switch storage if something goes wrong (Server/DNS not responding, timeout, error 500, too many redirects, authentication error, and more...). As soon as the main storage is available again, the SDK returns to it: while a fallback is active, a request starts at most one background check every 60 s (an authentication on the main storage, then a `HEAD` of its account). The delay doubles on each failure, up to 10 min. Requests are never delayed by this check, and parallel failovers share a single authentication on the fallback storage
+* 🌎 Provide one or a list of storages credentials: the SDK will switch storage if something goes wrong (Server/DNS not responding, timeout, repeated 5xx errors, authentication error). A throttled request (`498`, `429`) is returned, never sent to another storage, optionally after backoff retries on the same storage (`maxThrottleRetry`). As soon as the main storage is available again, the SDK returns to it: while a fallback is active, a request starts at most one background check every 60 s (an authentication on the main storage, then a `HEAD` of its account). The delay doubles on each failure, up to 10 min. Requests are never delayed by this check, and parallel failovers share a single authentication on the fallback storage
 * ✨ If a request fails due to an authentication token expiration, the SDK fetches a new authentication token and retries the initial request with it.
 * 🔒 Object names and request parameters are automatically encoded, as required by the [Swift API](https://docs.openstack.org/swift/latest/api/object_api_v1_overview.html). The `/` separators are kept as-is, so pseudo-folders such as `invoices/2024/client.pdf` keep working.
 * 🚩 When initialising the Tiny SDK client, provide only a list of S3 or a list of Swift credentials, switching from one storage system to another is not supported.
@@ -78,7 +78,7 @@ Requires **Node.js 20 or higher**.
 Initialise the SDK with one or multiple storage, if something goes wrong, the next region will take over automatically. If no storage is available, an error message is returned `Error: Object Storages are not available`. The error carries the cause of the last failure (request or authentication):
 - `err.storageStatusCode`: the last HTTP status code of the storage (5xx, or the status of the failed authentication), if the storage replied
 - `err.code`: the network error code (`ETIMEDOUT`, `ECONNRESET`...), if any
-- `err.cause`: the original `Error`, if any (network error, `Storage catalog not found`, `Storage endpoint not found, invalid region`)
+- `err.cause`: the original `Error`, if any (network error, `Storage catalog not found`, `Storage endpoint not found, invalid region`, `X-Subject-Token header missing`)
 
 `err.statusCode` and `err.status` are never set: HTTP frameworks (Express...) reply with them, a storage `401` must not become the `401` of your API.
 
@@ -116,6 +116,18 @@ The optional `interface` selects which endpoint of the Swift catalog is used for
 not set, every interface of the region matches and the first one returned by the server is used, which
 may not be the one you expect if the catalog exposes several.
 
+### Throttling, retries and failover
+
+| Answer of the storage | What the SDK does |
+|---|---|
+| `498` or `429` (rate limit) | Throttled: after the quick retry of rock-req (`429`), retried on the **same storage** with a full-jitter exponential backoff (`random() × min(500 ms × 2^attempt, 20 s)`, at least the `Retry-After` header, up to 5 s more than the backoff), `maxThrottleRetry` times (option of each storage, an integer >= 0, default `0`: no backoff retry, as before 4.1; `setStorages` throws on any other value). Then the last response is returned as `{ statusCode, headers, body }`, as in 4.0: never sent to another storage, never counted as a failure. |
+| `5xx` (but `501`) | After the retry of rock-req (`502`, `503`, `504`...), sent to the next storage (authenticated apart, its token is kept for the next ones). The active storage is switched for all requests after **3 consecutive failures**; any other answer of the active storage resets the count. |
+| Network error or timeout (already retried once by rock-req), authentication failure | The active storage is switched at once. |
+| `401` | A new token, shared by the parallel requests, then the request is sent again once. |
+| `501 Not Implemented`, `2xx`, `3xx`, other `4xx` | Returned to the caller. Redirects are never followed: the token is never sent to another host or port. |
+
+With a stream `output`, only a `2xx` response is written into your stream. Any other response is returned as `{ statusCode, headers, body }` (JSON parsed if `application/json`). Your `output()` is called at most once per request, for the first `2xx` response: once it is called, a network error (body cut, reset after the headers) or an error of your stream itself (disk full, destination destroyed) is returned with no failover (rock-req may still send its single retry: its response is discarded, never written into your stream). A network error before any response (a stale keep-alive socket) is still retried once on the same storage. A stream already destroyed returned by `output()` is an error.
+
 ### Security notes
 
 - `uploadFile` reads any local path it is given: never pass a path built from user input.
@@ -125,7 +137,9 @@ may not be the one you expect if the catalog exposes several.
 
 ### HTTP client options
 
-`setRockReqDefaults()` (and `global.rockReqConf`) change the defaults of [rock-req](https://github.com/carboneio/rock-req) for every request, except `keepAliveTimeout` and `keepAliveDuration`: rock-req reads them once, when it creates its HTTP agents in `rock.extend()`, so they are silently ignored. To change them, pass your own agent: `setRockReqDefaults({ agent: new https.Agent({ keepAlive: true, keepAliveMsecs: 3000 }) })`.
+`setRockReqDefaults()` (and `global.rockReqConf`) change the defaults of [rock-req](https://github.com/carboneio/rock-req) for every request, its retries included (`maxRetry`, `retryOnCode`, `beforeRequest`), with two exceptions. `followRedirects` is always `false`. And `keepAliveTimeout` and `keepAliveDuration` are silently ignored: rock-req reads them once, when it creates its HTTP agents in `rock.extend()`. To change them, pass your own agent: `setRockReqDefaults({ agent: new https.Agent({ keepAlive: true, keepAliveMsecs: 3000 }) })`.
+
+The SDK uses its own copy of rock-req if the version of your application differs (rock-req `=5.3.2`): your `rock.defaults` then do not apply to the storage requests. Depend on the same rock-req version as the SDK.
 
 ### Upload a file
 
@@ -481,8 +495,9 @@ storage.setLogFunction((message, level, fields) => {
 | `storage_connected` | info | Authenticated, endpoint of the region resolved |
 | `storage_connection_failed` | warning | Authentication failed on a storage, the next one is tried |
 | `storage_reconnect` | info | The token expired (`401`): a new authentication, shared by the parallel requests |
-| `storage_request_failed` | error | A request failed (network error, 5xx) with several storages: the next storage is used |
-| `storage_fallback` | warning | Switch to the next storage |
+| `storage_throttled` | info | The storage throttled the request (`498`, `429`): retried on the same storage after `delay` ms |
+| `storage_request_failed` | error | A request failed (network error, `5xx`): the next storage is used |
+| `storage_fallback` | warning | The active storage is switched for all requests (network error, authentication failure, 3 consecutive `5xx`) |
 | `storage_main_unavailable` | info | The background check of the main storage failed, the fallback is kept: next check in 2× the delay (60 s to 10 min) |
 | `storage_main_restored` | info | The main storage answers again, the next requests use it |
 | `storage_unavailable` | error | No storage available, the request returns `Object Storages are not available` |

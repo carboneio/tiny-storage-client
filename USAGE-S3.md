@@ -4,7 +4,7 @@
 ## Highlight
 
 * 🚀 Vanilla JS + Only 2 dependencies [rock-req](https://github.com/carboneio/rock-req) for HTTP requests and [aws4](https://github.com/mhart/aws4) for signing S3 requests.
-* 🌎 Provide one or a list of S3 storages credentials: the SDK will switch storage if something goes wrong (Server/DNS not responding, timeout, error 500, too many redirects, authentication error, and more...). As soon as the main storage is available, the SDK returns to the main storage.
+* 🌎 Provide one or a list of S3 storages credentials: the SDK will switch storage if something goes wrong (Server/DNS not responding, timeout, repeated 5xx errors, authentication error). A throttled request is handled as before (a `429` is returned, a `503 SlowDown` goes to the next storage), optionally after backoff retries on the same storage (`maxThrottleRetry`). As soon as the main storage is available, the SDK returns to the main storage.
 * ✨ File names and request parameters are automatically encoded.
 * ⚡️ Use [Bucket alias](#bucket-alias) if you have synchronised buckets into multiple regions/datacenters
 * 👉 XML responses from S3 are automatically converted as Javascript Objects (for `ListObjects`, `deleteFiles` and any `Errors`).
@@ -25,9 +25,9 @@ Requires **Node.js 20 or higher**.
 
 ### Setup
 
-Initialise the SDK with one or multiple storage, if something goes wrong (Error 500 / Timeout), the next region/provider will take over automatically. If no storage is available, an error message is returned `Error: All S3 storages are not available`. The error carries the cause of the last failure:
+Initialise the SDK with one or multiple storage, if something goes wrong (Error 500 / Timeout), the next region/provider will take over automatically (see [Throttling, retries and failover](#throttling-retries-and-failover)). If no storage is available, an error message is returned `Error: All S3 storages are not available`. The error carries the cause of the last failure:
 - `err.storageStatusCode`: the last HTTP status code of the storage (5xx, 401), if the storage replied
-- `err.code`: the network error code (`ETIMEDOUT`, `ECONNRESET`...), if any
+- `err.code`: the network error code (`ETIMEDOUT`, `ECONNRESET`...), or else the S3 error code (`InternalError`, `SlowDown`...), if any
 - `err.cause`: the original network `Error`, if any
 
 `err.statusCode` and `err.status` are never set: HTTP frameworks (Express...) reply with them, a storage `401` must not become the `401` of your API.
@@ -60,6 +60,50 @@ const s3storage = storageClient([{
 }])
 ```
 
+### Throttling, retries and failover
+
+The SDK classifies every failure, so that a storage under load is slowed down instead of being abandoned:
+
+| Answer of the storage | What the SDK does |
+|---|---|
+| `429`, or `503` with an S3 code asking to slow down (`SlowDown`, `SlowDownRead`, `SlowDownWrite`, `Throttling`, `ThrottlingException`, `RequestLimitExceeded`, `RequestThrottled`, `TooManyRequestsException`, `TooManyRequests`) | Throttled: after the quick retry of rock-req, retried on the **same storage** with a full-jitter exponential backoff (`random() × min(500 ms × 2^attempt, 20 s)`, at least the `Retry-After` header, up to 5 s more than the backoff), `maxThrottleRetry` times (option of each storage, default `0`: no backoff retry, as before 4.1). Then, as in 4.0: a `429` is returned as `{ statusCode, headers, body }`; a `503` is sent to the next storage and counted as a failure (the active storage is switched after 3 consecutive failures). A `503` throttled on every storage returns the error `All S3 storages are not available | Throttled by the storage (slow down)` with `err.storageStatusCode` `503` and `err.code` `SlowDown` (as in 4.0, with a message that starts the same). |
+| `5xx` (but `501`), including any other `503` (no code: empty body, `HEAD`, proxy or load balancer page) | After the retry of rock-req (`502`, `503`, `504`...), the request is sent to the next storage. The active storage is switched for all requests after **3 consecutive failures**; any other answer of the active storage resets the count (a throttle neither counts nor resets it). |
+| Network error or timeout (already retried once by rock-req), `401` | The active storage is switched at once, the request is sent to the next storage. |
+| `501 Not Implemented` | Returned to the caller: a feature the request needs, no other storage would do better. |
+| Other statuses (`2xx`, `3xx`, `4xx`) | Returned to the caller. Redirects are never followed: a signed request is never sent to another host, the `3xx` is returned with its parsed XML body (`Endpoint`...). |
+
+When no storage can serve a request (a single storage, or every storage failed), a `5xx` or a network error returns `All S3 storages are not available` (after the retry), with `err.storageStatusCode` and `err.code` (the S3 code of the last failure such as `InternalError`, or the network code), and logs `storage_unavailable`.
+
+While a fallback storage is active, requests start a background check of the main storage (`GET /`), one at a time: the first one at the next request after a switch (a short network blip is recovered at once), then, while the main storage stays down, every 60 s, doubled after each failure, up to 10 min. The main storage is restored on a `2xx`, a `403` or a `404` (credentials scoped to a bucket, without `s3:ListAllMyBuckets`), not on a `429`, a `5xx`, a `401` or a network error.
+
+`maxThrottleRetry` is an option of each storage, an integer >= 0 (`setConfig` throws on any other value):
+```js
+const s3storage = storageClient([{ accessKeyId, secretAccessKey, url, region, maxThrottleRetry: 5 }]);
+```
+
+With a stream `output`, only a `2xx` response is written into your stream. Any other response (`3xx`, `4xx`, throttled, failing over) is returned as `{ statusCode, headers, body }`. Your `output()` is called at most once per request, for the first `2xx` response: once it is called, a network error (body cut, reset after the headers) or an error of your stream itself (disk full, destination destroyed) is returned with no failover (rock-req may still send its single retry: its response is discarded, never written into your stream). A network error before any response (a stale keep-alive socket) is still retried once on the same storage. A stream already destroyed returned by `output()` is an error.
+
+### Storage class
+
+`storageClass` is an option of each storage: the header `x-amz-storage-class` is sent on `uploadFile` and on the copy of `setFileMetadata`, unless you set this header yourself. After a failover, the class of the storage actually used applies.
+
+```js
+const s3storage = storageClient([{
+  accessKeyId    : 'accessKeyId',
+  secretAccessKey: 'secretAccessKey',
+  url            : 's3.gra.io.cloud.ovh.net',
+  region         : 'gra',
+  storageClass   : 'EXPRESS_ONEZONE'
+}, {
+  accessKeyId    : 'accessKeyId',
+  secretAccessKey: 'secretAccessKey',
+  url            : 's3.eu-west-3.amazonaws.com',
+  region         : 'eu-west-3' // no storageClass: the bucket default applies
+}])
+```
+
+The values are provider specific. On OVHcloud (endpoint `s3.<region>.io.cloud.ovh.net`): `EXPRESS_ONEZONE` is High Performance in 1-AZ regions and `STANDARD` is Standard. MinIO and Cloudflare R2 reject an unknown value with a `400`.
+
 ### Security notes
 
 - `uploadFile` reads any local path it is given: never pass a path built from user input.
@@ -68,7 +112,9 @@ const s3storage = storageClient([{
 
 ### HTTP client options
 
-`setRockReqDefaults()` (and `global.rockReqConf`) change the defaults of [rock-req](https://github.com/carboneio/rock-req) for every request, except `keepAliveTimeout` and `keepAliveDuration`: rock-req reads them once, when it creates its HTTP agents in `rock.extend()`, so they are silently ignored. To change them, pass your own agent: `setRockReqDefaults({ agent: new https.Agent({ keepAlive: true, keepAliveMsecs: 3000 }) })`.
+`setRockReqDefaults()` (and `global.rockReqConf`) change the defaults of [rock-req](https://github.com/carboneio/rock-req) for every request, its retries included (`maxRetry`, `retryOnCode`, `beforeRequest`), with two exceptions. `followRedirects` is always `false`. And `keepAliveTimeout` and `keepAliveDuration` are silently ignored: rock-req reads them once, when it creates its HTTP agents in `rock.extend()`. To change them, pass your own agent: `setRockReqDefaults({ agent: new https.Agent({ keepAlive: true, keepAliveMsecs: 3000 }) })`.
+
+The SDK uses its own copy of rock-req if the version of your application differs (rock-req `=5.3.2`): your `rock.defaults` then do not apply to the storage requests. Depend on the same rock-req version as the SDK.
 
 ### Upload a file
 
@@ -463,8 +509,11 @@ s3storage.setLogFunction((message, level, fields) => {
 
 | `event` | Level | When |
 |---|---|---|
-| `storage_fallback` | warning | A request failed (network error, 5xx, 401): the next storage is used |
+| `storage_throttled` | info | The storage throttled the request (`429`, `503 SlowDown`...): retried on the same storage after `delay` ms |
+| `storage_request_failed` | warning | The request failed on a storage (`5xx`, or a `503` still throttled): it is sent to the next storage, the active storage is kept (less than 3 consecutive failures) |
+| `storage_fallback` | warning | The active storage is switched for all requests (network error, `401`, 3 consecutive `5xx`) |
 | `storage_unavailable` | error | No storage available, the request returns `All S3 storages are not available` |
+| `storage_main_unavailable` | info | The background check of the main storage failed, the fallback is kept: next check in 60 s, then 2× the delay (up to 10 min) |
 | `storage_main_restored` | info | The main storage answers again, the next requests use it |
 | `storage_index_invalid` | error | `requestStorageIndex` points to no storage |
 | `getmd5_error` | error | The `Content-MD5` of a body cannot be computed |

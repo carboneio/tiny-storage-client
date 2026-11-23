@@ -384,7 +384,8 @@ describe('Security', function () {
 
     it('S3 setFileMetadata should send the bucket of the fallback in "x-amz-copy-source", without modifying the caller options', function (done) {
       const _s3 = createS3(2);
-      nock(S3_URLS[0]).put('/data-0/file.pdf').reply(500).get('/').reply(500);
+      /** A 5xx is sent once, then the request is sent to the fallback */
+      nock(S3_URLS[0]).put('/data-0/file.pdf').reply(500);
       let _copySource = null;
       nock(S3_URLS[1]).put('/data-1/file.pdf').reply(function () {
         _copySource = this.req.headers['x-amz-copy-source'];
@@ -395,7 +396,8 @@ describe('Security', function () {
         assert.strictEqual(err, null);
         assert.strictEqual(resp.statusCode, 200);
         assert.strictEqual(_copySource, '/data-1/file.pdf');
-        assert.strictEqual(_options.headers['x-amz-copy-source'], '/data/file.pdf');
+        /** The caller's headers are never mutated: "x-amz-copy-source" is set on a copy */
+        assert.deepStrictEqual(_options, { headers: { 'x-amz-meta-a': '1' } });
         done();
       });
     });
@@ -411,7 +413,7 @@ describe('Security', function () {
 
     it('S3 should not write the error body of the failing storage into the stream output', function (done) {
       const _s3 = createS3(2);
-      nock(S3_URLS[0]).get('/data-0/file.txt').reply(500, 'Internal Error').get('/').reply(500);
+      nock(S3_URLS[0]).get('/data-0/file.txt').reply(500, 'Internal Error');
       nock(S3_URLS[1]).get('/data-1/file.txt').reply(200, 'content');
       const _out = collectOutput();
       _s3.downloadFile('data', 'file.txt', { output: _out.output }, (err, resp) => {
@@ -423,14 +425,19 @@ describe('Security', function () {
       });
     });
 
-    it('S3 should write a 4xx body into the stream output (the response returned to the caller)', function (done) {
+    /** Intentionally changed: a non-2xx response is never written into the caller's stream, it is returned parsed like a buffered response */
+    it('S3 should return a 4xx parsed, without writing it into the stream output', function (done) {
       const _s3 = createS3(2);
-      nock(S3_URLS[0]).get('/data-0/file.txt').reply(404, 'Not Found');
+      nock(S3_URLS[0]).get('/data-0/file.txt').reply(404, '<Error><Code>NoSuchKey</Code><Key>file.txt</Key></Error>', { 'content-type': 'application/xml' });
       const _out = collectOutput();
       _s3.downloadFile('data', 'file.txt', { output: _out.output }, (err, resp) => {
         assert.strictEqual(err, null);
         assert.strictEqual(resp.statusCode, 404);
-        assert.strictEqual(_out.written, 'Not Found');
+        assert.strictEqual(resp.body.error.code, 'NoSuchKey');
+        assert.strictEqual(resp.body.error.key, 'file.txt');
+        assert.strictEqual(_out.calls, 0);
+        assert.strictEqual(_out.written, '');
+        assert.strictEqual(_s3.getConfig().activeStorage, 0);
         done();
       });
     });
@@ -438,6 +445,7 @@ describe('Security', function () {
     it('Swift should not write the error body of the failing storage or of a 401 into the stream output', function (done) {
       const _swift = createSwift(2);
       authOK(0);
+      /** 401: new authentication, then a 500 sent to the fallback */
       nock(ENDPOINTS[0]).get('/data-0/file.txt').reply(401, 'Unauthorized').get('/data-0/file.txt').reply(500, 'Internal Error');
       authOK(0);
       authOK(1);
@@ -456,7 +464,13 @@ describe('Security', function () {
       const _swift = createSwift(2);
       nock(AUTH_URLS[0]).post('/auth/tokens').reply(500);
       authOK(1);
-      nock(ENDPOINTS[1]).get('/data-1/file.txt').reply(500);
+      /**
+       * The last storage is unreachable (network error, retried once by rock-req): immediate switch past the last storage, the main
+       * storage is active again. A 5xx would switch only after 3 consecutive failures
+       */
+      const _err = new Error('read ECONNRESET');
+      _err.code = 'ECONNRESET';
+      nock(ENDPOINTS[1]).get('/data-1/file.txt').times(2).replyWithError(_err);
       _swift.downloadFile('data', 'file.txt', (err) => {
         assert.strictEqual(err.message, 'Object Storages are not available');
         assert.strictEqual(_swift.getConfig().activeStorage, 0);
@@ -476,9 +490,14 @@ describe('Security', function () {
       const _urls = [...S3_URLS, 'https://s3-2.security.test'];
       const _s3 = createS3(3, _urls);
       let _requests = 0;
+      let _probes = 0;
       for (const _url of _urls) {
-        nock(_url).persist().get(/.*/).reply(() => {
-          _requests++;
+        nock(_url).persist().get(/.*/).reply((uri) => {
+          if (uri === '/') {
+            _probes++;
+          } else {
+            _requests++;
+          }
           return [500];
         });
       }
@@ -488,8 +507,13 @@ describe('Security', function () {
         _s3.downloadFile('data', `file-${i}.txt`, (err) => {
           assert.strictEqual(err.message, 'All S3 storages are not available');
           if (++_errors === _total) {
-            /** + a few health checks of the main storage, one at a time (500 is not retried by rock-req) */
-            assert.ok(_requests <= _total * _urls.length + _urls.length, `${_requests} requests`);
+            /**
+             * A 5xx is sent once (never retried by rock-req nor by the client): one attempt per storage and per request,
+             * + a few health checks of the main storage, one at a time. Without the limit: unbounded (loop between the storages)
+             */
+            assert.strictEqual(_requests, _total * _urls.length, `${_requests} requests`);
+            assert.ok(_probes <= _urls.length, `${_probes} health checks`);
+            /** Each storage fails 3 times in a row: switched from 0 to 1, then 2, then back to the main storage after the last one */
             assert.strictEqual(_s3.getConfig().activeStorage, 0);
             done();
           }
@@ -505,6 +529,8 @@ describe('Security', function () {
         assert.strictEqual(err, null);
         let _auths = 0;
         let _requests = 0;
+        let _switches = 0;
+        _swift.setLogFunction((message, level, fields) => { _switches += fields?.event === 'storage_fallback' ? 1 : 0; });
         for (let i = 0; i < 2; i++) {
           nock(AUTH_URLS[i]).persist().post('/auth/tokens').reply(() => {
             _auths++;
@@ -521,8 +547,13 @@ describe('Security', function () {
           _swift.downloadFile('data', `file-${i}.txt`, (err) => {
             assert.strictEqual(err.message, 'Object Storages are not available');
             if (++_errors === _total) {
-              assert.ok(_requests <= _total * 2, `${_requests} requests`);
-              assert.ok(_auths <= _total * 2, `${_auths} authentications`);
+              /** A 5xx is sent once (never retried by rock-req nor by the client): one attempt per storage and per request */
+              assert.strictEqual(_requests, _total * 2);
+              /**
+               * Single-flight authentications: one per activation of a storage (each switch clears the token), plus at most one per
+               * storage for the requests sent to it apart (its token is kept), never one per request
+               */
+              assert.ok(_auths >= 1 && _auths <= _switches + 2, `${_auths} authentications for ${_switches} switches`);
               done();
             }
           });

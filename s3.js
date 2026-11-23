@@ -4,10 +4,30 @@ const URL = require('url').URL;
 const crypto = require('crypto');
 const fs = require('fs');
 const xmlToJson = require('./xmlToJson.js');
-const { getUrlParameters, isFnStream, escapeXml, failureToString, failureFields, storageUnavailableError, downloadOptions, catchSyncError, finalOutput } = require('./helper.js');
+const {
+  getUrlParameters, isFnStream, escapeXml, failureToString, failureFields, storageUnavailableError, downloadOptions, catchSyncError, streamOutput,
+  throttleRetry, isServerError, failureTracker, probeSchedule, wait, hasHeader, checkMaxThrottleRetry
+} = require('./helper.js');
 
 /** xmlToJson options of an S3 "Error" response: these values are returned as written in the XML */
 const XML_ERROR_OPTIONS = { forceString: ['key', 'bucketname', 'requestid', 'hostid'] };
+
+/** Error codes of a 503 asking to slow down: the request is retried on the same storage with a backoff, never failed over */
+const THROTTLE_CODES = new Set(['SlowDown', 'SlowDownRead', 'SlowDownWrite', 'Throttling', 'ThrottlingException', 'RequestLimitExceeded', 'RequestThrottled', 'TooManyRequestsException', 'TooManyRequests']);
+
+/**
+ * Error of a request no storage could serve. A 503 still throttled after its retries (`failure.response`) extends the message of
+ * tiny-storage-client 4.0, so callers matching it keep working
+ * @param {Object} failure { statusCode, error, code, response }
+ */
+function unavailableError (failure) {
+  return storageUnavailableError(`All S3 storages are not available${failure?.response !== undefined ? ' | Throttled by the storage (slow down)' : ''}`, failure);
+}
+
+/** True for an XML body: "application/xml", "text/xml", with or without parameters ("; charset=utf-8") */
+function isXml (contentType) {
+  return typeof contentType === 'string' && (contentType.startsWith('application/xml') === true || contentType.startsWith('text/xml') === true);
+}
 
 module.exports = (config) => {
 
@@ -19,9 +39,12 @@ module.exports = (config) => {
     activeStorage  : 0
   };
 
-  let retryReconnectMainStorage = false;
-  /** Incremented each time the main storage is restored by the health check */
+  /** Incremented each time the main storage is restored by the probe */
   let mainStorageRestored = 0;
+  /** Consecutive failures of the active storage */
+  const failures = failureTracker();
+  /** Probe of the main storage while a fallback is active */
+  let probe = probeSchedule();
 
   setConfig(config);
   /**
@@ -51,11 +74,17 @@ module.exports = (config) => {
       if (URL.canParse(_auth.url) === false) {
         throw new Error("S3 Storage credentials not correct or missing - did you provide correct credentials?");
       }
+      if (_auth.storageClass !== undefined && (typeof _auth.storageClass !== 'string' || _auth.storageClass === '')) {
+        throw new Error('S3 Storage "storageClass" must be a non-empty string, such as "STANDARD"');
+      }
+      checkMaxThrottleRetry(_auth, 'S3');
       /** Save the hostname for AWS4 signature */
       _auth.hostname = new URL(_auth.url).hostname;
     }
     _config.storages        = [...newConfig];
     _config.activeStorage   = 0;
+    failures.reset();
+    probe = probeSchedule();
   }
 
   /**
@@ -94,17 +123,11 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
-    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
-    options = options ?? {};
-    options.alias = bucket;
     /** Encoded before reading the file: an invalid filename (URIError) is returned to the callback, never thrown by the fs callback */
     const _path = `/${bucket}/${encodeURIComponent(filename)}`;
+    /** On a copy: the caller's options are not mutated (an explicit `null`/`undefined` is accepted) */
     const _uploadFileRequest = function (objectBuffer) {
-      options.body = objectBuffer;
-      options.headers = {
-        ...options?.headers
-      };
-      return request('PUT', _path, options, callback);
+      return startRequest('PUT', _path, { ...options, alias: bucket, body: objectBuffer }, callback, true);
     };
     /**
      * AWS4 does not support computing signature with a Stream
@@ -130,9 +153,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
-    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
-    options = options ?? {};
-    options.alias = bucket;
+    /** On a copy: the caller's options are not mutated (an explicit `null`/`undefined` is accepted) */
+    options = { ...options, alias: bucket };
     return request('DELETE', `/${bucket}/${encodeURIComponent(filename)}`, options, callback);
   }
 
@@ -150,10 +172,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
-    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
-    options = options ?? {};
-    options.defaultQueries = 'list-type=2';
-    options.alias = bucket;
+    /** On a copy: the caller's options are not mutated (an explicit `null`/`undefined` is accepted) */
+    options = { ...options, defaultQueries: 'list-type=2', alias: bucket };
     return request('GET', `/${bucket}`, options, parseXmlResponse('listFiles', 'ListBucketResult', { forceArray: ['contents'], forceString: ['key', 'name', 'prefix', 'delimiter', 'startafter', 'continuationtoken', 'nextcontinuationtoken'] }, callback));
   }
 
@@ -165,9 +185,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
-    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
-    options = options ?? {};
-    options.alias = bucket;
+    /** On a copy: the caller's options are not mutated (an explicit `null`/`undefined` is accepted) */
+    options = { ...options, alias: bucket };
     return request('HEAD', `/${bucket}/${encodeURIComponent(filename)}`, options, callback);
   }
 
@@ -183,9 +202,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
-    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
-    options = options ?? {};
-    options.alias = bucket;
+    /** On a copy: the caller's options are not mutated (an explicit `null`/`undefined` is accepted) */
+    options = { ...options, alias: bucket };
     return request('HEAD', `/${bucket}`, options, callback);
   }
 
@@ -198,8 +216,6 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
-    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
-    options = options ?? {};
     return request('GET', `/`, options, parseXmlResponse('listBuckets', 'Buckets', { forceArray: ['bucket'], forceString: ['name'] }, callback, true));
   }
 
@@ -217,17 +233,18 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
-    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
-    options = options ?? {};
-
-    options.alias = bucket;
-    options["headers"] = {
-      'x-amz-copy-source': `/${bucket}/${encodeURIComponent(filename)}`,
-      'x-amz-metadata-directive': 'REPLACE',
-      ...options.headers
+    /** On a copy: the caller's options and headers are not mutated, a reused options object must not copy the previous file */
+    const _options = {
+      ...options,
+      alias: bucket,
+      headers: {
+        'x-amz-copy-source': `/${bucket}/${encodeURIComponent(filename)}`,
+        'x-amz-metadata-directive': 'REPLACE',
+        ...options?.headers
+      }
     };
 
-    request('PUT', `/${bucket}/${encodeURIComponent(filename)}`, options, parseXmlResponse('setFileMetadata', 'CopyObjectResult', {}, callback));
+    startRequest('PUT', `/${bucket}/${encodeURIComponent(filename)}`, _options, parseXmlResponse('setFileMetadata', 'CopyObjectResult', {}, callback), true);
   }
 
   /**
@@ -247,9 +264,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
-    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
-    options = options ?? {};
-    options.alias = bucket;
+    /** On a copy: the caller's options are not mutated (an explicit `null`/`undefined` is accepted) */
+    options = { ...options, alias: bucket };
 
     if (Array.isArray(files) === false) {
       return callback(new Error('Deleting files: the list of files must be an Array'));
@@ -264,10 +280,13 @@ module.exports = (config) => {
       _body += `<Object><Key>${escapeXml(files?.[i]?.[options?.fileNameKey] ?? files?.[i]?.name ?? files?.[i]?.key ?? files?.[i])}</Key></Object>`;
     }
     _body += '<Quiet>false</Quiet></Delete>';
-    options.body = _body;
-    options.headers = {
-      ...options?.headers,
-      'Content-MD5': getMD5(_body)
+    options = {
+      ...options,
+      body: _body,
+      headers: {
+        ...options?.headers,
+        'Content-MD5': getMD5(_body)
+      }
     };
     return request('POST', `/${bucket}/?delete`, options, parseXmlResponse('deleteFiles', 'DeleteResult', { forceArray: ['deleted', 'error'], forceString: ['key', 'versionid', 'deletemarkerversionid'] }, callback));
   }
@@ -291,16 +310,29 @@ module.exports = (config) => {
    * @returns
    */
   function request (method, path, options, callback) {
-    /**
-     * Fallback tracking is private to this request (never written on the caller's options):
-     * a reused options object must start a new request from scratch
-     */
-    return sendRequest(method, path, options ?? {}, callback, { try: 0, lastFailure: undefined, originalStorage: undefined, restoredRetry: false });
+    return startRequest(method, path, options, callback, false);
   }
 
   /**
-   * [PRIVATE] Send the request, and retry on the fallback storages
-   * @param {Object} state { try, lastFailure, originalStorage, restoredRetry } private state of the request, shared by its retries (restoredRetry: the main storage restored meanwhile already spared an attempt)
+   * [PRIVATE] Start a request. Its fallback tracking is private (never written on the caller's options):
+   * a reused options object must start a new request from scratch
+   * @param {Boolean} withStorageClass true to send the `storageClass` of the storage used (upload, copy)
+   */
+  function startRequest (method, path, options, callback, withStorageClass) {
+    return sendRequest(method, path, options ?? {}, callback, {
+      try: 0, index: undefined, lastFailure: undefined, restoredRetry: false, throttles: 0, withStorageClass
+    });
+  }
+
+  /**
+   * [PRIVATE] Send the request: retried on the same storage when throttled (backoff), then on the fallback storages
+   * @param {Object} state private state of the request, shared by its retries:
+   *  - try: number of storages that failed, one attempt per storage
+   *  - index: storage of the next attempt, undefined for the active one
+   *  - lastFailure: { statusCode, error, code } the last failure, attached to the returned error if no storage is available
+   *  - restoredRetry: the main storage restored meanwhile already spared an attempt
+   *  - throttles: throttle retries done on the storage of the attempt
+   *  - withStorageClass: send the `storageClass` of the storage
    */
   function sendRequest (method, path, options, callback, state) {
 
@@ -313,37 +345,21 @@ module.exports = (config) => {
       return callback(new Error(`S3 storage index "${options.requestStorageIndex}" does not exist`));
     }
 
-    if (_config.activeStorage >= _config.storages.length || state.try >= _config.storages.length) {
-      /** Reset the index of the main storage if any storage are available */
-      _config.activeStorage = 0;
-      log(`S3 Storage | All storages are not available - switch to the main storage`, 'error', { event: 'storage_unavailable', storage: 's3', ...failureFields(state.lastFailure) });
-      return callback(storageUnavailableError('All S3 storages are not available', state.lastFailure));
-    } else if (_config.activeStorage !== 0 && options?.requestStorageIndex === undefined && retryReconnectMainStorage === false) {
-      /**
-       * Retry to reconnect to the main storage if a child storage is active by requesting GET "/": Request "ListBuckets". Notes:
-       * - "requestStorageIndex" option is used to request a specific storage, disable the retry and not create an infinite loop of requests into child storages
-       * - "retryReconnectMainStorage" global variable is used to request one time and not create SPAM parallele requests to the main storage.
-       */
-      retryReconnectMainStorage = true;
-      request('GET', `/`, { requestStorageIndex: 0 }, function (err, resp) {
-        /**
-         * The main storage is back if it answers like a storage that would serve the requests: the same rule as the
-         * failover (network error, 5xx or 401 = not available). A 403 (credentials scoped to a bucket, without the
-         * "s3:ListAllMyBuckets" permission) or a 404 is an answer of a healthy storage.
-         */
-        if (!err && resp?.statusCode < 500 && resp.statusCode !== 401) {
-          log(`S3 Storage | Main storage available - reconnecting for next requests`, 'info', { event: 'storage_main_restored', storage: 's3', index: 0, region: _config.storages[0]?.region });
-          _config.activeStorage = 0;
-          mainStorageRestored++;
-        }
-        retryReconnectMainStorage = false;
-      });
+    /** Storage of this attempt: the same one on a retry, the next one on a failover, else the requested or the active one */
+    const _index = state.index ?? options?.requestStorageIndex ?? _config.activeStorage;
+    if (state.try >= _config.storages.length || _index >= _config.storages.length) {
+      log(`S3 Storage | All storages are not available`, 'error', { event: 'storage_unavailable', storage: 's3', ...failureFields(state.lastFailure) });
+      return callback(unavailableError(state.lastFailure));
+    }
+    /** On a fallback storage: check in the background if the main storage is back */
+    if (_config.activeStorage !== 0 && probe.due() === true) {
+      probeMainStorage();
     }
 
-    /** Get active storage based on an index */
-    const _activeStorage = _config.storages[options?.requestStorageIndex ?? _config.activeStorage];
-    state.originalStorage = _config.activeStorage;
+    const _activeStorage = _config.storages[_index];
     const _mainStorageRestored = mainStorageRestored;
+    /** A request to a requested storage (`requestStorageIndex`) never changes the failure count of the active storage */
+    const _generation = options?.requestStorageIndex === undefined ? failures.of(_index, _config.activeStorage) : -1;
 
     /**
      * Return a bucket name based on an alias and current active storage.
@@ -362,57 +378,118 @@ module.exports = (config) => {
         _headers['x-amz-copy-source'] = _headers['x-amz-copy-source'].replace(options?.alias, _activeBucket);
       }
     }
+    /** The storage class of the storage actually used (after a failover, the one of the fallback), unless the caller sets it */
+    if (state.withStorageClass === true && _activeStorage.storageClass !== undefined && hasHeader(_headers, 'x-amz-storage-class') === false) {
+      _headers['x-amz-storage-class'] = _activeStorage.storageClass;
+    }
+    const _logPath = _path.split('?')[0];
 
-    const _isStreamOutput = isFnStream(options?.output);
-    /** A response failing over to the next storage, its body is never written into the stream `output` of the caller */
-    const _isFailure = (res) => (res?.statusCode >= 500 || res?.statusCode === 401) && options?.requestStorageIndex === undefined;
+    /** Stream `output`: only a 2xx response is written into the caller's stream */
+    const _stream = isFnStream(options?.output) ? (state.stream ??= streamOutput(options.output)) : null;
     /** A synchronous throw (invalid query, header value...) is returned to the callback, never thrown */
     let _responded = false;
 
+    /** Send the request again on the storage `index`, after `delay` ms */
+    const _retry = function (index, delay) {
+      state.index = index;
+      return delay === undefined ? sendRequest(method, path, options, callback, state) : wait(delay, () => sendRequest(method, path, options, callback, state));
+    };
+
+    /**
+     * The storage of this attempt failed: the request is sent to the next storage. The active storage is switched for all
+     * requests after FAILURE_THRESHOLD consecutive failures, or at once if `isDown`: a network error or a timeout (already
+     * retried by rock-req, the storage is unreachable) or a 401. A 503 still throttled after its retries counts as a failure
+     * @param {Object} failure { statusCode, error, code, response }
+     * @param {Boolean} isDown
+     */
+    const _failover = function (failure, isDown) {
+      /** The last failure of this request (not shared: requests run in parallel), attached to the returned error if no storage is available */
+      state.lastFailure = failure;
+      const _fields = { storage: 's3', index: _index, region: _activeStorage.region, method, path: _logPath, ...failureFields(failure) };
+      /** Single storage: no fallback to activate, the error is returned at once */
+      if (_config.storages.length === 1) {
+        log(`S3 Storage | ${method} ${_logPath} | Storage not available, no fallback storage | ${failureToString(failure)}`, 'error', { event: 'storage_unavailable', ..._fields });
+        return callback(unavailableError(failure));
+      }
+      /** Only the failures of the active storage count, if it did not change meanwhile: a parallel request may have already switched to a child storage */
+      if (failures.fail(_generation, isDown) === true) {
+        /** After the last storage, the main storage is active again */
+        const _to = _index + 1 < _config.storages.length ? _index + 1 : 0;
+        log(`S3 Storage | Activate fallback storage: switch from "${_index}" to "${_to}" | ${failureToString(failure)}`, 'warning', { event: 'storage_fallback', ..._fields, from: _index, to: _to });
+        _config.activeStorage = _to;
+        failures.reset();
+        /** The next request probes the main storage at once: a short network blip does not keep the fallback for 60 s */
+        probe.soon();
+      } else {
+        log(`S3 Storage | ${method} ${_logPath} | Request failed on storage "${_index}", sent to the next storage | ${failureToString(failure)}`, 'warning', { event: 'storage_request_failed', ..._fields });
+      }
+      state.throttles = 0;
+      /**
+       * Every failed attempt counts, even if a parallel request switched the storage: one attempt per storage, parallel
+       * failovers never send it round the storages again (request storm). Unless the main storage was restored meanwhile,
+       * once per request: a flapping main storage (probe OK, requests failing) never makes it loop
+       */
+      if (_mainStorageRestored === mainStorageRestored || state.restoredRetry === true) {
+        state.try += 1;
+        return _retry(Math.max(_index + 1, _config.activeStorage));
+      }
+      state.restoredRetry = true;
+      return _retry(_config.activeStorage);
+    };
+
     const _requestCallback = function (err, res, body) {
       _responded = true;
-      if ((err && options?.requestStorageIndex === undefined) || _isFailure(res)) {
-        /** The last failure of this request (not shared: requests run in parallel), attached to the returned error if no storage is available */
-        state.lastFailure = { statusCode: res?.statusCode, error: err };
-        const _fields = { storage: 's3', index: _config.activeStorage, region: _activeStorage.region, method, path: _path.split('?')[0], ...failureFields(state.lastFailure) };
-        /** Single storage: no fallback to activate, the error is returned at once */
-        if (_config.storages.length === 1) {
-          log(`S3 Storage | ${method} ${_path.split('?')[0]} | Storage not available, no fallback storage | ${failureToString(state.lastFailure)}`, 'error', { event: 'storage_unavailable', ..._fields });
-          return callback(storageUnavailableError('All S3 storages are not available', state.lastFailure));
+      if (_stream !== null) {
+        /** The caller's stream was given (bytes, or its own error such as a full disk): never retried nor failed over */
+        if (err && _stream.written === true) {
+          return callback(err);
         }
-        /** Protection when requesting storage in parallel, another request may have already switch to a child storage on Error */
-        if (state.originalStorage === _config.activeStorage) {
-          log(`S3 Storage | Activate fallback storage: switch from "${_config.activeStorage}" to "${_config.activeStorage + 1}" | ${failureToString(state.lastFailure)}`, 'warning', { event: 'storage_fallback', ..._fields, from: _config.activeStorage, to: _config.activeStorage + 1 });
-          _config.activeStorage += 1;
-        }
-        /**
-         * Every failed attempt counts, even if a parallel request switched the storage: one attempt per storage, parallel
-         * failovers never send it round the storages again (request storm). Unless the main storage was restored meanwhile,
-         * once per request: a flapping main storage (health check OK, requests failing) never makes it loop
-         */
-        if (_mainStorageRestored === mainStorageRestored || state.restoredRetry === true) {
-          state.try += 1;
-        } else {
-          state.restoredRetry = true;
-        }
-        return sendRequest(method, path, options, callback, state);
-      } else if (err) {
-        return callback(err, res);
+        body = _stream.body !== null ? Buffer.concat(_stream.body) : undefined;
       }
-      /** If the response is an error as XML and not a stream, the error is parsed as JSON. The content type may carry parameters: "application/xml; charset=utf-8" */
-      if (res.statusCode >= 400 && res?.headers?.['content-type']?.startsWith('application/xml') === true && _isStreamOutput === false) {
+      if (err) {
+        return options?.requestStorageIndex === undefined ? _failover({ error: err }, true) : callback(err, res);
+      }
+      const _status = res.statusCode;
+      /** An XML error (3xx, 4xx, 5xx) is parsed as JSON. A 304 has no body, its content type is the one of the file */
+      if (_status >= 300 && _status !== 304 && isXml(res.headers?.['content-type']) === true) {
         body = xmlToJson(body?.toString() ?? '', XML_ERROR_OPTIONS);
       }
-      return _isStreamOutput === true ? callback(null, res) : callback(null, { headers : res.headers, statusCode: res.statusCode, body : body });
+      const _code = body?.error?.code;
+      const _fields = { storage: 's3', index: _index, region: _activeStorage.region, method, path: _logPath, status: _status, code: _code };
+      const _response = _stream !== null && _stream.body === null ? res : { headers : res.headers, statusCode: _status, body : body };
+      /** Throttled (after the quick retry of rock-req): a 429, or a 503 with a "slow down" code. Any other 503 is a server error */
+      if (_status === 429 || (_status === 503 && THROTTLE_CODES.has(_code) === true)) {
+        const _delay = throttleRetry(state, _activeStorage, res.headers);
+        if (_delay !== undefined) {
+          log(`S3 Storage | ${method} ${_logPath} | Throttled by storage "${_index}" (${_status}${_code ? ` ${_code}` : ''}), retry ${state.throttles} in ${Math.round(_delay)}ms`, 'info', { event: 'storage_throttled', ..._fields, delay: Math.round(_delay) });
+          return _retry(_index, _delay);
+        }
+        /**
+         * Still throttled: a 429 is returned, as before. A 503 is sent to the next storage, as before, and counted as a failure: a
+         * storage throttling every request is left after FAILURE_THRESHOLD of them. A `requestStorageIndex` request gets the response
+         */
+        if (_status === 429 || options?.requestStorageIndex !== undefined) {
+          return callback(null, _response);
+        }
+        return _failover({ statusCode: _status, code: _code, response: _response }, false);
+      }
+      if ((isServerError(_status) === true || _status === 401) && options?.requestStorageIndex === undefined) {
+        return _failover({ statusCode: _status, code: _code }, _status === 401);
+      }
+      /** The storage answered: the failures of the active storage are reset */
+      failures.success(_generation);
+      return callback(null, _response);
     };
     try {
       const _urlParams = getUrlParameters(options?.queries ?? '', options?.defaultQueries ?? '');
       const _pathWithParams = `${_path}${_urlParams ?? ''}`;
       const _requestParams = aws4.sign({
         timeout: _config.timeout,
-        output: _isStreamOutput ? finalOutput(options.output, _isFailure) : null,
+        output: _stream?.output ?? null,
         /** Rock-req Options: they cannot override the URL, the method, the body or the signed headers below */
         ...(options?.requestOptions ? options?.requestOptions : {}),
+        /** A signed request is never re-sent elsewhere: a 3xx is returned */
+        followRedirects: false,
         method: method,
         url: `${_activeStorage.url}${_pathWithParams}`,
         ...(options?.body ? { body: options?.body } : {}),
@@ -426,13 +503,67 @@ module.exports = (config) => {
         accessKeyId: _activeStorage.accessKeyId,
         secretAccessKey: _activeStorage.secretAccessKey
       });
-      return _isStreamOutput === true ? rock(_requestParams, _requestCallback) : rock.concat(_requestParams, _requestCallback);
+      return rock(_requestParams, _requestCallback);
     } catch (err) {
       /** Thrown by the callback (caller code): not swallowed, never called twice */
       if (_responded === true) {
         throw err;
       }
       return callback(err);
+    }
+  }
+
+  /**
+   * Check in the background if the main storage is back, with a "ListBuckets" request (GET /). It is back on a 2xx, or on
+   * a 403/404: credentials scoped to a bucket, without the "s3:ListAllMyBuckets" permission. Not on a network error, a 429,
+   * a 5xx or a 401. On success the next requests use the main storage, the requests in progress finish on the fallback.
+   * Never returns an error to a caller and never throws: a failure is logged and doubles the delay of the next probe.
+   */
+  function probeMainStorage () {
+    const _probe = probe;
+    _probe.start();
+    const _storage = _config.storages[0];
+    let _done = false;
+    const _end = function (err, res) {
+      if (_done === true) {
+        return;
+      }
+      _done = true;
+      const _status = res?.statusCode;
+      const _isUp = !err && ((_status >= 200 && _status < 300) || _status === 403 || _status === 404);
+      _probe.end(_isUp);
+      /** Discarded if setConfig() was called meanwhile */
+      if (_probe !== probe) {
+        return;
+      }
+      if (_isUp === false) {
+        return log(`S3 Storage | Index "0" region "${_storage.region}" main storage still not available, next check in ${_probe.delay / 1000}s | ${failureToString({ statusCode: _status, error: err })}`, 'info', { event: 'storage_main_unavailable', storage: 's3', index: 0, region: _storage.region, ...failureFields({ statusCode: _status, error: err }) });
+      }
+      if (_config.activeStorage === 0) {
+        return;
+      }
+      log(`S3 Storage | Main storage available - reconnecting for next requests`, 'info', { event: 'storage_main_restored', storage: 's3', index: 0, region: _storage.region });
+      _config.activeStorage = 0;
+      failures.reset();
+      mainStorageRestored++;
+    };
+    try {
+      rock(aws4.sign({
+        timeout: _config.timeout,
+        followRedirects: false,
+        method: 'GET',
+        url: `${_storage.url}/`,
+        headers: {},
+        service: 's3',
+        hostname: _storage.hostname,
+        path: '/',
+        region: _storage.region
+      }, {
+        accessKeyId: _storage.accessKeyId,
+        secretAccessKey: _storage.secretAccessKey
+      }), _end);
+    } catch (err) {
+      _end(err);
     }
   }
 

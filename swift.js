@@ -1,6 +1,9 @@
 const rock = require('rock-req');
 const fs = require('fs');
-const { getUrlParameters, isFnStream, encodeObjectName, failureToString, failureFields, storageUnavailableError, downloadOptions, catchSyncError, finalOutput } = require('./helper.js');
+const {
+  getUrlParameters, isFnStream, encodeObjectName, failureToString, failureFields, storageUnavailableError, downloadOptions, catchSyncError, streamOutput,
+  throttleRetry, isServerError, failureTracker, probeSchedule, callAll, wait, checkMaxThrottleRetry
+} = require('./helper.js');
 
 /**
  *
@@ -27,12 +30,16 @@ module.exports = (config) => {
   let _connectionCallbacks = null;
   /** Incremented by setStorages(): an authentication started on the previous storages is restarted on the new ones */
   let _storagesVersion = 0;
-  /** Probe of the main storage while a fallback is active: one at a time, every PROBE_DELAY_MIN ms, doubled on each failure up to PROBE_DELAY_MAX */
-  const PROBE_DELAY_MIN = 60000;
-  const PROBE_DELAY_MAX = 600000;
-  let _probeDelay = PROBE_DELAY_MIN;
-  let _probeAt = 0;
-  let _probing = false;
+  /** Probe of the main storage while a fallback is active */
+  let _probe = probeSchedule();
+  /** Consecutive failures of the active storage */
+  const _failures = failureTracker();
+  /**
+   * Authentications of the storages used apart from the active one (the next storage while the active one has failed less than
+   * FAILURE_THRESHOLD times, or the same storage after a parallel failover). Keyed by the storage object itself: a token is never
+   * used with another storage. Value: { token, endpoints }, or { callbacks } while authenticating. Replaced by setStorages()
+   */
+  let _spareAuth = new Map();
 
   /**
    * @description Optional: authenticate now (startup check, or to fail fast on wrong credentials).
@@ -54,15 +61,6 @@ module.exports = (config) => {
   function connection (callback, originStorage = 0, failure = {}) {
     const arrayArguments = [callback, originStorage, failure];
 
-    if (_config.activeStorage === _config.storages.length) {
-      /** Reset the index of the actual storage. The endpoint and token of the last storage are cleared: the next request authenticates on the main storage */
-      _config.activeStorage = 0;
-      _config.endpoints = {};
-      _config.token = '';
-      log(`SWIFT Storage | Object Storages are not available`, 'error', { event: 'storage_unavailable', storage: 'swift', ...failureFields(failure) });
-      return callback(storageUnavailableError('Object Storages are not available', failure));
-    }
-
     /**
      * Record the failure, then authenticate on the fallback storage.
      * Single storage: no fallback to activate, a single log line and the error is returned at once
@@ -77,7 +75,13 @@ module.exports = (config) => {
         return callback(storageUnavailableError('Object Storages are not available', failure));
       }
       log(message, 'warning', { event: 'storage_connection_failed', ..._fields });
-      activateFallbackStorage(originStorage);
+      /** The last storage failed too: the main storage is active again, without token, for the next request */
+      if (_index + 1 >= _config.storages.length) {
+        activateFallbackStorage(_index, true);
+        log(`SWIFT Storage | Object Storages are not available`, 'error', { event: 'storage_unavailable', storage: 'swift', ...failureFields(failure) });
+        return callback(storageUnavailableError('Object Storages are not available', failure));
+      }
+      activateFallbackStorage(_index);
       arrayArguments[1] = _config.activeStorage;
       return connection.apply(null, arrayArguments);
     }
@@ -183,7 +187,12 @@ module.exports = (config) => {
       if (!_endpoints?.url) {
         return callback({ message: 'Storage endpoint not found, invalid region', error: new Error('Storage endpoint not found, invalid region') });
       }
-      return callback(null, res.headers['x-subject-token'], _endpoints);
+      /** Without a token, every request would be sent with "X-Auth-Token: undefined": an authentication failure of this storage */
+      const _token = res.headers['x-subject-token'];
+      if (typeof _token !== 'string' || _token === '') {
+        return callback({ message: 'connection failed | X-Subject-Token header missing', error: new Error('X-Subject-Token header missing') });
+      }
+      return callback(null, _token, _endpoints);
     });
   }
   /**
@@ -198,9 +207,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
-    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
-    options = options ?? {};
-    options.alias = container;
+    /** On a copy: the caller's options are not mutated (an explicit `null`/`undefined` is accepted) */
+    options = { ...options, alias: container };
     return request('GET', `/${container}`, options, (err, resp) => {
       if (err) {
         return callback(err);
@@ -231,9 +239,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
-    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
-    options = options ?? {};
-    options.alias = container;
+    /** On a copy: the caller's options are not mutated (an explicit `null`/`undefined` is accepted) */
+    options = { ...options, alias: container };
     /** Encoded before reading the file: an invalid filename (URIError) is returned to the callback, never thrown by the fs callback */
     const _path = `/${container}/${encodeObjectName(filename)}`;
     /** Is File Path */
@@ -242,13 +249,11 @@ module.exports = (config) => {
         if (err){
           return callback(err);
         }
-        options.body = objectBuffer;
-        return request('PUT', _path, options, callback);
+        return request('PUT', _path, { ...options, body: objectBuffer }, callback);
       });
     }
     /** Is a Buffer or a Function returning a ReadStream */
-    options.body = localPathOrBuffer;
-    return request('PUT', _path, options, callback);
+    return request('PUT', _path, { ...options, body: localPathOrBuffer }, callback);
   }
 
   /**
@@ -283,9 +288,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
-    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
-    options = options ?? {};
-    options.alias = container;
+    /** On a copy: the caller's options are not mutated (an explicit `null`/`undefined` is accepted) */
+    options = { ...options, alias: container };
     return request('DELETE', `/${container}/${encodeObjectName(filename)}`, options, callback);
   }
 
@@ -303,9 +307,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
-    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
-    options = options ?? {};
-    options.alias = container;
+    /** On a copy: the caller's options are not mutated (an explicit `null`/`undefined` is accepted) */
+    options = { ...options, alias: container };
     return request('HEAD', `/${container}/${encodeObjectName(filename)}`, options, callback);
    }
 
@@ -328,8 +331,6 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
-    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
-    options = options ?? {};
     if (Array.isArray(objects) === false) {
       return callback(new Error('Deleting files: the list of files must be an Array'));
     }
@@ -341,13 +342,17 @@ module.exports = (config) => {
       }
       _filesAsText += `${container}/${encodeURIComponent(_fileName)}\n`;
     }
-    options.body = _filesAsText;
-    options.headers = {
-      ...options?.headers,
-      'Content-Type': 'text/plain'
+    /** On a copy: the caller's options are not mutated */
+    options = {
+      ...options,
+      body: _filesAsText,
+      headers: {
+        ...options?.headers,
+        'Content-Type': 'text/plain'
+      },
+      defaultQueries: 'bulk-delete',
+      alias: container
     };
-    options.defaultQueries = 'bulk-delete';
-    options.alias = container;
     return request('POST', `/`, options, (err, resp) => {
       if (err) {
         return callback(err);
@@ -375,9 +380,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
-    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
-    options = options ?? {};
-    options.alias = container;
+    /** On a copy: the caller's options are not mutated (an explicit `null`/`undefined` is accepted) */
+    options = { ...options, alias: container };
     return request('HEAD', `/${container}`, options, callback);
   }
 
@@ -393,9 +397,7 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
-    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
-    options = options ?? {};
-    return request('GET', `/`, options, (err, resp) => {
+    return request('GET', `/`, options ?? {}, (err, resp) => {
       if (err) {
         return callback(err);
       }
@@ -427,9 +429,8 @@ module.exports = (config) => {
       callback = options;
       options = {};
     }
-    /** An explicit `null`/`undefined` passed as options must not crash the setters below */
-    options = options ?? {};
-    options.alias = container;
+    /** On a copy: the caller's options are not mutated (an explicit `null`/`undefined` is accepted) */
+    options = { ...options, alias: container };
     return request('POST', `/${container}/${encodeObjectName(filename)}`, options, callback);
   }
 
@@ -448,103 +449,178 @@ module.exports = (config) => {
       options = { headers: {}, queries: {}, body: null };
     }
     /** Private state of the request, shared by its retries */
-    return sendRequest(method, path, options, callback, { unauthorizedRetry: false, failures: 0, failure: {} });
+    return sendRequest(method, path, options, callback, { unauthorizedRetry: false, failures: 0, failure: {}, index: undefined, throttles: 0 });
   }
 
   /**
-   * [PRIVATE] Send the request, reconnect and retry on error/401
-   * @param {Object} state { unauthorizedRetry, failures, failure } unauthorizedRetry: true if the request has already been retried after a 401, failures: number of 5xx/network errors, failure: the last one
+   * [PRIVATE] Send the request on the storage `state.index` (the active one if undefined): authenticate first if needed
+   * @param {Object} state private state of the request, shared by its retries:
+   *  - unauthorizedRetry: true if the request has already been retried after a 401
+   *  - failures: number of storages that failed (network error, 5xx), one attempt per storage
+   *  - failure: the last failure { statusCode, error, response } (`response`: still throttled, returned if no storage is left)
+   *  - index: storage of the next attempt, undefined for the active one
+   *  - throttles: throttle retries done on the storage of the attempt
    */
   function sendRequest (method, path, options, callback, state) {
+    const _index = state.index;
+    /** setStorages() removed the storage of the next attempt meanwhile */
+    if (_index >= _config.storages.length) {
+      log(`SWIFT Storage | Object Storages are not available`, 'error', { event: 'storage_unavailable', storage: 'swift', ...failureFields(state.failure) });
+      return callback(storageUnavailableError('Object Storages are not available', state.failure));
+    }
+    /**
+     * Another storage than the active one: the next storage while the active one has failed less than FAILURE_THRESHOLD
+     * times, or the same storage after a parallel failover. Authenticated apart, the active storage is unchanged
+     */
+    if (_index !== undefined && _index !== _config.activeStorage) {
+      const _storage = _config.storages[_index];
+      return spareConnection(_storage, (failure, auth) => {
+        if (failure) {
+          state.failure = { statusCode: failure.statusCode, error: failure.error };
+          log(`SWIFT Storage | Index "${_index}" region "${_storage.region}" ${failure.message}`, 'warning', { event: 'storage_connection_failed', storage: 'swift', index: _index, region: _storage.region, ...failureFields(state.failure) });
+          /** Not the active storage: never counted as a failure of the active one */
+          return failover(method, path, options, callback, state, _index, false, -1);
+        }
+        return sendAttempt(method, path, options, callback, state, _index, _storage, auth.token, auth.endpoints.url);
+      });
+    }
     /**
      * Not connected (first request, after setStorages, or after a failover): authenticate first, with a single
-     * authentication shared by the parallel requests
+     * authentication shared by the parallel requests. The request follows the active storage, if it fails over meanwhile
      */
     if (!_config.endpoints?.url) {
       return sharedConnection((err) => {
         if (err) {
           return callback(err);
         }
+        state.index = undefined;
         return sendRequest(method, path, options, callback, state);
       }, _config.activeStorage, state.failure);
     }
     /** On a fallback storage: check in the background if the main storage is back */
-    if (_config.activeStorage !== 0 && _probing === false && (Date.now() - _probeAt >= _probeDelay || Date.now() < _probeAt)) { /** a clock set back must not postpone the check */
+    if (_config.activeStorage !== 0 && _probe.due() === true) {
       probeMainStorage();
     }
-    const _originStorage = _config.activeStorage;
-    const _token = _config.token;
+    return sendAttempt(method, path, options, callback, state, _config.activeStorage, _config.storages[_config.activeStorage], _config.token, _config.endpoints.url);
+  }
 
+  /**
+   * [PRIVATE] The storage `index` failed for this request: the request is sent to the next storage. The active storage is switched
+   * for all requests after FAILURE_THRESHOLD consecutive failures, or at once if `isDown` (network error or timeout, already retried
+   * by rock-req: the storage is unreachable). Single storage: the error is returned at once
+   */
+  function failover (method, path, options, callback, state, index, isDown, generation) {
+    const _failure = state.failure;
+    if (_config.storages.length === 1) {
+      log(`SWIFT Storage | Index "${index}" region "${_config.storages[index]?.region}" | ${method} ${path.split('?')[0]} | Storage not available, no fallback storage | ${failureToString(_failure)}`, 'error', { event: 'storage_unavailable', storage: 'swift', index, region: _config.storages[index]?.region, method, path: path.split('?')[0], ...failureFields(_failure) });
+      return callback(storageUnavailableError('Object Storages are not available', _failure));
+    }
+    /** Only the failures of the active storage count, if it did not change meanwhile: a parallel request may have already switched to a child storage */
+    if (_failures.fail(generation, isDown) === true) {
+      activateFallbackStorage(index);
+    }
+    state.throttles = 0;
+    /** One attempt per storage, even if a parallel request switched the storage: parallel failovers never send it round again (request storm) */
+    const _next = Math.max(index + 1, _config.activeStorage);
+    if (++state.failures >= _config.storages.length || _next >= _config.storages.length) {
+      log(`SWIFT Storage | Object Storages are not available`, 'error', { event: 'storage_unavailable', storage: 'swift', ...failureFields(_failure) });
+      return callback(storageUnavailableError('Object Storages are not available', _failure));
+    }
+    state.index = _next;
+    return sendRequest(method, path, options, callback, state);
+  }
+
+  /**
+   * [PRIVATE] Send one attempt of the request to the storage `index` (object `storage`), with its token and endpoint
+   */
+  function sendAttempt (method, path, options, callback, state, index, storage, token, endpointUrl) {
     let _path = path;
-    const _isStreamOutput = isFnStream(options?.output);
-    /** A response retried on another storage or after a reconnection: its body is never written into the stream `output` of the caller */
-    const _isRetried = (res) => res.statusCode >= 500 || (res.statusCode === 401 && state.unauthorizedRetry === false);
+    const _generation = _failures.of(index, _config.activeStorage);
+    /** Stream `output`: only a 2xx response is written into the caller's stream */
+    const _stream = isFnStream(options?.output) ? (state.stream ??= streamOutput(options.output)) : null;
+    /** Send the request again, on the same storage if `index` is set, after `delay` ms */
+    const _retry = (retryIndex, delay) => {
+      state.index = retryIndex;
+      return delay === undefined ? sendRequest(method, path, options, callback, state) : wait(delay, () => sendRequest(method, path, options, callback, state));
+    };
     /** A synchronous throw (invalid query, header value...) is returned to the callback, never thrown */
     let _responded = false;
     const _requestCallback = function (err, res, body) {
       _responded = true;
+      if (_stream !== null) {
+        /** The caller's stream was given (bytes, or its own error such as a full disk): never retried nor failed over */
+        if (err && _stream.written === true) {
+          return callback(err);
+        }
+        body = _stream.body !== null ? Buffer.concat(_stream.body) : undefined;
+      }
       /** The last failure of this request (not shared: requests run in parallel), attached to the returned error if no storage is available */
       const _failure = state.failure = { statusCode: res?.statusCode, error: err };
-      const _fields = { storage: 'swift', index: _config.activeStorage, region: _config.storages[_config.activeStorage]?.region, method, path: _path.split('?')[0] };
-      /** Single storage: no fallback to activate, the error is returned at once */
-      if ((err || res?.statusCode >= 500) && _config.storages.length === 1) {
-        log(`SWIFT Storage | Index "${_config.activeStorage}" region "${_config.storages[_config.activeStorage]?.region}" | ${method} ${_path.split('?')[0]} | Storage not available, no fallback storage | ${failureToString(_failure)}`, 'error', { event: 'storage_unavailable', ..._fields, ...failureFields(_failure) });
-        return callback(storageUnavailableError('Object Storages are not available', _failure));
+      const _status = res?.statusCode;
+      const _region = storage?.region;
+      const _fields = { storage: 'swift', index, region: _region, method, path: _path.split('?')[0] };
+      if (err || isServerError(_status) === true) {
+        log(`SWIFT Storage | Index "${index}" region "${_region}" | ${method} ${_fields.path} | ${_status ?? err?.toString()}`, 'error', { event: 'storage_request_failed', ..._fields, ...failureFields(_failure) });
+        return failover(method, path, options, callback, state, index, !!err, _generation);
       }
-      /** Catch error and retry */
-      if ((err || res?.statusCode >= 500)) {
-        log(`SWIFT Storage | Index "${_config.activeStorage}" region "${_config.storages[_config.activeStorage]?.region}" | ${method} ${_fields.path} | ${res?.statusCode ?? err?.toString()}`, 'error', { event: 'storage_request_failed', ..._fields, ...failureFields(_failure) });
-        activateFallbackStorage(_originStorage);
-        /** One attempt per storage, even if a parallel request switched the storage: parallel failovers never send it round again (request storm) */
-        if (++state.failures >= _config.storages.length && _config.activeStorage < _config.storages.length) {
-          log(`SWIFT Storage | Object Storages are not available`, 'error', { event: 'storage_unavailable', storage: 'swift', ...failureFields(_failure) });
-          return callback(storageUnavailableError('Object Storages are not available', _failure));
+      /** Throttled (rate limit 498 or 429, after the quick retry of rock-req): retried on the same storage with a backoff */
+      if (_status === 429 || _status === 498) {
+        const _delay = throttleRetry(state, storage, res.headers);
+        if (_delay !== undefined) {
+          log(`SWIFT Storage | Index "${index}" region "${_region}" | ${method} ${_fields.path} | Throttled (${_status}), retry ${state.throttles} in ${Math.round(_delay)}ms`, 'info', { event: 'storage_throttled', ..._fields, status: _status, delay: Math.round(_delay) });
+          return _retry(index, _delay);
         }
-      } else if (res?.statusCode === 401) {
+        /** Still throttled: returned, as before (never sent to another storage) */
+        return callback(null, _response(res, body));
+      }
+      if (_status === 401 && state.unauthorizedRetry === false) {
         /** A single reconnection per request: a second 401 is returned like any 4xx (wrong permissions, not an expired token) */
-        if (state.unauthorizedRetry === true) {
-          return _isStreamOutput === true ? callback(null, res) : callback(null, { headers : res.headers, statusCode: res.statusCode, body : body });
-        }
         state.unauthorizedRetry = true;
-      }
-
-      /** If something went wrong: connect again and request again */
-      if (err || res?.statusCode >= 500 || res?.statusCode === 401) {
-        const _retry = (err) => {
-          if (err) {
-            return callback(err);
+        /** Another storage than the active one: its token is dropped (unless already replaced), the retry authenticates again */
+        if (index !== _config.activeStorage) {
+          if (_spareAuth.get(storage)?.token === token) {
+            _spareAuth.delete(storage);
           }
-          // Request again with the new Auth token
-          return sendRequest(method, path, options, callback, state);
-        };
-        /**
-         * The failover cleared the token: the retry authenticates on the storage just activated, with a single authentication
-         * shared by the parallel requests (its failure fails over to the next one). If a parallel request has already
-         * authenticated on it, the retry is sent at once
-         */
-        if (res?.statusCode !== 401) {
-          return _retry(null);
+          return _retry(index);
         }
         /** The token was already renewed by a parallel request since this one was sent */
-        if (_connectionCallbacks === null && _token !== _config.token) {
-          return _retry(null);
+        if (_connectionCallbacks === null && token !== _config.token) {
+          return _retry(undefined);
         }
         if (_connectionCallbacks === null) {
-          log(`SWIFT Storage | Index "${_config.activeStorage}" region "${_config.storages[_config.activeStorage]?.region}" try reconnect...`, 'info', { event: 'storage_reconnect', storage: 'swift', index: _config.activeStorage, region: _config.storages[_config.activeStorage]?.region, method, path: _fields.path, status: 401 });
+          log(`SWIFT Storage | Index "${index}" region "${_region}" try reconnect...`, 'info', { event: 'storage_reconnect', storage: 'swift', index, region: _region, method, path: _fields.path, status: 401 });
         }
-        return sharedConnection(_retry, _originStorage, _failure);
+        /** A single authentication shared by the parallel requests: the retry follows the active storage, if it fails over meanwhile */
+        return sharedConnection((err) => (err ? callback(err) : _retry(undefined)), index, _failure);
       }
-      return _isStreamOutput === true ? callback(null, res) : callback(null, { headers : res.headers, statusCode: res.statusCode, body : body });
+      /** The storage answered: the failures of the active storage are reset */
+      _failures.success(_generation);
+      return callback(null, _response(res, body));
+    };
+    /** Response returned to the caller: the raw response of a stream written into the caller's stream, else { headers, statusCode, body } */
+    const _response = (res, body) => {
+      if (_stream !== null && _stream.body === null) {
+        return res;
+      }
+      /** A response diverted from the caller's stream: a JSON body is parsed */
+      if (_stream !== null && res.headers?.['content-type']?.includes('application/json') === true) {
+        try {
+          body = JSON.parse(body.toString());
+        } catch {
+          /** Returned as a Buffer */
+        }
+      }
+      return { headers : res.headers, statusCode: res.statusCode, body : body };
     };
     try {
       const _urlParams = getUrlParameters(options?.queries ?? '', options?.defaultQueries ?? '');
 
       /**
-       * Return a bucket name based on an alias and current active storage.
+       * Return a bucket name based on an alias and the storage of this attempt.
        * If the alias does not exist, the alias is returned as bucket name
        */
       let _body = options?.body;
-      const _activeBucket = _config.storages[_config.activeStorage]?.buckets?.[options?.alias] ?? options?.alias;
+      const _activeBucket = storage?.buckets?.[options?.alias] ?? options?.alias;
       if (_activeBucket !== options?.alias) {
         _path = _path.replace(options?.alias, _activeBucket);
         /** The bulk-delete body lists the container of every file, only a String body can be remapped */
@@ -557,20 +633,22 @@ module.exports = (config) => {
 
       const _requestOptions = {
         timeout: _config.timeout,
-        output: _isStreamOutput ? finalOutput(options.output, _isRetried) : null, /** Handle Streams */
+        output: _stream?.output ?? null, /** Handle Streams */
         /** Rock-req Options: they cannot override the URL, the method, the body or the auth token below (a dropped token would loop on 401) */
         ...(options?.requestOptions ? options?.requestOptions : {}),
-        url     : `${_config.endpoints.url}${_path}${_urlParams}`,
+        /** The token is never sent elsewhere: a 3xx is returned */
+        followRedirects: false,
+        url     : `${endpointUrl}${_path}${_urlParams}`,
         method  : method,
         headers : {
           ...options?.requestOptions?.headers,
-          'X-Auth-Token' : _config.token,
+          'X-Auth-Token' : token,
           Accept         : 'application/json',
           ...(options?.headers ? options?.headers : {})
         },
         ...(_body ? { body: _body } : {}),
       };
-      return _isStreamOutput === true ? rock(_requestOptions, _requestCallback) : rock.concat(_requestOptions, _requestCallback);
+      return rock(_requestOptions, _requestCallback);
     } catch (err) {
       /** Thrown by the callback (caller code): not swallowed, never called twice */
       if (_responded === true) {
@@ -598,13 +676,17 @@ module.exports = (config) => {
       if (typeof _storages[i]?.username !== 'string' || typeof _storages[i]?.password !== 'string' || typeof _storages[i]?.authUrl !== 'string') {
         throw new Error("Swift Storage credentials not correct or missing - did you provide correct credentials?");
       }
+      checkMaxThrottleRetry(_storages[i], 'Swift');
     }
     _storagesVersion++;
-    _probeDelay = PROBE_DELAY_MIN;
+    _probe = probeSchedule();
+    _failures.reset();
+    _spareAuth = new Map();
     _config.token = '';
     _config.endpoints = {};
     _config.activeStorage = 0;
-    _config.storages = _storages;
+    /** A copy: a later change of the caller's array does not change the storages */
+    _config.storages = [..._storages];
   }
 
   /**
@@ -671,18 +753,7 @@ module.exports = (config) => {
     const _callbacks = _connectionCallbacks = [callback];
     const _done = (err) => {
       _connectionCallbacks = null;
-      let _error = null;
-      for (let i = 0; i < _callbacks.length; i++) {
-        /** An exception of one caller must not strand the other waiting requests: the first one is rethrown after all are called */
-        try {
-          _callbacks[i](err);
-        } catch (e) {
-          _error = _error ?? { e };
-        }
-      }
-      if (_error !== null) {
-        throw _error.e;
-      }
+      callAll(_callbacks, err);
     };
     try {
       connection(_done, originStorage, failure);
@@ -695,15 +766,63 @@ module.exports = (config) => {
     }
   }
 
-  /** Switch to the next storage, unless a parallel request already did. The token and endpoint of the failing storage are cleared */
-  function activateFallbackStorage(originStorage) {
-    if (originStorage === _config.activeStorage && _config.activeStorage + 1 <= _config.storages.length) {
-      log(`SWIFT Storage | Activate fallback storage: switch from "${_config.activeStorage}" to "${_config.activeStorage + 1}"`, 'warning', { event: 'storage_fallback', storage: 'swift', from: _config.activeStorage, to: _config.activeStorage + 1 });
-      _config.activeStorage += 1;
+  /**
+   * Authenticate on a storage which is not the active one, without changing the state of the client. Its token is kept for
+   * the next requests sent to this storage. A single authentication at a time per storage, shared by the parallel requests
+   *
+   * @param {Object} storage credentials, the key of its token
+   * @param {Function} callback (failure, { token, endpoints }) => {} `failure` { message, statusCode, error } is null on success
+   */
+  function spareConnection (storage, callback) {
+    const _entry = _spareAuth.get(storage);
+    if (_entry?.token !== undefined) {
+      return callback(null, _entry);
+    }
+    if (_entry !== undefined) {
+      return _entry.callbacks.push(callback);
+    }
+    /** setStorages() replaces the map: a result arriving after it is not kept */
+    const _auths = _spareAuth;
+    const _pending = { callbacks: [callback] };
+    _auths.set(storage, _pending);
+    let _called = false;
+    const _done = (failure, token, endpoints) => {
+      _called = true;
+      const _auth = failure ? null : { token, endpoints };
+      if (_auth === null) {
+        _auths.delete(storage);
+      } else {
+        _auths.set(storage, _auth);
+      }
+      callAll(_pending.callbacks, failure, _auth);
+    };
+    try {
+      authenticate(storage, _done);
+    } catch (err) {
+      /** Already done: the exception comes from a callback of the caller, it is not swallowed */
+      if (_called === true) {
+        throw err;
+      }
+      _done({ message: `Action "connection" ${err.toString()}`, error: err });
+    }
+  }
+
+  /**
+   * Switch to the next storage, unless a parallel request already did: after the last storage, the main storage is active again.
+   * The token and endpoint of the failing storage are cleared. `silent`: no log, all the storages failed (logged by the caller)
+   */
+  function activateFallbackStorage(originStorage, silent) {
+    if (originStorage === _config.activeStorage) {
+      const _to = originStorage + 1 < _config.storages.length ? originStorage + 1 : 0;
+      if (silent !== true) {
+        log(`SWIFT Storage | Activate fallback storage: switch from "${originStorage}" to "${_to}"`, 'warning', { event: 'storage_fallback', storage: 'swift', from: originStorage, to: _to });
+      }
+      _config.activeStorage = _to;
       _config.token = '';
       _config.endpoints = {};
+      _failures.reset();
       /** The main storage has just failed: the first probe is sent after the probe delay */
-      _probeAt = Date.now();
+      _probe.at = Date.now();
     }
   }
 
@@ -714,9 +833,8 @@ module.exports = (config) => {
    * Never returns an error to a caller and never throws: a failure is logged and doubles the delay of the next probe.
    */
   function probeMainStorage () {
-    _probing = true;
-    _probeAt = Date.now();
-    const _version = _storagesVersion;
+    const _schedule = _probe;
+    _schedule.start();
     const _from = _config.activeStorage;
     const _storage = _config.storages[0];
     let _done = false;
@@ -725,20 +843,19 @@ module.exports = (config) => {
         return;
       }
       _done = true;
-      _probing = false;
+      _schedule.end(!failure);
       /** Discarded if setStorages() was called, or if the state changed meanwhile (an authentication in progress, another failover) */
-      if (_version !== _storagesVersion) {
+      if (_schedule !== _probe) {
         return;
       }
       if (failure) {
-        _probeDelay = Math.min(_probeDelay * 2, PROBE_DELAY_MAX);
-        return log(`SWIFT Storage | Index "0" region "${_storage.region}" main storage still not available, next check in ${_probeDelay / 1000}s | ${failure.message}`, 'info', { event: 'storage_main_unavailable', storage: 'swift', index: 0, region: _storage.region, ...failureFields(failure) });
+        return log(`SWIFT Storage | Index "0" region "${_storage.region}" main storage still not available, next check in ${_schedule.delay / 1000}s | ${failure.message}`, 'info', { event: 'storage_main_unavailable', storage: 'swift', index: 0, region: _storage.region, ...failureFields(failure) });
       }
       if (_connectionCallbacks !== null || _config.activeStorage !== _from) {
         return;
       }
-      _probeDelay = PROBE_DELAY_MIN;
       _config.activeStorage = 0;
+      _failures.reset();
       _config.token = token;
       _config.endpoints = endpoints;
       log(`SWIFT Storage | Main storage available - reconnecting for next requests`, 'info', { event: 'storage_main_restored', storage: 'swift', index: 0, region: _storage.region });
@@ -749,7 +866,7 @@ module.exports = (config) => {
           return _end(failure);
         }
         try {
-          rock.concat({ url: endpoints.url, method: 'HEAD', headers: { 'X-Auth-Token': token }, timeout: _config.timeout }, (err, res) => {
+          rock.concat({ url: endpoints.url, method: 'HEAD', headers: { 'X-Auth-Token': token }, timeout: _config.timeout, followRedirects: false }, (err, res) => {
             if (err || res.statusCode < 200 || res.statusCode >= 300) {
               return _end({ message: `HEAD account | ${err?.toString() ?? `Status ${res.statusCode}`}`, statusCode: res?.statusCode, error: err });
             }

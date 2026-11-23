@@ -33,6 +33,12 @@ describe('Failover', function () {
   describe('S3', function () {
     const urls = ['https://s3-0.failover.test', 'https://s3-1.failover.test', 'https://s3-2.failover.test'];
     let _events = [];
+    const _realNow = Date.now;
+
+    /** The clock (probe delay) is stubbed by some tests: never leaked to the next one */
+    afterEach(function () {
+      Date.now = _realNow;
+    });
 
     /** A new client of `count` storages, the bucket alias "data" is "data-<index>" on each storage */
     function createS3 (count) {
@@ -53,35 +59,66 @@ describe('Failover', function () {
     describe('N=3 storages', function () {
       it('should skip two failing storages and serve the request by the third one', function (done) {
         const _s3 = createS3(3);
-        const _n0 = nock(urls[0]).get('/data-0/file.txt').reply(500).get('/').reply(500);
+        /** A 5xx is sent once (not retried by rock-req nor by the client), then the request moves on to the next storage */
+        const _n0 = nock(urls[0]).get('/data-0/file.txt').reply(500);
+        const _probe = nock(urls[0]).get('/').reply(200);
         const _n1 = nock(urls[1]).get('/data-1/file.txt').reply(500);
         const _n2 = nock(urls[2]).get('/data-2/file.txt').reply(200, 'third');
         _s3.downloadFile('data', 'file.txt', (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.body.toString(), 'third');
-          assert.strictEqual(_s3.getConfig().activeStorage, 2);
-          assert.ok(_n1.isDone() && _n2.isDone());
-          assert.deepStrictEqual(_events.filter(e => e === 'storage_fallback').length, 2);
-          /** The health check of the main storage runs in the background */
+          assert.ok(_n0.isDone() && _n1.isDone() && _n2.isDone());
+          assert.deepStrictEqual(_events, ['storage_request_failed', 'storage_request_failed']);
+          /** A single failure of the active storage: below the threshold (3 consecutive failures), the active storage is unchanged */
+          assert.strictEqual(_s3.getConfig().activeStorage, 0);
+          /** No health check while the main storage is active */
           setTimeout(() => {
-            assert.ok(_n0.isDone());
-            assert.strictEqual(_s3.getConfig().activeStorage, 2);
+            assert.strictEqual(_probe.isDone(), false);
+            assert.strictEqual(_s3.getConfig().activeStorage, 0);
             done();
           }, 50);
         });
       });
 
-      it('should return an error if all storages fail, request each storage once (no loop) and reset the active storage to the main', function (done) {
+      it('should skip two unreachable storages (network error) and activate the third one at once', function (done) {
+        const _s3 = createS3(3);
+        /** A network error is retried once by rock-req, then the storage is down: immediate switch, no retry by the client */
+        const _n0 = nock(urls[0]).get('/data-0/file.txt').times(rockAttempts()).replyWithError(networkError('ECONNREFUSED'));
+        const _n1 = nock(urls[1]).get('/data-1/file.txt').times(rockAttempts()).replyWithError(networkError('ECONNREFUSED'));
+        const _n2 = nock(urls[2]).get('/data-2/file.txt').reply(200, 'third');
+        /** Each switch probes the main storage at once, in the background (one probe in flight, so one or two probes): still down */
+        let _probes = 0;
+        nock(urls[0]).get('/').times(2).reply(() => { _probes++; return [500]; });
+        _s3.downloadFile('data', 'file.txt', (err, resp) => {
+          assert.strictEqual(err, null);
+          assert.strictEqual(resp.body.toString(), 'third');
+          assert.ok(_n0.isDone() && _n1.isDone() && _n2.isDone());
+          assert.strictEqual(_s3.getConfig().activeStorage, 2);
+          assert.deepStrictEqual(_events.filter(e => e !== 'storage_main_unavailable'), ['storage_fallback', 'storage_fallback']);
+          setTimeout(() => {
+            assert.ok(_probes >= 1 && _probes <= 2, `${_probes} probes`);
+            assert.strictEqual(_events.filter(e => e === 'storage_main_unavailable').length, _probes);
+            assert.strictEqual(_s3.getConfig().activeStorage, 2);
+            done();
+          }, 400);
+        });
+      });
+
+      /** The active storage is not reset to the main anymore when no storage is left: it is switched only by consecutive failures */
+      it('should return an error if all storages fail, request each storage once (no loop), the next request starts on the active storage', function (done) {
         const _s3 = createS3(3);
         let _hits = [0, 0, 0];
         nock(urls[0]).get('/data-0/file.txt').times(5).reply(() => { _hits[0]++; return [500]; });
-        nock(urls[0]).get('/').times(5).reply(500);
         nock(urls[1]).get('/data-1/file.txt').times(5).reply(() => { _hits[1]++; return [500]; });
-        nock(urls[2]).get('/data-2/file.txt').times(5).reply(() => { _hits[2]++; return [502]; });
+        nock(urls[2]).get('/data-2/file.txt').times(5).reply(() => { _hits[2]++; return [502, '<Error><Code>BadGateway</Code></Error>', { 'content-type': 'application/xml' }]; });
         _s3.downloadFile('data', 'file.txt', (err) => {
           assert.strictEqual(err.message, 'All S3 storages are not available');
           assert.strictEqual(err.storageStatusCode, 502);
+          assert.strictEqual(err.code, 'BadGateway');
+          /** Each storage once: a 500 is not retried, a 502 is retried once by rock-req only */
           assert.deepStrictEqual(_hits, [1, 1, rockAttempts()]);
+          assert.strictEqual(_events.filter(e => e === 'storage_unavailable').length, 1);
+          assert.strictEqual(_events.includes('storage_fallback'), false);
           assert.strictEqual(_s3.getConfig().activeStorage, 0);
           /** Next request starts again on the main storage */
           _hits = [0, 0, 0];
@@ -98,9 +135,10 @@ describe('Failover', function () {
 
       it('should switch a single time when parallel requests fail on the main storage (no double increment)', function (done) {
         const _s3 = createS3(3);
-        nock(urls[0]).get('/data-0/file.txt').times(3).reply(500).get('/').reply(500);
-        const _n1 = nock(urls[1]).get('/data-1/file.txt').times(3).reply(200, 'second');
-        Promise.all([download(_s3), download(_s3), download(_s3)]).then((results) => {
+        /** 5 parallel requests, 1 attempt each on the main storage: the 3rd failure switches, the next ones do not count anymore */
+        nock(urls[0]).get('/data-0/file.txt').times(5).reply(500);
+        const _n1 = nock(urls[1]).get('/data-1/file.txt').times(5).reply(200, 'second');
+        Promise.all([download(_s3), download(_s3), download(_s3), download(_s3), download(_s3)]).then((results) => {
           for (const { err, resp } of results) {
             assert.strictEqual(err, null);
             assert.strictEqual(resp.body.toString(), 'second');
@@ -134,6 +172,9 @@ describe('Failover', function () {
       });
 
       it('should spare a single attempt per request when the main storage flaps (health check OK, requests failing)', function (done) {
+        /** The probe runs at most every 60 s: the clock moves 5 s at each reading, the probe restores the main storage many times during the test */
+        let _clock = _realNow();
+        Date.now = () => (_clock += 5000);
         const _s3 = createS3(2);
         const _attempts = {};
         let _n = 0;
@@ -152,7 +193,7 @@ describe('Failover', function () {
             assert.strictEqual(err.message, 'All S3 storages are not available');
           }
           assert.ok(_events.filter((e) => e === 'storage_main_restored').length > 1);
-          /** One attempt per storage, plus one on the main storage if restored meanwhile: 3 at most. Without the limit: up to ~60 */
+          /** One attempt per storage, plus one on the main storage if restored meanwhile: 3 at most. Without the limit: unbounded (a request loops between the storages) */
           assert.ok(Math.max(...Object.values(_attempts)) <= 3, JSON.stringify(_attempts));
           setTimeout(() => {
             assert.ok(_calls.every((c) => c === 1));
@@ -161,37 +202,58 @@ describe('Failover', function () {
         }).catch(done);
       });
 
-      it('should stay on the fallback if the health check fails, and check again on the next request', function (done) {
+      /** The health check is not sent by every request anymore: a failed probe doubles the delay before the next one (60 s, then 120 s) */
+      it('should stay on the fallback if the health check fails, and check again after the doubled probe delay', function (done) {
+        let _now = _realNow();
+        Date.now = () => _now;
         const _s3 = createS3(2);
         _s3.getConfig().activeStorage = 1;
-        nock(urls[0]).get('/').reply(500).get('/').reply(200, '<ListAllMyBucketsResult></ListAllMyBucketsResult>');
-        nock(urls[1]).get('/data-1/file.txt').times(2).reply(200, 'second');
-        download(_s3).then(() => {
-          setTimeout(() => {
-            assert.strictEqual(_s3.getConfig().activeStorage, 1);
-            download(_s3).then(({ resp }) => {
-              assert.strictEqual(resp.body.toString(), 'second');
-              setTimeout(() => {
-                assert.strictEqual(_s3.getConfig().activeStorage, 0);
-                done();
-              }, 50);
-            });
-          }, 50);
-        });
+        let _checks = 0;
+        nock(urls[0]).get('/').reply(() => { _checks++; return [500]; }).get('/').reply(() => { _checks++; return [200, '<ListAllMyBucketsResult></ListAllMyBucketsResult>']; });
+        nock(urls[1]).get('/data-1/file.txt').times(3).reply(200, 'second');
+        const _wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+        download(_s3).then(() => _wait(50)).then(() => {
+          assert.strictEqual(_checks, 1);
+          assert.strictEqual(_s3.getConfig().activeStorage, 1);
+          assert.ok(_events.includes('storage_main_unavailable'));
+          /** 60 s later: the delay is now 120 s, no health check */
+          _now += 60000;
+          return download(_s3);
+        }).then(({ resp }) => {
+          assert.strictEqual(resp.body.toString(), 'second');
+          return _wait(50);
+        }).then(() => {
+          assert.strictEqual(_checks, 1);
+          assert.strictEqual(_s3.getConfig().activeStorage, 1);
+          _now += 60000;
+          return download(_s3);
+        }).then(({ resp }) => {
+          /** The request starting the health check is served by the fallback */
+          assert.strictEqual(resp.body.toString(), 'second');
+          return _wait(50);
+        }).then(() => {
+          assert.strictEqual(_checks, 2);
+          assert.strictEqual(_s3.getConfig().activeStorage, 0);
+          assert.ok(_events.includes('storage_main_restored'));
+          done();
+        }).catch(done);
       });
 
-      it('should not send a health check for a request with "requestStorageIndex"', function (done) {
+      /** The probe is a background check of the client (not a request() anymore): a request with "requestStorageIndex" also starts it, and stays on its storage */
+      it('should send the health check in the background for a request with "requestStorageIndex", the request stays on its storage', function (done) {
         const _s3 = createS3(2);
         _s3.getConfig().activeStorage = 1;
         let _checks = 0;
         nock(urls[0]).get('/').times(5).reply(() => { _checks++; return [200]; });
+        const _main = nock(urls[0]).get('/data-0/file.txt').reply(200, 'main');
         nock(urls[1]).get('/data-1/file.txt').reply(200, 'second');
         _s3.downloadFile('data', 'file.txt', { requestStorageIndex: 1 }, (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.body.toString(), 'second');
           setTimeout(() => {
-            assert.strictEqual(_checks, 0);
-            assert.strictEqual(_s3.getConfig().activeStorage, 1);
+            assert.strictEqual(_checks, 1);
+            assert.strictEqual(_main.isDone(), false);
+            assert.strictEqual(_s3.getConfig().activeStorage, 0);
             done();
           }, 50);
         });
@@ -253,23 +315,28 @@ describe('Failover', function () {
         download(_s3).then(({ err }) => {
           assert.strictEqual(err.message, 'All S3 storages are not available');
           assert.strictEqual(_mainData, 0);
-          assert.strictEqual(_s3.getConfig().activeStorage, 0);
+          /** A single failure of the active storage (below the threshold): the active storage is not reset to the main anymore */
+          assert.strictEqual(_s3.getConfig().activeStorage, 1);
           done();
         }).catch(done);
       });
     });
 
     describe('rock-req retry before the failover', function () {
+      /** A 503 without a "slow down" code is a server error: retried once by rock-req (its defaults), never by the client, then the next storage */
       it('should let rock-req retry a 503 of the main storage once, then fail over', function (done) {
         const _s3 = createS3(2);
         let _main = 0;
-        nock(urls[0]).get('/data-0/file.txt').times(5).reply(() => { _main++; return [503]; });
-        nock(urls[0]).get('/').reply(500);
+        nock(urls[0]).get('/data-0/file.txt').times(5).reply(() => { _main++; return [503, '<Error><Code>ServiceUnavailable</Code></Error>', { 'content-type': 'application/xml' }]; });
         nock(urls[1]).get('/data-1/file.txt').reply(200, 'second');
         download(_s3).then(({ err, resp }) => {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.body.toString(), 'second');
           assert.strictEqual(_main, rockAttempts());
+          /** A single failure of the active storage: below the threshold, the active storage is unchanged */
+          assert.deepStrictEqual(_events, ['storage_request_failed']);
+          assert.strictEqual(_s3.getConfig().activeStorage, 0);
+          assert.deepStrictEqual(rock.defaults.retryOnCode.includes(503), true, 'the global defaults of rock-req are unchanged');
           done();
         }).catch(done);
       });
@@ -296,7 +363,7 @@ describe('Failover', function () {
        */
       it('[BUG] setFileMetadata should send the bucket of the fallback storage in "x-amz-copy-source" after a failover', function (done) {
         const _s3 = createS3(2);
-        nock(urls[0]).put('/data-0/file.pdf').reply(500).get('/').reply(500);
+        nock(urls[0]).put('/data-0/file.pdf').reply(500);
         let _copySource = null;
         nock(urls[1]).put('/data-1/file.pdf').reply(function () {
           _copySource = this.req.headers['x-amz-copy-source'];
@@ -313,7 +380,7 @@ describe('Failover', function () {
 
       it('should upload into the bucket alias of the fallback storage', function (done) {
         const _s3 = createS3(2);
-        nock(urls[0]).put('/data-0/file.txt').reply(500).get('/').reply(500);
+        nock(urls[0]).put('/data-0/file.txt').reply(500);
         const _n1 = nock(urls[1]).put('/data-1/file.txt', 'content').reply(200);
         _s3.uploadFile('data', 'file.txt', Buffer.from('content'), (err, resp) => {
           assert.strictEqual(err, null);
@@ -330,7 +397,7 @@ describe('Failover', function () {
        */
       it('[RISK] a stream download should not write the error body of the failing storage into an output stream', function (done) {
         const _s3 = createS3(2);
-        nock(urls[0]).get('/data-0/file.txt').reply(500, 'Internal Error').get('/').reply(500);
+        nock(urls[0]).get('/data-0/file.txt').reply(500, 'Internal Error');
         nock(urls[1]).get('/data-1/file.txt').reply(200, 'content');
         let _written = '';
         let _outputs = 0;
@@ -529,6 +596,7 @@ describe('Failover', function () {
       it('should remap the container alias of the bulk-delete body on the fallback storage', function (done) {
         const _swift = createSwift(2);
         authOK(0);
+        /** A 5xx is sent once, then the request is sent to the next storage */
         nock(endpoints[0]).post('/?bulk-delete').reply(500);
         authOK(1);
         const _r1 = nock(endpoints[1]).post('/?bulk-delete', 'data-1/file1.txt\ndata-1/file2.txt\n').reply(200, { 'Number Deleted': 2 }, { 'content-type': 'application/json' });
@@ -555,6 +623,7 @@ describe('Failover', function () {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 201);
           assert.ok(_r1.isDone());
+          /** A new stream for each attempt: main storage, fallback storage */
           assert.strictEqual(_bodies, 2);
           done();
         });
@@ -575,9 +644,10 @@ describe('Failover', function () {
         return Promise.all(_calls.map((x, i) => new Promise((resolve) => client.downloadFile('data', 'file.txt', (err, resp) => { _calls[i]++; resolve({ err, resp }); })))).then((results) => ({ results, calls: _calls }));
       }
 
-      it('50 parallel requests failing with a 500 on the main storage share a single authentication on the fallback', function (done) {
+      it('50 parallel requests failing with a 500 on the main storage share the authentications on the fallback (not one per request)', function (done) {
         const _swift = createSwift(2);
-        authOK(0);
+        let _auth0 = 0;
+        nock(auths[0]).post('/auth/tokens').times(50).reply(() => { _auth0++; return [200, catalog('GRA'), { 'X-Subject-Token': 'token-0' }]; });
         nock(endpoints[0]).get('/data-0/file.txt').times(50).reply(500);
         let _auth1 = 0;
         nock(auths[1]).post('/auth/tokens').times(50).reply(() => { _auth1++; return [200, catalog('SBG'), { 'X-Subject-Token': 'token-1' }]; });
@@ -587,15 +657,31 @@ describe('Failover', function () {
             assert.strictEqual(err, null);
             assert.strictEqual(resp.body.toString(), 'second');
           }
-          assert.strictEqual(_auth1, 1);
+          /**
+           * Not one authentication per request: one shared by the requests sent to the fallback while the main storage is
+           * still active (below the threshold of 3 consecutive failures), one when the fallback is activated
+           */
+          assert.strictEqual(_auth1, 2);
+          assert.strictEqual(_auth0, 1);
           assert.strictEqual(_events.filter(e => e === 'storage_fallback').length, 1);
           assert.strictEqual(_swift.getConfig().activeStorage, 1);
           done();
         }).catch(done);
       });
 
-      it('50 parallel requests with every storage answering 500: one authentication per storage, each callback once with the error, then the main storage again', function (done) {
+      /**
+       * The active storage is switched after 3 consecutive failures. Each storage is authenticated once per activation, plus once
+       * for the requests sent to it while it is not the active one (token kept): not once per request
+       */
+      it('50 parallel requests with every storage answering 500: one authentication per storage activation, each callback once with the error, then the main storage again', function (done) {
         const _swift = createSwift(2);
+        const _switches = [];
+        _swift.setLogFunction((message, level, fields) => {
+          _events.push(fields?.event);
+          if (fields?.event === 'storage_fallback') {
+            _switches.push(fields.from);
+          }
+        });
         const _auths = [0, 0];
         nock(auths[0]).post('/auth/tokens').times(50).reply(() => { _auths[0]++; return [200, catalog('GRA'), { 'X-Subject-Token': 'token-0' }]; });
         nock(auths[1]).post('/auth/tokens').times(50).reply(() => { _auths[1]++; return [200, catalog('SBG'), { 'X-Subject-Token': 'token-1' }]; });
@@ -606,7 +692,12 @@ describe('Failover', function () {
             assert.strictEqual(err.message, 'Object Storages are not available');
             assert.strictEqual(err.storageStatusCode, 500);
           }
-          assert.deepStrictEqual(_auths, [1, 1]);
+          /**
+           * A single switch per storage: the failures of the requests sent before a switch are not counted again. One authentication
+           * on the main storage, two on the fallback: one shared by the requests sent to it below the threshold, one when it is activated
+           */
+          assert.deepStrictEqual(_switches, [0, 1]);
+          assert.deepStrictEqual(_auths, [1, 2]);
           assert.ok(calls.every(c => c === 1));
           assert.strictEqual(_swift.getConfig().activeStorage, 0);
           assert.strictEqual(_swift.getConfig().token, '');
@@ -622,10 +713,15 @@ describe('Failover', function () {
       });
 
       it('a fallback authentication finishing after the "all down" reset never writes the endpoint of the fallback while the main storage is active', function (done) {
-        /** Request A fails on the main and on the fallback authentication (500), request B joins the second, slow, fallback authentication */
+        /**
+         * Request A fails on the main and on the fallback authentication (500), request B joins the second, slow, fallback authentication.
+         * The main storage fails with a network error not retried by rock-req (EPROTO): immediate switch, both requests fail at the same time.
+         * A 5xx would switch only after 3 consecutive failures
+         */
         const _swift = createSwift(2);
         authOK(0);
-        nock(endpoints[0]).get(/^\/data-0\/[AB]$/).times(2).reply(500);
+        /** The regular expression is matched against the whole path, the account path of the endpoint included */
+        nock(endpoints[0]).get(/^\/v1\/AUTH_x\/data-0\/[AB]$/).times(2).replyWithError(networkError('EPROTO'));
         nock(auths[1]).post('/auth/tokens').reply(500);
         nock(auths[1]).post('/auth/tokens').times(5).delay(50).reply(200, catalog('SBG'), { 'X-Subject-Token': 'token-1' });
         const _fallbackHits = [];
@@ -816,7 +912,8 @@ describe('Failover', function () {
           await sleep(10);
           assert.strictEqual(_swift.getConfig().activeStorage, 0);
           _up = false;
-          nock(endpoints[0]).get('/data-0/file.txt').reply(500);
+          /** Unreachable (network error, retried once by rock-req): immediate failover. A 5xx would need 3 consecutive failures */
+          nock(endpoints[0]).get('/data-0/file.txt').times(rockAttempts()).replyWithError(networkError('ECONNRESET'));
           authOK(1);
           assert.strictEqual((await download(_swift)).resp.body.toString(), 'second');
           assert.strictEqual(_swift.getConfig().activeStorage, 1);
@@ -1099,7 +1196,11 @@ describe('Failover', function () {
         const _swift = createSwift(2);
         nock(auths[0]).post('/auth/tokens').reply(500);
         authOK(1);
-        nock(endpoints[1]).get('/data-1/file.txt').reply(500);
+        /**
+         * The last storage is unreachable (network error, retried once by rock-req): immediate switch past the last storage,
+         * the main storage is active again. A single 5xx would not switch (threshold of 3 consecutive failures)
+         */
+        nock(endpoints[1]).get('/data-1/file.txt').times(rockAttempts()).replyWithError(networkError('ECONNRESET'));
         download(_swift).then(({ err }) => {
           assert.strictEqual(err.message, 'Object Storages are not available');
           assert.strictEqual(_swift.getConfig().activeStorage, 0);
@@ -1142,7 +1243,7 @@ describe('Failover', function () {
        * RISK (swift.js:492): parallel requests failing with a 5xx call connection() directly (not sharedConnection),
        * each one authenticates on the fallback storage: N failed requests = N authentications (Keystone rate limits).
        */
-      it('[RISK] parallel requests failing on the main storage should share a single authentication on the fallback', function (done) {
+      it('[RISK] parallel requests failing on the main storage should share the authentications on the fallback (not one per request)', function (done) {
         const _swift = createSwift(2);
         authOK(0);
         nock(endpoints[0]).get('/data-0/file.txt').times(3).reply(500);
@@ -1153,7 +1254,9 @@ describe('Failover', function () {
           for (const { resp } of results) {
             assert.strictEqual(resp.body.toString(), 'second');
           }
-          assert.strictEqual(_auth1, 1);
+          /** One authentication shared by the requests sent to the fallback below the threshold, one when the 3rd failure activates it */
+          assert.strictEqual(_auth1, 2);
+          assert.strictEqual(_events.filter(e => e === 'storage_fallback').length, 1);
           done();
         }).catch(done);
       });

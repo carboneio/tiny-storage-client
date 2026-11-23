@@ -7,6 +7,8 @@ const storageSDK = (config) => require('../index.js')(config);
 
 /**
  * Return the source of every `log(...)` call (definitions excluded). Skips strings and template literals, `${}` included.
+ * The braces of the code are tracked ('{' on the stack): the `}` of an object literal inside a `${}` (such as
+ * `${failureToString({ statusCode: _status })}`) does not close the `${}`.
  */
 function logCalls (source) {
   const calls = [];
@@ -20,14 +22,15 @@ function logCalls (source) {
     for (; i < source.length; i++) {
       const c = source[i];
       const top = quotes[quotes.length - 1];
-      if (top !== undefined && top !== '}') {
+      if (top !== undefined && top !== '}' && top !== '{') {
         if (c === '\\') i++;
         else if (c === top) quotes.pop();
         else if (top === '`' && c === '$' && source[i + 1] === '{') { quotes.push('}'); i++; }
         continue;
       }
       if (c === '\'' || c === '"' || c === '`') quotes.push(c);
-      else if (c === '}' && top === '}') quotes.pop();
+      else if (c === '{') quotes.push('{');
+      else if (c === '}' && (top === '}' || top === '{')) quotes.pop();
       else if (c === '(') depth++;
       else if (c === ')' && --depth === 0) break;
     }
@@ -96,6 +99,7 @@ describe('log', function () {
         .post('/auth/tokens').reply(200, catalog, { 'X-Subject-Token': SECRET_TOKEN });
       nock(swiftSBG)
         .get('/templates').query(true).reply(401)
+        /** A 500 is sent once (never retried on the same storage) */
         .get('/templates').query(true).reply(500);
       swift.listFiles('templates', { queries: { prefix: 'a', temp_url_sig: 'signature' } }, (err) => {
         assert.strictEqual(err.message, 'Object Storages are not available');
@@ -104,13 +108,16 @@ describe('log', function () {
         assert.deepStrictEqual(events, [
           'storage_connecting', 'storage_connection_failed', 'storage_fallback', 'storage_connecting', 'storage_connected',
           'storage_reconnect', 'storage_connecting', 'storage_connected',
-          'storage_request_failed', 'storage_fallback', 'storage_unavailable'
+          /** The last storage failed (below the threshold of 3 consecutive failures): no switch, no storage left */
+          'storage_request_failed', 'storage_unavailable'
         ]);
         assert.deepStrictEqual(logs[1].fields, { event: 'storage_connection_failed', storage: 'swift', index: 0, region: 'GRA', status: 500, code: undefined });
         assert.deepStrictEqual(logs[2].fields, { event: 'storage_fallback', storage: 'swift', from: 0, to: 1 });
         assert.deepStrictEqual(logs[5].fields, { event: 'storage_reconnect', storage: 'swift', index: 1, region: 'SBG', method: 'GET', path: '/templates', status: 401 });
         assert.deepStrictEqual(logs[8].fields, { event: 'storage_request_failed', storage: 'swift', index: 1, region: 'SBG', method: 'GET', path: '/templates', status: 500, code: undefined });
-        assert.strictEqual(logs[10].fields.status, 500);
+        assert.strictEqual(logs[8].level, 'error');
+        assert.deepStrictEqual(logs[9].fields, { event: 'storage_unavailable', storage: 'swift', status: 500, code: undefined });
+        assert.strictEqual(logs[9].level, 'error');
         done();
       });
     });
@@ -135,18 +142,35 @@ describe('log', function () {
       const logs = [];
       const s3 = storageSDK(s3Storages);
       s3.setLogFunction((message, level, fields) => logs.push({ message, level, fields }));
-      nock('https://s3.gra.log.test').get('/bucket/file.txt').query(true).times(2).reply(500);
+      /** A network error (retried once by rock-req) switches the active storage at once */
+      const _err = new Error('read ECONNRESET');
+      _err.code = 'ECONNRESET';
+      nock('https://s3.gra.log.test').get('/bucket/file.txt').query(true).times(2).replyWithError(_err);
+      /** A 503 without throttle code is a server error: retried once by rock-req (never by the client on the same storage), then the request is sent to the next storage: none is left */
       nock('https://s3.de.log.test').get('/bucket/file.txt').query(true).times(2).reply(503);
+      /** The switch probes the main storage at once, in the background: still down */
+      nock('https://s3.gra.log.test').get('/').reply(500);
       s3.downloadFile('bucket', 'file.txt', { queries: { 'X-Amz-Signature': 'signature' } }, (err) => {
         assert.strictEqual(err.message, 'All S3 storages are not available');
         s3.request('GET', '/', { requestStorageIndex: 5 }, (err) => {
           assert.strictEqual(err.message, 'S3 storage index "5" does not exist');
-          assertFields(logs);
-          assert.deepStrictEqual(logs.map((l) => l.fields.event), ['storage_fallback', 'storage_fallback', 'storage_unavailable', 'storage_index_invalid']);
-          assert.deepStrictEqual(logs[0].fields, { event: 'storage_fallback', storage: 's3', index: 0, region: 'gra', method: 'GET', path: '/bucket/file.txt', status: 500, code: undefined, from: 0, to: 1 });
-          assert.deepStrictEqual(logs[2].fields, { event: 'storage_unavailable', storage: 's3', status: 503, code: undefined });
-          assert.deepStrictEqual(logs[3].fields, { event: 'storage_index_invalid', storage: 's3', index: 5 });
-          done();
+          setTimeout(() => {
+            assertFields(logs);
+            /** The probe ends in the background, whenever: exactly one, checked apart */
+            const _probes = logs.filter((l) => l.fields.event === 'storage_main_unavailable');
+            assert.strictEqual(_probes.length, 1);
+            assert.strictEqual(_probes[0].level, 'info');
+            assert.deepStrictEqual(_probes[0].fields, { event: 'storage_main_unavailable', storage: 's3', index: 0, region: 'gra', status: 500, code: undefined });
+            logs.splice(logs.indexOf(_probes[0]), 1);
+            assert.deepStrictEqual(logs.map((l) => l.fields.event), ['storage_fallback', 'storage_request_failed', 'storage_unavailable', 'storage_index_invalid']);
+            assert.deepStrictEqual(logs.map((l) => l.level), ['warning', 'warning', 'error', 'error']);
+            assert.deepStrictEqual(logs[0].fields, { event: 'storage_fallback', storage: 's3', index: 0, region: 'gra', method: 'GET', path: '/bucket/file.txt', status: undefined, code: 'ECONNRESET', from: 0, to: 1 });
+            assert.deepStrictEqual(logs[1].fields, { event: 'storage_request_failed', storage: 's3', index: 1, region: 'de', method: 'GET', path: '/bucket/file.txt', status: 503, code: undefined });
+            assert.deepStrictEqual(logs[2].fields, { event: 'storage_unavailable', storage: 's3', status: 503, code: undefined });
+            assert.strictEqual(logs[2].message, 'S3 Storage | All storages are not available');
+            assert.deepStrictEqual(logs[3].fields, { event: 'storage_index_invalid', storage: 's3', index: 5 });
+            done();
+          }, 150);
         });
       });
     });

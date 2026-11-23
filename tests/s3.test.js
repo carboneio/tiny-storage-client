@@ -35,6 +35,22 @@ const outputStreamFunction = function () {
   return outputStream;
 };
 
+/** Real clock and random generator: some tests stub them, they are restored after each test */
+const _realNow = Date.now;
+const _realRandom = Math.random;
+
+/**
+ * Call `callback` when `condition()` is true, polling every 5 ms (1 s max), such as the end of a background probe
+ * @param {Function} condition () => Boolean
+ * @param {Function} callback () => {}
+ */
+function waitFor (condition, callback, _tries = 0) {
+  if (condition() === true || _tries >= 200) {
+    return callback();
+  }
+  setTimeout(() => waitFor(condition, callback, _tries + 1), 5);
+}
+
 /** ASSETS for download/upload */
 const fileTxtPath = path.join(__dirname, 'assets', 'file.txt');
 const fileTxt = fs.readFileSync(fileTxtPath).toString();
@@ -65,6 +81,11 @@ describe('S3 SDK', function () {
         invoices : "invoices-de-8888"
       }
     }]);
+  });
+
+  afterEach(function () {
+    Date.now = _realNow;
+    Math.random = _realRandom;
   });
 
   describe('constructor/getConfig/setConfig/setTimeout', function () {
@@ -205,9 +226,9 @@ describe('S3 SDK', function () {
 
     describe("SWITCH TO CHILD STORAGE", function () {
       it('should switch to the child storage and return code 200 with bucket as ALIAS', function (done) {
+        /** A 500 is not retried on the same storage: the request is sent to the child storage */
         const nockRequestS1 = nock(url1S3).intercept("/invoices-gra-1234", "HEAD").reply(500, '');
         const nockRequestS2 = nock(url2S3).intercept("/invoices-de-8888", "HEAD").reply(200, '');
-        const nockRequestS3 = nock(url1S3).get('/').reply(500);
 
         storage.headBucket('invoices', function(err, resp) {
           assert.strictEqual(err, null);
@@ -215,7 +236,8 @@ describe('S3 SDK', function () {
           assert.strictEqual(resp.body.toString(), '');
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
-          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+          /** A single failure does not switch the active storage */
+          assert.strictEqual(storage.getConfig().activeStorage, 0);
           done();
         });
       });
@@ -396,6 +418,7 @@ describe('S3 SDK', function () {
 
     describe("SWITCH TO CHILD STORAGE", function () {
       it('should fetch a list of buckets', function (done) {
+        /** A 500 is not retried on the same storage: the request is sent to the child storage */
         const nockRequestS1 = nock(url1S3)
           .get('/')
           .reply(500, '');
@@ -405,10 +428,6 @@ describe('S3 SDK', function () {
           .reply(200, () => {
             return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><ListAllMyBucketsResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Owner><ID>89123456:user-feiowjfOEIJW</ID><DisplayName>12345678:user-feiowjfOEIJW</DisplayName></Owner><Buckets><Bucket><Name>invoices</Name><CreationDate>2023-02-27T11:46:24.000Z</CreationDate></Bucket><Bucket><Name>www</Name><CreationDate>2023-02-27T11:46:24.000Z</CreationDate></Bucket></Buckets></ListAllMyBucketsResult>";
           });
-
-        const nockRequestS3 = nock(url1S3)
-          .get('/')
-          .reply(500);
 
         storage.listBuckets((err, resp) => {
           assert.strictEqual(err, null);
@@ -422,7 +441,6 @@ describe('S3 SDK', function () {
           assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify({}));
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
-          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
           done();
         });
       });
@@ -431,6 +449,7 @@ describe('S3 SDK', function () {
     describe("Options 'requestStorageIndex'", function() {
 
       it("should request the first storage and should return an error if the first storage is not available", function(done) {
+        /** A 500 is returned at once: no retry on the requested storage, no failover with "requestStorageIndex" */
         const nockRequestS1 = nock(url1S3)
           .get('/')
           .reply(500, '');
@@ -446,6 +465,7 @@ describe('S3 SDK', function () {
       });
 
       it("should request the second storage and should return an error if the second storage is not available", function(done) {
+        /** A 500 is returned at once: no retry on the requested storage, no failover with "requestStorageIndex" */
         const nockRequestS1 = nock(url2S3)
           .get('/')
           .reply(500, '');
@@ -791,6 +811,7 @@ describe('S3 SDK', function () {
 
     describe("SWITCH TO CHILD STORAGE", function () {
       it('should fetch a list of objects', function (done) {
+        /** A 500 is not retried on the same storage: the request is sent to the child storage */
         const nockRequestS1 = nock(url1S3)
           .get('/bucket')
           .query({ 'list-type' : 2 })
@@ -803,10 +824,6 @@ describe('S3 SDK', function () {
             return _listObjectsResponseXML;
           });
 
-        const nockRequestS3 = nock(url1S3)
-          .get('/')
-          .reply(500);
-
         storage.listFiles('bucket', (err, resp) => {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
@@ -814,7 +831,6 @@ describe('S3 SDK', function () {
           assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify({}));
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
-          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
           done();
         });
       });
@@ -1049,10 +1065,19 @@ describe('S3 SDK', function () {
           .get('/bucket/file.docx')
           .reply(404, "<?xml version='1.0' encoding='UTF-8'?><Error><Code>NoSuchKey</Code><Message>The specified key does not exist.</Message><RequestId>txc03d49a36c324653854de-006408d963</RequestId><Key>template222.odt</Key></Error>");
 
-        storage.downloadFile('bucket', 'file.docx', { output: outputStreamFunction }, function (err, resp) {
+        dataStream = '';
+        let _outputCalled = false;
+        const _output = function () {
+          _outputCalled = true;
+          return outputStreamFunction();
+        };
+        storage.downloadFile('bucket', 'file.docx', { output: _output }, function (err, resp) {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 404);
-          assert.strictEqual(JSON.stringify(storage.xmlToJson(dataStream)), JSON.stringify({
+          /** A non-2xx response is never written into the caller's stream: it is buffered and its XML body is returned as JSON */
+          assert.strictEqual(_outputCalled, false);
+          assert.strictEqual(dataStream, '');
+          assert.strictEqual(JSON.stringify(resp.body), JSON.stringify({
             error: {
               code: 'NoSuchKey',
               message: 'The specified key does not exist.',
@@ -1102,6 +1127,7 @@ describe('S3 SDK', function () {
 
     describe("SWITCH TO CHILD STORAGE", function () {
       it('should download a file from the second storage if the main storage returns a 500 error', function(done) {
+        /** A 500 is not retried on the same storage: the request is sent to the second storage */
         const nockRequestS1 = nock(url1S3)
           .get('/bucket/file.docx')
           .reply(500);
@@ -1110,24 +1136,22 @@ describe('S3 SDK', function () {
           .reply(200, () => {
             return fileTxt;
           });
-        const nockRequestS3 = nock(url1S3)
-          .get('/')
-          .reply(500);
 
         storage.downloadFile('bucket', 'file.docx', function (err, resp) {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(resp.body.toString(), fileTxt);
           const _config = storage.getConfig();
-          assert.strictEqual(_config.activeStorage, 1);
+          /** A single failure does not switch the active storage (3 consecutive failures are required) */
+          assert.strictEqual(_config.activeStorage, 0);
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
-          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
           done();
         });
       });
 
       it('should download a file from the second storage if the main storage returns a 500 error and the container is an ALIAS', function(done) {
+        /** A 500 is not retried on the same storage: the request is sent to the second storage */
         const nockRequestS1 = nock(url1S3)
           .get('/invoices-gra-1234/file.docx')
           .reply(500);
@@ -1136,50 +1160,88 @@ describe('S3 SDK', function () {
           .reply(200, () => {
             return fileTxt;
           });
-        const nockRequestS3 = nock(url1S3)
-          .get('/')
-          .reply(500);
 
         storage.downloadFile('invoices', 'file.docx', function (err, resp) {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(resp.body.toString(), fileTxt);
           const _config = storage.getConfig();
-          assert.strictEqual(_config.activeStorage, 1);
+          /** A single failure does not switch the active storage (3 consecutive failures are required) */
+          assert.strictEqual(_config.activeStorage, 0);
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
-          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
           done();
         });
       });
 
       it('should download a file from the second storage if the main storage returns a 500 error, then should RECONNECT to the main storage', function(done) {
+        const _events = [];
+        storage.setLogFunction((msg, level, fields) => { _events.push(fields?.event); });
+        /** 3 requests failing (500, not retried on the same storage) on the main storage: the active storage is switched to the second storage */
         const nockRequestS1 = nock(url1S3)
           .get('/bucket/file.docx')
+          .times(3)
           .reply(500);
         const nockRequestS2 = nock(url2S3)
+          .get('/bucket/file.docx')
+          .times(4)
+          .reply(200, () => {
+            return fileTxt;
+          });
+        /** Probe of the main storage at once after the switch (GET /): it is still not available */
+        const nockRequestProbe = nock(url1S3)
+          .get('/')
+          .reply(500);
+        const nockRequestS3 = nock(url1S3)
+          .get('/')
+          .reply(200);
+        const nockRequestS4 = nock(url1S3)
           .get('/bucket/file.docx')
           .reply(200, () => {
             return fileTxt;
           });
-        const nockRequestS3 = nock(url1S3)
-          .get('/')
-          .reply(200);
+        const _download = () => new Promise((resolve, reject) => {
+          storage.downloadFile('bucket', 'file.docx', (err, resp) => err ? reject(err) : resolve(resp));
+        });
 
-        storage.downloadFile('bucket', 'file.docx', function (err, resp) {
-          assert.strictEqual(err, null);
+        Promise.all([_download(), _download(), _download()]).then((results) => {
+          results.forEach((resp) => {
+            assert.strictEqual(resp.statusCode, 200);
+            assert.strictEqual(resp.body.toString(), fileTxt);
+          });
+          assert.strictEqual(storage.getConfig().activeStorage, 1);
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          return new Promise((resolve) => waitFor(() => _events.includes('storage_main_unavailable'), resolve));
+        }).then(() => {
+          assert.strictEqual(nockRequestProbe.pendingMocks().length, 0);
+          assert.strictEqual(storage.getConfig().activeStorage, 1);
+          /** No other probe of the main storage before the probe delay (60 s): the clock is moved forward */
+          assert.strictEqual(nockRequestS3.isDone(), false);
+          const _now = _realNow();
+          Date.now = () => _now + 60000;
+          /** This request is sent to the second storage, the main storage is probed in the background (GET /) */
+          return _download();
+        }).then((resp) => {
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(resp.body.toString(), fileTxt);
-          const _config = storage.getConfig();
-          assert.strictEqual(_config.activeStorage, 0);
-          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
-          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
-          done();
-        });
+          waitFor(() => storage.getConfig().activeStorage === 0, () => {
+            assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+            assert.strictEqual(storage.getConfig().activeStorage, 0);
+            /** Reconnected: the next request is sent to the main storage */
+            storage.downloadFile('bucket', 'file.docx', function (err, resp) {
+              assert.strictEqual(err, null);
+              assert.strictEqual(resp.statusCode, 200);
+              assert.strictEqual(resp.body.toString(), fileTxt);
+              assert.strictEqual(nockRequestS4.pendingMocks().length, 0);
+              done();
+            });
+          });
+        }).catch(done);
       });
 
       it('should download a file from the second storage if the authentication on the main storage is not allowed', function(done) {
+        /** A 401 switches the active storage at once, without retry on the same storage */
         const nockRequestS1 = nock(url1S3)
           .get('/bucket/file.docx')
           .reply(401, 'Unauthorized');
@@ -1189,6 +1251,7 @@ describe('S3 SDK', function () {
           .reply(200, () => {
             return fileTxt;
           });
+        /** Probe of the main storage at once after the switch (GET /): the authentication is still not allowed */
         const nockRequestS3 = nock(url1S3)
           .get('/')
           .reply(401, 'Unauthorized');
@@ -1207,6 +1270,7 @@ describe('S3 SDK', function () {
       });
 
       it('should download a file as Stream from the second storage if the authentication on the main storage is not allowed', function(done) {
+        /** A 401 switches the active storage at once, its body is never written into the stream */
         const nockRequestS1 = nock(url1S3)
           .get('/bucket/file.docx')
           .reply(401, 'Unauthorized');
@@ -1216,6 +1280,7 @@ describe('S3 SDK', function () {
           .reply(200, () => {
             return fileTxt;
           });
+        /** Probe of the main storage at once after the switch (GET /): the authentication is still not allowed */
         const nockRequestS3 = nock(url1S3)
           .get('/')
           .reply(401, 'Unauthorized');
@@ -1234,9 +1299,13 @@ describe('S3 SDK', function () {
       });
 
       it('should download a file from the second storage if the main storage timeout', function(done) {
+        const _events = [];
+        storage.setLogFunction((msg, level, fields) => { _events.push(fields?.event); });
         storage.setTimeout(200);
+        /** The timeout is retried once by rock-req, then the active storage is switched at once */
         const nockRequestS1 = nock(url1S3)
           .get('/bucket/file.docx')
+          .times(2)
           .delayConnection(500)
           .reply(200, {});
         const nockRequestS2 = nock(url2S3)
@@ -1244,8 +1313,10 @@ describe('S3 SDK', function () {
           .reply(200, () => {
             return fileTxt;
           });
+        /** Probe of the main storage at once after the switch (GET /): it still timeouts (retried once by rock-req) */
         const nockRequestS3 = nock(url1S3)
           .get('/')
+          .times(2)
           .delayConnection(500)
           .reply(200, {});
 
@@ -1257,12 +1328,17 @@ describe('S3 SDK', function () {
           assert.strictEqual(_config.activeStorage, 1);
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
-          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
-          done();
+          /** Wait for the end of the background probe */
+          waitFor(() => _events.includes('storage_main_unavailable'), () => {
+            assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+            assert.strictEqual(storage.getConfig().activeStorage, 1);
+            done();
+          });
         });
       });
 
       it('should download a file from the second storage if the main storage returns any kind of error', function(done) {
+        /** A network error switches the active storage at once (rock-req retries only the errors with a known code, such as ECONNRESET) */
         const nockRequestS1 = nock(url1S3)
           .get('/bucket/file.docx')
           .replyWithError('Error Message 1234');
@@ -1272,6 +1348,7 @@ describe('S3 SDK', function () {
           .reply(200, () => {
             return fileTxt;
           });
+        /** Probe of the main storage at once after the switch (GET /): it still returns an error */
         const nockRequestS3 = nock(url1S3)
           .get('/')
           .replyWithError('Error Message 1234');
@@ -1290,6 +1367,7 @@ describe('S3 SDK', function () {
       });
 
       it('should return an error if all storage are not available, and reset the active storage to the main', function(done) {
+        /** Each storage answers 500 once (no retry on the same storage) */
         const nockRequestS1 = nock(url1S3)
           .get('/bucket/file.docx')
           .reply(500);
@@ -1298,9 +1376,35 @@ describe('S3 SDK', function () {
           .reply(500, () => {
             return fileTxt;
           });
+
+        storage.downloadFile('bucket', 'file.docx', function (err, resp) {
+          assert.strictEqual(err.toString(), 'Error: All S3 storages are not available');
+          assert.strictEqual(err.storageStatusCode, 500);
+          assert.strictEqual(resp, undefined);
+          const _config = storage.getConfig();
+          /** A single failure of the main storage: the active storage is still the main storage */
+          assert.strictEqual(_config.activeStorage, 0);
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          done();
+        });
+      });
+
+      it('should return an error and should not create an infinite loop of retry', function(done) {
+        storage.setTimeout(200);
+        /** Network errors and timeouts (the timeout is retried once by rock-req): each storage is switched at once, after the last storage the main storage is active again */
+        const nockRequestS1 = nock(url1S3)
+          .get('/bucket/file.docx')
+          .replyWithError(new Error('ERR_STREAM_PREMATURE_CLOSE'));
+        /** Probe of the main storage at once after the switch (GET /): it is still not available */
         const nockRequestS3 = nock(url1S3)
           .get('/')
           .reply(500);
+        const nockRequestS2 = nock(url2S3)
+          .get('/bucket/file.docx')
+          .times(2)
+          .delayConnection(400)
+          .replyWithError(new Error('TIMEOUT'));
 
         storage.downloadFile('bucket', 'file.docx', function (err, resp) {
           assert.strictEqual(err.toString(), 'Error: All S3 storages are not available');
@@ -1310,33 +1414,11 @@ describe('S3 SDK', function () {
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
-          done();
-        });
-      });
-
-      it('should return an error and should not create an infinite loop of retry', function(done) {
-        storage.setTimeout(200);
-        const nockRequestS1 = nock(url1S3)
-          .get('/bucket/file.docx')
-          .replyWithError(new Error('ERR_STREAM_PREMATURE_CLOSE'))
-          .get('/')
-          .reply(200)
-          .get('/bucket/file.docx')
-          .replyWithError(new Error('TIMEOUT'));
-        const nockRequestS2 = nock(url2S3)
-          .get('/bucket/file.docx')
-          .delayConnection(400)
-          .replyWithError(new Error('TIMEOUT'));
-          
-
-        storage.downloadFile('bucket', 'file.docx', function (err, resp) {
-          assert.strictEqual(err.toString(), 'Error: All S3 storages are not available');
-          assert.strictEqual(resp, undefined);
-          const _config = storage.getConfig();
-          assert.strictEqual(_config.activeStorage, 0);
-          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
-          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
-          done();
+          /** No other request: the request is never sent again */
+          setTimeout(() => {
+            assert.strictEqual(nock.pendingMocks().length, 0);
+            done();
+          }, 300);
         });
       });
     });
@@ -1358,21 +1440,29 @@ describe('S3 SDK', function () {
         });
       }
 
+      /** Wait for the end of the background probe of the main storage, using the log events */
+      function waitForProbe (events, event, callback) {
+        waitFor(() => events.includes(event), callback);
+      }
+
       it('should fallback to a child if the main storage return any kind of errors, then should reconnect to the main storage automatically', function (done) {
+        const _events = [];
+        storage.setLogFunction((msg, level, fields) => { _events.push(fields?.event); });
+        /** 3 parallel requests failing (500, not retried on the same storage) on the main storage: the active storage is switched after 3 consecutive failures */
         const nockRequestS1 = nock(url1S3)
           .get('/bucket/file.odt')
-          .reply(500)
-          .get('/bucket/file.odt')
+          .times(3)
           .reply(500);
         const nockRequestS2 = nock(url2S3)
           .get('/bucket/file.odt')
-          .reply(200, () => {
-            return fileTxt;
-          })
-          .get('/bucket/file.odt')
+          .times(4)
           .reply(200, () => {
             return fileTxt;
           });
+        /** Probe of the main storage at once after the switch (GET /): it is still not available */
+        const nockRequestProbe = nock(url1S3)
+          .get('/')
+          .reply(500);
         const nockRequestS3 = nock(url1S3)
           .get('/')
           .reply(200);
@@ -1382,61 +1472,69 @@ describe('S3 SDK', function () {
             return fileTxt;
           });
 
-        const promise1 = getDownloadFilePromise();
-        const promise2 = getDownloadFilePromise();
-
-        Promise.all([promise1, promise2]).then(results => {
-          assert.strictEqual(results.length, 2);
-          assert.strictEqual(results[0].body.toString(), fileTxt);
-          assert.strictEqual(results[0].statusCode, 200);
-          assert.strictEqual(results[1].body.toString(), fileTxt);
-          assert.strictEqual(results[1].statusCode, 200);
-          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
-          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
-          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
-          assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
-          /** Last batch requesting the main storage, everything is ok */
-          storage.downloadFile('bucket', 'file.odt', function (err, resp) {
-            assert.strictEqual(err, null);
+        Promise.all([getDownloadFilePromise(), getDownloadFilePromise(), getDownloadFilePromise()]).then(results => {
+          assert.strictEqual(results.length, 3);
+          results.forEach((resp) => {
             assert.strictEqual(resp.body.toString(), fileTxt);
             assert.strictEqual(resp.statusCode, 200);
-            assert.strictEqual(nockRequestS4.pendingMocks().length, 0);
-            assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
-            done();
           });
-        }).catch(err => {
-          assert.strictEqual(err, null);
-          done();
-        });
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
+          assert.strictEqual(_events.filter(e => e === 'storage_fallback').length, 1);
+          return new Promise((resolve) => waitForProbe(_events, 'storage_main_unavailable', resolve));
+        }).then(() => {
+          assert.strictEqual(nockRequestProbe.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS3.isDone(), false);
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
+          /** The main storage is probed again in the background once the probe delay (60 s) is elapsed */
+          const _now = _realNow();
+          Date.now = () => _now + 60000;
+          return getDownloadFilePromise();
+        }).then((resp) => {
+          assert.strictEqual(resp.body.toString(), fileTxt);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          waitForProbe(_events, 'storage_main_restored', () => {
+            assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+            assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
+            /** Last batch requesting the main storage, everything is ok */
+            storage.downloadFile('bucket', 'file.odt', function (err, resp) {
+              assert.strictEqual(err, null);
+              assert.strictEqual(resp.body.toString(), fileTxt);
+              assert.strictEqual(resp.statusCode, 200);
+              assert.strictEqual(nockRequestS4.pendingMocks().length, 0);
+              assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
+              done();
+            });
+          });
+        }).catch(done);
       });
 
       it('should fallback to a child if the main storage return any kind of errors, then should reconnect to the main storage after multiple try', function (done) {
-        /** First Batch */
+        const _events = [];
+        storage.setLogFunction((msg, level, fields) => { _events.push(fields?.event); });
+        const _now = _realNow();
+        let _elapsed = 0;
+        Date.now = () => _now + _elapsed;
+        /** First Batch: 3 parallel requests failing (500, not retried on the same storage) on the main storage, the active storage is switched */
         const nockRequestS1 = nock(url1S3)
           .get('/bucket/file.odt')
-          .reply(500)
-          .get('/bucket/file.odt')
+          .times(3)
           .reply(500);
         const nockRequestS2 = nock(url2S3)
           .get('/bucket/file.odt')
-          .reply(200, () => {
-            return fileTxt;
-          })
-          .get('/bucket/file.odt')
+          .times(3)
           .reply(200, () => {
             return fileTxt;
           });
+        /** Probe of the main storage at once after the switch (GET /): it is still not available */
         const nockRequestS3 = nock(url1S3)
           .get('/')
           .reply(500);
 
-        /** Second Batch */
+        /** Second Batch: the probe delay (60 s) is elapsed, the probe of the main storage fails */
         const nockRequestS4 = nock(url2S3)
           .get('/bucket/file.odt')
-          .reply(200, () => {
-            return fileTxt;
-          })
-          .get('/bucket/file.odt')
+          .times(2)
           .reply(200, () => {
             return fileTxt;
           });
@@ -1444,7 +1542,7 @@ describe('S3 SDK', function () {
           .get('/')
           .reply(500);
 
-        /** Third Batch */
+        /** Third Batch: the probe delay is doubled (120 s), the probe of the main storage succeeds */
         const nockRequestS6 = nock(url2S3)
           .get('/bucket/file.odt')
           .reply(200, () => {
@@ -1461,56 +1559,58 @@ describe('S3 SDK', function () {
           });
 
         /** First batch of requests > S3 main return error > Child storage response ok */
-        const promise1 = getDownloadFilePromise();
-        const promise2 = getDownloadFilePromise();
-        Promise.all([promise1, promise2]).then(function (results) {
+        Promise.all([getDownloadFilePromise(), getDownloadFilePromise(), getDownloadFilePromise()]).then(function (results) {
+          assert.strictEqual(results.length, 3);
+          results.forEach((resp) => {
+            assert.strictEqual(resp.body.toString(), fileTxt);
+            assert.strictEqual(resp.statusCode, 200);
+          });
+          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
+          return new Promise((resolve) => waitForProbe(_events, 'storage_main_unavailable', resolve));
+        }).then(function () {
+          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS5.isDone(), false);
+          assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
+          /** Second batch of requests > Still requesting the child storage, the main storage is still not available  */
+          _elapsed = 60000;
+          return Promise.all([getDownloadFilePromise(), getDownloadFilePromise()]);
+        }).then(function (results) {
           assert.strictEqual(results.length, 2);
           assert.strictEqual(results[0].body.toString(), fileTxt);
           assert.strictEqual(results[0].statusCode, 200);
           assert.strictEqual(results[1].body.toString(), fileTxt);
           assert.strictEqual(results[1].statusCode, 200);
-          assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
-          assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
-          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
-          assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
-          /** Second batch of requests > Still requesting the child storage, the main storage is still not available  */
-          const promise3 = getDownloadFilePromise();
-          const promise4 = getDownloadFilePromise();
-          Promise.all([promise3, promise4]).then(function (results) {
-            assert.strictEqual(results.length, 2);
-            assert.strictEqual(results[0].body.toString(), fileTxt);
-            assert.strictEqual(results[0].statusCode, 200);
-            assert.strictEqual(results[1].body.toString(), fileTxt);
-            assert.strictEqual(results[1].statusCode, 200);
-            assert.strictEqual(nockRequestS4.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS4.pendingMocks().length, 0);
+          waitFor(() => _events.filter(e => e === 'storage_main_unavailable').length === 2, () => {
+            /** A single probe at a time, even with parallel requests */
             assert.strictEqual(nockRequestS5.pendingMocks().length, 0);
+            assert.strictEqual(nockRequestS7.isDone(), false);
             assert.deepStrictEqual(storage.getConfig().activeStorage, 1);
             /** Third batch of requests >  Still requesting the child storage, the main storage is now Available! Active storage is reset to the main storage  */
+            _elapsed = 60000 + 120000;
             storage.downloadFile('bucket', 'file.odt', function (err, resp) {
               assert.strictEqual(err, null);
               assert.strictEqual(resp.body.toString(), fileTxt);
               assert.strictEqual(resp.statusCode, 200);
               assert.strictEqual(nockRequestS6.pendingMocks().length, 0);
-              assert.strictEqual(nockRequestS7.pendingMocks().length, 0);
-              assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
-              /** Fourth batch requesting the main storage, everything is ok */
-              storage.downloadFile('bucket', 'file.odt', function (err, resp) {
-                assert.strictEqual(err, null);
-                assert.strictEqual(resp.body.toString(), fileTxt);
-                assert.strictEqual(resp.statusCode, 200);
-                assert.strictEqual(nockRequestS8.pendingMocks().length, 0);
+              waitForProbe(_events, 'storage_main_restored', () => {
+                assert.strictEqual(nockRequestS7.pendingMocks().length, 0);
                 assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
-                done();
+                /** Fourth batch requesting the main storage, everything is ok */
+                storage.downloadFile('bucket', 'file.odt', function (err, resp) {
+                  assert.strictEqual(err, null);
+                  assert.strictEqual(resp.body.toString(), fileTxt);
+                  assert.strictEqual(resp.statusCode, 200);
+                  assert.strictEqual(nockRequestS8.pendingMocks().length, 0);
+                  assert.deepStrictEqual(storage.getConfig().activeStorage, 0);
+                  done();
+                });
               });
             });
-          }).catch(function (err) {
-            assert.strictEqual(err, null);
-            done();
           });
-        }).catch(function (err) {
-          assert.strictEqual(err, null);
-          done();
-        });
+        }).catch(done);
       });
 
     });
@@ -1715,6 +1815,7 @@ describe('S3 SDK', function () {
           'transfer-encoding': 'chunked',
         };
 
+        /** A 500 is not retried on the same storage: the request is sent to the child storage */
         const nockRequestS1 = nock(url1S3)
           .defaultReplyHeaders(_header)
           .put('/bucket/file.pdf')
@@ -1727,9 +1828,6 @@ describe('S3 SDK', function () {
             assert.strictEqual(requestBody, fileXml);
             return '';
           });
-        const nockRequestS3 = nock(url1S3)
-          .get('/')
-          .reply(500);
 
         storage.uploadFile('bucket', 'file.pdf', Buffer.from(fileXml), function(err, resp) {
           assert.strictEqual(err, null);
@@ -1738,7 +1836,6 @@ describe('S3 SDK', function () {
           assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_header));
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
-          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
           done();
         });
       });
@@ -1754,6 +1851,7 @@ describe('S3 SDK', function () {
           'transfer-encoding': 'chunked',
         };
 
+        /** A 500 is not retried on the same storage: the request is sent to the child storage */
         const nockRequestS1 = nock(url1S3)
           .defaultReplyHeaders(_header)
           .put('/invoices-gra-1234/file.pdf')
@@ -1766,9 +1864,6 @@ describe('S3 SDK', function () {
             assert.strictEqual(requestBody, fileXml);
             return '';
           });
-        const nockRequestS3 = nock(url1S3)
-          .get('/')
-          .reply(500);
 
         storage.uploadFile('invoices', 'file.pdf', Buffer.from(fileXml), function(err, resp) {
           assert.strictEqual(err, null);
@@ -1777,7 +1872,6 @@ describe('S3 SDK', function () {
           assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_header));
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
-          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
           done();
         });
       });
@@ -1793,6 +1887,7 @@ describe('S3 SDK', function () {
           'transfer-encoding': 'chunked',
         };
 
+        /** A 500 is not retried on the same storage: the request is sent to the child storage */
         const nockRequestS1 = nock(url1S3)
           .defaultReplyHeaders(_header)
           .put('/bucket/file.pdf')
@@ -1804,9 +1899,6 @@ describe('S3 SDK', function () {
           .reply(403, () => {
             return "<?xml version='1.0' encoding='UTF-8'?><Error><Code>AccessDenied</Code><Message>Access Denied.</Message><RequestId>txd14fbe8bc05341c0b548a-00640b2752</RequestId></Error>";
           });
-        const nockRequestS3 = nock(url1S3)
-          .get('/')
-          .reply(500);
 
         const _expectedBody = {
           error: {
@@ -1823,7 +1915,6 @@ describe('S3 SDK', function () {
           assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_header));
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
-          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
           done();
         });
       });
@@ -1936,6 +2027,7 @@ describe('S3 SDK', function () {
           date: 'Mon, 20 Mar 2023 08:17:29 GMT',
         };
 
+        /** A 500 is not retried on the same storage: the request is sent to the child storage */
         const nockRequestS1 = nock(url1S3)
           .delete('/www/file.pdf')
           .reply(500, '');
@@ -1945,9 +2037,6 @@ describe('S3 SDK', function () {
           .delete('/www/file.pdf')
           .reply(204, '');
 
-        const nockRequestS3 = nock(url1S3)
-          .get('/')
-          .reply(500, '');
 
         storage.deleteFile('www', 'file.pdf', (err, resp) => {
           assert.strictEqual(err, null);
@@ -1956,7 +2045,6 @@ describe('S3 SDK', function () {
           assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
-          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
           done();
         });
       });
@@ -1972,6 +2060,7 @@ describe('S3 SDK', function () {
           date: 'Mon, 20 Mar 2023 08:17:29 GMT',
         };
 
+        /** A 500 is not retried on the same storage: the request is sent to the child storage */
         const nockRequestS1 = nock(url1S3)
           .delete('/invoices-gra-1234/file.pdf')
           .reply(500, '');
@@ -1981,9 +2070,6 @@ describe('S3 SDK', function () {
           .delete('/invoices-de-8888/file.pdf')
           .reply(204, '');
 
-        const nockRequestS3 = nock(url1S3)
-          .get('/')
-          .reply(500, '');
 
         storage.deleteFile('invoices', 'file.pdf', (err, resp) => {
           assert.strictEqual(err, null);
@@ -1992,7 +2078,6 @@ describe('S3 SDK', function () {
           assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
-          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
           done();
         });
       });
@@ -2017,6 +2102,7 @@ describe('S3 SDK', function () {
           'transfer-encoding': 'chunked',
         };
 
+        /** A 500 is not retried on the same storage: the request is sent to the child storage */
         const nockRequestS1 = nock(url1S3)
           .delete('/www/file.pdf')
           .reply(500, '');
@@ -2026,9 +2112,6 @@ describe('S3 SDK', function () {
           .delete('/www/file.pdf')
           .reply(403, _bodyErrorAccessDenied);
 
-        const nockRequestS3 = nock(url1S3)
-          .get('/')
-          .reply(500, '');
 
         storage.deleteFile('www', 'file.pdf', (err, resp) => {
           assert.strictEqual(err, null);
@@ -2037,7 +2120,6 @@ describe('S3 SDK', function () {
           assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
-          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
           done();
         });
       });
@@ -2446,6 +2528,7 @@ describe('S3 SDK', function () {
           })
         };
 
+        /** A 500 is not retried on the same storage: the request is sent to the child storage */
         const nockRequestS1 = nock(url1S3)
           .post('/www/')
           .query((actualQueryObject) => {
@@ -2464,9 +2547,6 @@ describe('S3 SDK', function () {
           .reply(200, function() {
             return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><DeleteResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Error><Key>invoice%202023.pdf</Key><Code>AccessDenied</Code><Message>Access Denied</Message></Error><Error><Key>carbone(1).png</Key><Code>AccessDenied</Code><Message>Access Denied</Message></Error><Error><Key>file.txt</Key><Code>AccessDenied</Code><Message>Access Denied</Message></Error></DeleteResult>";
           });
-        const nockRequestS3 = nock(url1S3)
-          .get('/')
-          .reply(500, '');
 
         storage.deleteFiles('www', _filesToDelete, (err, resp) => {
           assert.strictEqual(err, null);
@@ -2475,7 +2555,6 @@ describe('S3 SDK', function () {
           assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
-          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
           done();
         });
       });
@@ -2597,6 +2676,7 @@ describe('S3 SDK', function () {
           date: 'Mon, 20 Mar 2023 12:53:38 GMT',
         };
 
+        /** A 500 is not retried on the same storage: the request is sent to the child storage */
         const nockRequestS1 = nock(url1S3)
           .intercept("/bucket/file.pdf", "HEAD")
           .reply(500, "");
@@ -2606,9 +2686,6 @@ describe('S3 SDK', function () {
           .intercept("/bucket/file.pdf", "HEAD")
           .reply(200, "");
 
-        const nockRequestS3 = nock(url1S3)
-          .get('/')
-          .reply(500, '');
 
         storage.getFileMetadata('bucket', 'file.pdf', function(err, resp) {
           assert.strictEqual(err, null);
@@ -2617,7 +2694,6 @@ describe('S3 SDK', function () {
           assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
-          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
           done();
         });
       });
@@ -2639,6 +2715,7 @@ describe('S3 SDK', function () {
           date: 'Mon, 20 Mar 2023 12:53:38 GMT',
         };
 
+        /** A 500 is not retried on the same storage: the request is sent to the child storage */
         const nockRequestS1 = nock(url1S3)
           .intercept("/invoices-gra-1234/file.pdf", "HEAD")
           .reply(500, "");
@@ -2648,9 +2725,6 @@ describe('S3 SDK', function () {
           .intercept("/invoices-de-8888/file.pdf", "HEAD")
           .reply(200, "");
 
-        const nockRequestS3 = nock(url1S3)
-          .get('/')
-          .reply(500, '');
 
         storage.getFileMetadata('invoices', 'file.pdf', function(err, resp) {
           assert.strictEqual(err, null);
@@ -2659,7 +2733,6 @@ describe('S3 SDK', function () {
           assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers));
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
-          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
           done();
         });
       });
@@ -2947,6 +3020,7 @@ describe('S3 SDK', function () {
         };
 
 
+        /** A 500 is not retried on the same storage: the request is sent to the child storage */
         const nockRequestS1 = nock(url1S3, {
             reqheaders: {
               'x-amz-copy-source': () => true,
@@ -2966,9 +3040,6 @@ describe('S3 SDK', function () {
           .put('/bucket/file.pdf')
           .reply(200, "<?xml version=\"1.0\" encoding=\"UTF-8\"?><CopyObjectResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><LastModified>2023-03-20T13:13:06.000Z</LastModified><ETag>\"fde6d729123cee4db6bfa3606306bc8c\"</ETag></CopyObjectResult>");
 
-        const nockRequestS3 = nock(url1S3)
-          .get('/')
-          .reply(500, "");
 
 
         storage.setFileMetadata('bucket', 'file.pdf', { headers: { "x-amz-meta-name": "Invoice 2023", "x-amz-meta-version": "1.2.3"  } }, (err, resp) => {
@@ -2981,7 +3052,6 @@ describe('S3 SDK', function () {
           assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers2));
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
-          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
           done();
         });
       });
@@ -3003,6 +3073,7 @@ describe('S3 SDK', function () {
         };
 
 
+        /** A 500 is not retried on the same storage: the request is sent to the child storage */
         const nockRequestS1 = nock(url1S3, {
             reqheaders: {
               'x-amz-copy-source': () => true,
@@ -3022,9 +3093,6 @@ describe('S3 SDK', function () {
           .put('/invoices-de-8888/file.pdf')
           .reply(200, "<?xml version=\"1.0\" encoding=\"UTF-8\"?><CopyObjectResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><LastModified>2023-03-20T13:13:06.000Z</LastModified><ETag>\"fde6d729123cee4db6bfa3606306bc8c\"</ETag></CopyObjectResult>");
 
-        const nockRequestS3 = nock(url1S3)
-          .get('/')
-          .reply(500, "");
 
 
         storage.setFileMetadata('invoices', 'file.pdf', { headers: { "x-amz-meta-name": "Invoice 2023", "x-amz-meta-version": "1.2.3"  } }, (err, resp) => {
@@ -3037,7 +3105,6 @@ describe('S3 SDK', function () {
           assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers2));
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
-          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
           done();
         });
       });
@@ -3054,6 +3121,7 @@ describe('S3 SDK', function () {
           'transfer-encoding': 'chunked',
         };
 
+        /** A 500 is not retried on the same storage: the request is sent to the child storage */
         const nockRequestS1 = nock(url1S3)
           .put('/bucket/file.pdf')
           .reply(500, "");
@@ -3069,9 +3137,6 @@ describe('S3 SDK', function () {
           .put('/bucket/file.pdf')
           .reply(403, "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Error><Code>AccessDenied</Code><Message>Access Denied.</Message><RequestId>tx439620795cdd41b08c58c-0064186222</RequestId></Error>");
 
-        const nockRequestS3 = nock(url1S3)
-          .get('/')
-          .reply(500, "");
 
         storage.setFileMetadata('bucket', 'file.pdf', { headers: { "x-amz-meta-name": "Invoice 2023", "x-amz-meta-version": "1.2.3"  } }, (err, resp) => {
           assert.strictEqual(err, null);
@@ -3086,7 +3151,6 @@ describe('S3 SDK', function () {
           assert.strictEqual(JSON.stringify(resp.headers), JSON.stringify(_headers2));
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
-          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
           done();
         });
       });
@@ -3162,10 +3226,9 @@ describe('S3 SDK', function () {
         i++;
       });
 
+      /** A 500 is not retried on the same storage: the request is sent to the child storage */
       const nockRequestS1 = nock(url1S3)
         .intercept("/bucket", "HEAD")
-        .reply(500, "")
-        .intercept("/", "GET")
         .reply(500, "");
       const nockRequestS2 = nock(url2S3)
         .intercept("/bucket", "HEAD")
@@ -3238,7 +3301,7 @@ describe('S3 SDK', function () {
       });
 
       it('should return the status code of a 503 and log a single error', function (done) {
-        /** rock-req retries a 503 once */
+        /** A 503 with a body without throttling code is a server error: rock-req retries a 503 once, then the error is returned */
         const nockRequest = nock(url1S3)
           .get('/bucket/file.docx')
           .query({ versionId: '1' })
@@ -3279,6 +3342,7 @@ describe('S3 SDK', function () {
       });
 
       it('should retry the bulk delete POST once on a 503 (rock-req default)', function (done) {
+        /** A 503 without code to a POST is a server error (only a HEAD has no body): retried once by rock-req, not by this client */
         const nockRequest = nock(url1S3)
           .post('/bucket/').query(true).reply(503)
           .post('/bucket/').query(true).reply(200, '<?xml version="1.0" encoding="UTF-8"?><DeleteResult><Deleted><Key>file.txt</Key></Deleted></DeleteResult>');
@@ -3314,6 +3378,7 @@ describe('S3 SDK', function () {
       });
 
       it('should not mix the causes of parallel requests', function (done) {
+        /** A 503 without code to a GET is a server error: retried once by rock-req, then returned */
         nock(url1S3).get('/bucket/a.txt').times(2).reply(503);
         nock(url1S3).get('/bucket/b.txt').times(2).replyWithError(networkError('ECONNRESET'));
         nock(url1S3).get('/bucket/c.txt').reply(200, 'ok');
@@ -3347,35 +3412,43 @@ describe('S3 SDK', function () {
         const nockRequestS1 = nock(url1S3)
           .get('/invoices-gra-1234/file.docx')
           .times(2)
-          .replyWithError(networkError('ETIMEDOUT'))
-          .get('/')
-          .reply(500);
+          .replyWithError(networkError('ETIMEDOUT'));
+        /** A 503 with an S3 error code which is not a throttling code is a server error: retried once by rock-req, then sent to the next storage */
         const nockRequestS2 = nock(url2S3)
           .get('/invoices-de-8888/file.docx')
           .times(2)
-          .reply(503);
+          .reply(503, '<?xml version="1.0" encoding="UTF-8"?><Error><Code>InternalError</Code><Message>We encountered an internal error. Please try again.</Message></Error>', { 'content-type': 'application/xml' });
+        /** Probe of the main storage at once after the switch (GET /): it is still not available */
+        const nockRequestS3 = nock(url1S3)
+          .get('/')
+          .reply(500);
 
         storage.downloadFile('invoices', 'file.docx', function (err, resp) {
           assert.strictEqual(err.message, 'All S3 storages are not available');
           assert.strictEqual(err.storageStatusCode, 503);
           assert.strictEqual(err.statusCode, undefined);
           assert.strictEqual(err.status, undefined);
-          assert.strictEqual(err.code, undefined);
+          /** The S3 error code of the last failure */
+          assert.strictEqual(err.code, 'InternalError');
           assert.strictEqual(err.cause, undefined);
           assert.strictEqual(resp, undefined);
-          assert.strictEqual(storage.getConfig().activeStorage, 0);
+          /** The network error switched the active storage at once, a single 503 of the second storage does not switch it, and the active storage is no longer reset */
+          assert.strictEqual(storage.getConfig().activeStorage, 1);
           assert.deepStrictEqual(_logs.filter((log) => log.level !== ''), [
             { message: 'S3 Storage | Activate fallback storage: switch from "0" to "1" | Error: read ETIMEDOUT', level: 'warning' },
-            { message: 'S3 Storage | Activate fallback storage: switch from "1" to "2" | Status code: 503', level: 'warning' },
-            { message: 'S3 Storage | All storages are not available - switch to the main storage', level: 'error' }
+            { message: 'S3 Storage | Index "0" region "gra" main storage still not available, next check in 60s | Status code: 500', level: 'info' },
+            { message: 'S3 Storage | GET /invoices-de-8888/file.docx | Request failed on storage "1", sent to the next storage | Status code: 503', level: 'warning' },
+            { message: 'S3 Storage | All storages are not available', level: 'error' }
           ]);
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
+          assert.strictEqual(nockRequestS3.pendingMocks().length, 0);
           done();
         });
       });
 
       it('should still return the file of the second storage if the first one fails', function (done) {
+        /** A 500 is not retried on the same storage: the request is sent to the second storage */
         const nockRequestS1 = nock(url1S3)
           .get('/invoices-gra-1234/file.docx')
           .reply(500);
@@ -3387,7 +3460,8 @@ describe('S3 SDK', function () {
           assert.strictEqual(err, null);
           assert.strictEqual(resp.statusCode, 200);
           assert.strictEqual(resp.body.toString(), 'ok');
-          assert.strictEqual(storage.getConfig().activeStorage, 1);
+          /** A single failure does not switch the active storage (3 consecutive failures are required) */
+          assert.strictEqual(storage.getConfig().activeStorage, 0);
           assert.strictEqual(nockRequestS1.pendingMocks().length, 0);
           assert.strictEqual(nockRequestS2.pendingMocks().length, 0);
           done();
@@ -3475,13 +3549,12 @@ describe('S3 SDK', function () {
 
     it('a reused options object should start a new request after all storages failed (no "try"/failure kept on the options)', function (done) {
       const _options = {};
+      /** Each storage answers 500 once (no retry on the same storage), then the main storage answers the second request */
       const nockRequestS1 = nock(url1S3)
         .get('/bucket/file.txt')
         .reply(500)
         .get('/bucket/file.txt')
         .reply(200, 'ok');
-      /** Reconnection to the main storage, not asserted */
-      nock(url1S3).get('/').reply(500);
       const nockRequestS2 = nock(url2S3)
         .get('/bucket/file.txt')
         .reply(500);
